@@ -31,6 +31,26 @@ export type OutingResult = {
   fitnessDelta: number;
   socialQualityHint: "haute" | "moyenne" | "basse";
 };
+export type LifePattern =
+  | "burnout"
+  | "social_drought"
+  | "grind_mode"
+  | "productive_isolated"
+  | "neglect"
+  | "momentum"
+  | "recovery_needed"
+  | "image_gap"
+  | "equilibre";
+
+export type GuidanceItem = {
+  id: string;
+  title: string;
+  body: string;
+  action: string;
+  category: "energy" | "social" | "budget" | "discipline" | "wellbeing";
+  urgency: "high" | "medium" | "low";
+};
+
 export type NotificationKind = "needs" | "social" | "work" | "reward" | "tip";
 export type ConversationKind = "local" | "direct";
 export type ConversationMessageKind = "message" | "system" | "invitation";
