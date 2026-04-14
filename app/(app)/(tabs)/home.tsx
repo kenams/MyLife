@@ -6,6 +6,69 @@ import { AppShell, AvatarBadge, Button, Card, MetricCard, Muted, Pill, SectionTi
 import { getLocationName, getRecommendedAction, getSocialRankCopy, getSocialRankLabel, getUrgency, getUrgencyCopy, getWellbeingScore } from "@/lib/selectors";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
+import type { DailyEvent } from "@/lib/types";
+
+const EVENT_KIND_COLOR: Record<DailyEvent["kind"], string> = {
+  opportunity: "#38c793",
+  encounter:   "#8b7cff",
+  setback:     "#f87171",
+  windfall:    "#fbbf24",
+  social:      "#60a5fa"
+};
+
+const EVENT_KIND_LABEL: Record<DailyEvent["kind"], string> = {
+  opportunity: "Opportunite",
+  encounter:   "Rencontre",
+  setback:     "Imprévu",
+  windfall:    "Aubaine",
+  social:      "Social"
+};
+
+function EffectLine({ effects }: { effects: DailyEvent["effects"] }) {
+  const entries = Object.entries(effects).filter(([, v]) => v !== 0 && v !== undefined);
+  if (entries.length === 0) return <Muted>Aucun effet</Muted>;
+  return (
+    <Text style={{ color: colors.muted, fontSize: 12 }}>
+      {entries.map(([k, v]) => `${k} ${(v as number) > 0 ? "+" : ""}${v}`).join("  ·  ")}
+    </Text>
+  );
+}
+
+function DailyEventCard({ event, onResolve }: { event: DailyEvent; onResolve: (c: "accepted" | "skipped") => void }) {
+  const kindColor = EVENT_KIND_COLOR[event.kind];
+  return (
+    <Card>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: kindColor }} />
+        <Text style={{ color: kindColor, fontWeight: "800", fontSize: 12, textTransform: "uppercase" }}>
+          {EVENT_KIND_LABEL[event.kind]} du jour
+        </Text>
+      </View>
+      <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16, marginBottom: 6 }}>{event.title}</Text>
+      <Muted>{event.body}</Muted>
+      <View style={{ gap: 10, marginTop: 12 }}>
+        <View style={{ padding: 10, borderRadius: 12, backgroundColor: "rgba(56,199,147,0.08)", borderLeftWidth: 2, borderLeftColor: "#38c793" }}>
+          <Text style={{ color: "#38c793", fontWeight: "700", fontSize: 13, marginBottom: 4 }}>{event.actionLabel}</Text>
+          <EffectLine effects={event.effects} />
+        </View>
+        {Object.keys(event.skipEffects).length > 0 ? (
+          <View style={{ padding: 10, borderRadius: 12, backgroundColor: "rgba(248,113,113,0.06)", borderLeftWidth: 2, borderLeftColor: colors.muted }}>
+            <Text style={{ color: colors.muted, fontWeight: "700", fontSize: 13, marginBottom: 4 }}>{event.skipLabel}</Text>
+            <EffectLine effects={event.skipEffects} />
+          </View>
+        ) : null}
+      </View>
+      <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
+        <View style={{ flex: 1 }}>
+          <Button label={event.actionLabel} onPress={() => onResolve("accepted")} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button label={event.skipLabel === "N/A" ? "Ok" : event.skipLabel} variant="secondary" onPress={() => onResolve("skipped")} />
+        </View>
+      </View>
+    </Card>
+  );
+}
 
 function QuickAction({
   title,
@@ -34,6 +97,8 @@ export default function HomeScreen() {
   const advice = useGameStore((state) => state.advice);
   const lifeFeed = useGameStore((state) => state.lifeFeed);
   const bootstrap = useGameStore((state) => state.bootstrap);
+  const dailyEvent = useGameStore((state) => state.dailyEvent);
+  const resolveDailyEvent = useGameStore((state) => state.resolveDailyEvent);
 
   useFocusEffect(
     useCallback(() => {
@@ -56,6 +121,10 @@ export default function HomeScreen() {
           subtitle={`${avatar?.photoStyle ?? "Minimal clean"} · ${getLocationName(currentLocationSlug)}`}
         />
       </Card>
+
+      {dailyEvent && !dailyEvent.resolved ? (
+        <DailyEventCard event={dailyEvent} onResolve={resolveDailyEvent} />
+      ) : null}
 
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
         <MetricCard label="Budget" value={`${stats.money}`} hint="credits disponibles" />

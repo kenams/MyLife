@@ -6,10 +6,13 @@ import type {
   AvatarStats,
   Conversation,
   ConversationMessage,
+  DailyEvent,
+  DailyEventEffects,
   DailyGoal,
   InvitationRecord,
   LifeActionId,
   LifeFeedItem,
+  LifePattern,
   MentalStabilityState,
   NotificationItem,
   OutingConfig,
@@ -657,6 +660,215 @@ export function createInitialRuntime() {
     invitations: [] as InvitationRecord[],
     lifeFeed: seededFeed()
   };
+}
+
+// ─── Daily Events ─────────────────────────────────────────────────────────────
+
+type EventTemplate = Omit<DailyEvent, "id" | "createdAt" | "resolved" | "choice"> & {
+  patterns: LifePattern[];
+};
+
+const EVENT_TEMPLATES: EventTemplate[] = [
+  // BURNOUT
+  {
+    kind: "setback", patterns: ["burnout"],
+    title: "Signal d'alarme",
+    body: "Ton systeme nerveux envoie des signaux clairs. Forcer maintenant accelere la descente — pas la progression.",
+    actionLabel: "Prendre du repos",
+    skipLabel: "Ignorer (risque)",
+    effects: { energy: 20, stress: -15, mood: 6 },
+    skipEffects: { stress: 12, mood: -8, energy: -6 }
+  },
+  {
+    kind: "opportunity", patterns: ["burnout"],
+    title: "Proposition legere",
+    body: "Un contact propose une collaboration courte — 1h maximum, sans pression, bien remuneree.",
+    actionLabel: "Accepter (1h, facile)",
+    skipLabel: "Passer",
+    effects: { money: 38, energy: -5, discipline: 4 },
+    skipEffects: { mood: -3 }
+  },
+  // SOCIAL_DROUGHT
+  {
+    kind: "social", patterns: ["social_drought"],
+    title: "Message inattendu",
+    body: "Un contact reprend de ses nouvelles apres une absence. C'est le bon moment pour repondre.",
+    actionLabel: "Repondre maintenant",
+    skipLabel: "Lire et passer",
+    effects: { sociability: 14, mood: 10, stress: -4 },
+    skipEffects: { sociability: 4, mood: 2 }
+  },
+  {
+    kind: "social", patterns: ["social_drought"],
+    title: "Evenement de quartier",
+    body: "Une sortie locale est organisee ce soir. Accessible, sans pression. Exactement ce qu'il faut.",
+    actionLabel: "Y aller",
+    skipLabel: "Rester chez soi",
+    effects: { sociability: 18, mood: 12, energy: -10 },
+    skipEffects: { mood: -5, sociability: -3 }
+  },
+  // GRIND_MODE
+  {
+    kind: "opportunity", patterns: ["grind_mode"],
+    title: "Proposition business",
+    body: "Un contact propose un projet court mais exigeant. Le gain est reel, mais ca demande du focus.",
+    actionLabel: "Prendre le projet",
+    skipLabel: "Decliner",
+    effects: { money: 85, energy: -16, discipline: 6, stress: 8 },
+    skipEffects: { stress: -4, mood: 3 }
+  },
+  {
+    kind: "setback", patterns: ["grind_mode"],
+    title: "Avertissement corporel",
+    body: "Ton corps te rappelle qu'il a des limites. Ignorer ce signal a un cout immediat.",
+    actionLabel: "Ecouter et recuperer",
+    skipLabel: "Continuer quand meme",
+    effects: { energy: 12, stress: -10, mood: 5 },
+    skipEffects: { energy: -14, stress: 10 }
+  },
+  // PRODUCTIVE_ISOLATED
+  {
+    kind: "social", patterns: ["productive_isolated"],
+    title: "Invitation spontanee",
+    body: "Quelqu'un dans ton reseau propose une sortie courte. Une heure dehors peut tout changer.",
+    actionLabel: "Accepter l'invitation",
+    skipLabel: "Rester en mode solo",
+    effects: { sociability: 14, mood: 10, energy: -8 },
+    skipEffects: { discipline: 2 }
+  },
+  {
+    kind: "encounter", patterns: ["productive_isolated"],
+    title: "Reconnaissance externe",
+    body: "Un profil remarque ta regularite et commente positivement. Un lien utile peut s'ouvrir.",
+    actionLabel: "Entretenir le contact",
+    skipLabel: "Ignorer",
+    effects: { reputation: 8, mood: 8, sociability: 6, motivation: 6 },
+    skipEffects: {}
+  },
+  // NEGLECT / RECOVERY
+  {
+    kind: "windfall", patterns: ["neglect", "recovery_needed"],
+    title: "Coup de pouce inattendu",
+    body: "Une source inattendue t'envoie de quoi couvrir les bases. Pas de condition, juste un reset.",
+    actionLabel: "Encaisser",
+    skipLabel: "Refuser",
+    effects: { money: 28, mood: 10, motivation: 6, energy: 8 },
+    skipEffects: {}
+  },
+  {
+    kind: "setback", patterns: ["neglect"],
+    title: "Consequence visible",
+    body: "Ton mode de vie actuel commence a laisser des traces. Rien de grave — mais le signal est la.",
+    actionLabel: "Reconnu et pris en compte",
+    skipLabel: "Nier",
+    effects: { motivation: 5, discipline: 3 },
+    skipEffects: { mood: -8, reputation: -4 }
+  },
+  // MOMENTUM
+  {
+    kind: "opportunity", patterns: ["momentum"],
+    title: "Opportunite de niveau superieur",
+    body: "Une occasion premium s'ouvre — accessible uniquement parce que ton mode de vie est en ordre.",
+    actionLabel: "Saisir l'opportunite",
+    skipLabel: "Conserver l'energie",
+    effects: { money: 95, reputation: 10, energy: -18, discipline: 8 },
+    skipEffects: { stress: -4, energy: 6 }
+  },
+  {
+    kind: "encounter", patterns: ["momentum"],
+    title: "Rencontre inspirante",
+    body: "Tu croises un profil remarquable — le genre de personne qui eleve le niveau du quartier.",
+    actionLabel: "Engager la conversation",
+    skipLabel: "Laisser passer",
+    effects: { sociability: 12, mood: 12, motivation: 10, reputation: 5 },
+    skipEffects: { mood: 3 }
+  },
+  // IMAGE_GAP
+  {
+    kind: "setback", patterns: ["image_gap"],
+    title: "Feedback social direct",
+    body: "Ton image exterieure ne colle pas avec le rang que tu vises. Ce n'est pas une critique — c'est une info.",
+    actionLabel: "Prendre en compte et agir",
+    skipLabel: "Ignorer le signal",
+    effects: { discipline: 10, motivation: 6, hygiene: 12 },
+    skipEffects: { reputation: -5, mood: -5 }
+  },
+  {
+    kind: "opportunity", patterns: ["image_gap"],
+    title: "Occasion de repositionnement",
+    body: "Une situation te permet d'ameliorer ton image rapidement — mais elle coute.",
+    actionLabel: "Investir dans l'image",
+    skipLabel: "Passer",
+    effects: { reputation: 10, hygiene: 18, money: -22 },
+    skipEffects: {}
+  },
+  // EQUILIBRE / UNIVERSAL
+  {
+    kind: "windfall", patterns: ["equilibre", "momentum"],
+    title: "Cashback inattendu",
+    body: "Une regularite de paiement te rapporte un retour imprévu. Petit mais bienvenu.",
+    actionLabel: "Encaisser",
+    skipLabel: "N/A",
+    effects: { money: 24 },
+    skipEffects: {}
+  },
+  {
+    kind: "setback", patterns: ["equilibre", "grind_mode", "productive_isolated"],
+    title: "Depense imprevue",
+    body: "Une charge non planifiee arrive. Absorbable si le budget est sain, tendu sinon.",
+    actionLabel: "Regler la situation",
+    skipLabel: "Reporter (risque)",
+    effects: { money: -30, stress: 4 },
+    skipEffects: { money: -30, stress: 12, reputation: -3 }
+  },
+  {
+    kind: "windfall", patterns: ["equilibre", "productive_isolated", "social_drought"],
+    title: "Nuit de qualite",
+    body: "Sans raison apparente, tu recuperes mieux que d'habitude. Le corps et le mental en profitent.",
+    actionLabel: "Super",
+    skipLabel: "N/A",
+    effects: { energy: 14, mood: 8, stress: -10 },
+    skipEffects: {}
+  },
+  {
+    kind: "social", patterns: ["equilibre"],
+    title: "Occasion sociale legere",
+    body: "Une sortie simple se presente — sans pression, juste du lien et de la detente.",
+    actionLabel: "Rejoindre",
+    skipLabel: "Passer cette fois",
+    effects: { sociability: 10, mood: 8, energy: -6 },
+    skipEffects: { discipline: 2 }
+  }
+];
+
+export function generateDailyEvent(pattern: LifePattern): DailyEvent {
+  const matching = EVENT_TEMPLATES.filter((t) => t.patterns.includes(pattern));
+  const pool = matching.length > 0 ? matching : EVENT_TEMPLATES.filter((t) => t.patterns.includes("equilibre"));
+  const template = pool[Math.floor(Math.random() * pool.length)];
+  return {
+    ...template,
+    id: `event-${Date.now()}`,
+    createdAt: nowIso(),
+    resolved: false,
+    choice: null
+  };
+}
+
+export function applyEventEffects(stats: AvatarStats, effects: DailyEventEffects): AvatarStats {
+  return normalizeStats({
+    ...stats,
+    money:       clampMoney((stats.money) + (effects.money ?? 0)),
+    energy:      stats.energy      + (effects.energy      ?? 0),
+    mood:        stats.mood        + (effects.mood        ?? 0),
+    sociability: stats.sociability + (effects.sociability ?? 0),
+    stress:      stats.stress      + (effects.stress      ?? 0),
+    discipline:  stats.discipline  + (effects.discipline  ?? 0),
+    reputation:  stats.reputation  + (effects.reputation  ?? 0),
+    fitness:     stats.fitness     + (effects.fitness     ?? 0),
+    motivation:  stats.motivation  + (effects.motivation  ?? 0),
+    hygiene:     stats.hygiene     + (effects.hygiene     ?? 0),
+    lastDecayAt: nowIso()
+  });
 }
 
 export { activities, jobs, locations, neighborhoods, starterResidents };

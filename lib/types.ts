@@ -31,6 +31,35 @@ export type OutingResult = {
   fitnessDelta: number;
   socialQualityHint: "haute" | "moyenne" | "basse";
 };
+export type DailyEventKind = "opportunity" | "encounter" | "setback" | "windfall" | "social";
+
+export type DailyEventEffects = {
+  money?: number;
+  energy?: number;
+  mood?: number;
+  sociability?: number;
+  stress?: number;
+  discipline?: number;
+  reputation?: number;
+  fitness?: number;
+  motivation?: number;
+  hygiene?: number;
+};
+
+export type DailyEvent = {
+  id: string;
+  kind: DailyEventKind;
+  title: string;
+  body: string;
+  actionLabel: string;
+  skipLabel: string;
+  effects: DailyEventEffects;
+  skipEffects: DailyEventEffects;
+  createdAt: string;
+  resolved: boolean;
+  choice: "accepted" | "skipped" | null;
+};
+
 export type LifePattern =
   | "burnout"
   | "social_drought"

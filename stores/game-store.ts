@@ -6,6 +6,7 @@ import {
   activities,
   applyActivityToStats,
   applyDecay,
+  applyEventEffects,
   applyOutingToStats,
   appendFeed,
   appendNotification,
@@ -15,6 +16,7 @@ import {
   createInitialRuntime,
   createStatsFromAvatar,
   ensureLocalConversation,
+  generateDailyEvent,
   jobs,
   locations,
   normalizeStats,
@@ -25,11 +27,12 @@ import {
   updateGoal,
   updateRelationshipScore
 } from "@/lib/game-engine";
-import { buildAdvice } from "@/lib/selectors";
+import { buildAdvice, detectLifePattern } from "@/lib/selectors";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
   AvatarProfile,
   Conversation,
+  DailyEvent,
   InvitationRecord,
   LifeActionId,
   NotificationItem,
@@ -51,6 +54,7 @@ type GameState = {
   advice: ReturnType<typeof createInitialRuntime>["advice"];
   relationships: ReturnType<typeof createInitialRuntime>["relationships"];
   invitations: InvitationRecord[];
+  dailyEvent: DailyEvent | null;
   lifeFeed: ReturnType<typeof createInitialRuntime>["lifeFeed"];
   signIn: (email: string, password?: string) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => void;
@@ -64,6 +68,7 @@ type GameState = {
   sendInvitation: (residentId: string, activitySlug: string) => void;
   respondInvitation: (invitationId: string, status: "accepted" | "declined") => void;
   performOuting: (config: OutingConfig) => void;
+  resolveDailyEvent: (choice: "accepted" | "skipped") => void;
   claimDailyReward: () => void;
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: () => void;
@@ -76,6 +81,7 @@ function initialState() {
     hasHydrated: false,
     session: null as UserSession | null,
     avatar: null as AvatarProfile | null,
+    dailyEvent: null as DailyEvent | null,
     ...runtime
   };
 }
@@ -320,7 +326,24 @@ export const useGameStore = create<GameState>()(
           const stats = applyDecay(state.stats);
           const notifications = buildAutomaticNotifications(stats, state.notifications);
           let invitations = state.invitations;
+          let { dailyEvent } = state;
 
+          // Generate daily event if none today
+          const today = new Date().toDateString();
+          const hasEventToday = dailyEvent && new Date(dailyEvent.createdAt).toDateString() === today;
+          if (!hasEventToday) {
+            dailyEvent = generateDailyEvent(detectLifePattern(stats));
+            notifications.unshift({
+              id: `notif-event-${Date.now()}`,
+              kind: "tip",
+              title: `Evenement du jour : ${dailyEvent.title}`,
+              body: "Un evenement t'attend sur l'ecran principal.",
+              createdAt: nowIso(),
+              read: false
+            });
+          }
+
+          // Try resident invitation
           const newInvitation = tryGenerateResidentInvitation(stats, state.relationships, invitations);
           if (newInvitation) {
             const resident = starterResidents.find((r) => r.id === newInvitation.residentId);
@@ -340,7 +363,8 @@ export const useGameStore = create<GameState>()(
             stats,
             advice: buildAdvice(stats),
             notifications,
-            invitations
+            invitations,
+            dailyEvent
           };
         }),
       performAction: (action) => set((state) => withActionApplied(state, action)),
@@ -642,6 +666,26 @@ export const useGameStore = create<GameState>()(
             })
           };
         }),
+      resolveDailyEvent: (choice) =>
+        set((state) => {
+          if (!state.dailyEvent || state.dailyEvent.resolved) return state;
+          const effects = choice === "accepted" ? state.dailyEvent.effects : state.dailyEvent.skipEffects;
+          const nextStats = applyEventEffects(state.stats, effects);
+          const createdAt = nowIso();
+          return {
+            dailyEvent: { ...state.dailyEvent, resolved: true, choice },
+            stats: nextStats,
+            advice: buildAdvice(nextStats),
+            lifeFeed: appendFeed(state.lifeFeed, {
+              id: `feed-event-${Date.now()}`,
+              title: state.dailyEvent.title,
+              body: choice === "accepted"
+                ? `Tu as agi : ${state.dailyEvent.actionLabel}.`
+                : `Tu as laisse passer cet evenement.`,
+              createdAt
+            })
+          };
+        }),
       claimDailyReward: () =>
         set((state) => {
           const today = new Date().toDateString();
@@ -701,6 +745,7 @@ export const useGameStore = create<GameState>()(
         advice: state.advice,
         relationships: state.relationships,
         invitations: state.invitations,
+        dailyEvent: state.dailyEvent,
         lifeFeed: state.lifeFeed
       }),
       onRehydrateStorage: () => (state) => {
