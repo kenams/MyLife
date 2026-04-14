@@ -10,6 +10,7 @@ import {
   appendFeed,
   appendNotification,
   buildAutomaticNotifications,
+  buildResidentVisitMessage,
   createFeedFromAction,
   createInitialRuntime,
   createStatsFromAvatar,
@@ -20,6 +21,7 @@ import {
   nowIso,
   resolveOutingResult,
   starterResidents,
+  tryGenerateResidentInvitation,
   updateGoal,
   updateRelationshipScore
 } from "@/lib/game-engine";
@@ -316,10 +318,29 @@ export const useGameStore = create<GameState>()(
       bootstrap: () =>
         set((state) => {
           const stats = applyDecay(state.stats);
+          const notifications = buildAutomaticNotifications(stats, state.notifications);
+          let invitations = state.invitations;
+
+          const newInvitation = tryGenerateResidentInvitation(stats, state.relationships, invitations);
+          if (newInvitation) {
+            const resident = starterResidents.find((r) => r.id === newInvitation.residentId);
+            const activity = activities.find((a) => a.slug === newInvitation.activitySlug);
+            invitations = [newInvitation, ...invitations].slice(0, 20);
+            notifications.unshift({
+              id: `notif-${newInvitation.id}`,
+              kind: "social",
+              title: `${newInvitation.residentName} t'invite`,
+              body: `${resident?.name ?? newInvitation.residentName} propose ${activity?.name.toLowerCase() ?? newInvitation.activitySlug}. Reponds dans l'onglet Social.`,
+              createdAt: nowIso(),
+              read: false
+            });
+          }
+
           return {
             stats,
             advice: buildAdvice(stats),
-            notifications: buildAutomaticNotifications(stats, state.notifications)
+            notifications,
+            invitations
           };
         }),
       performAction: (action) => set((state) => withActionApplied(state, action)),
@@ -334,10 +355,33 @@ export const useGameStore = create<GameState>()(
             lastDecayAt: nowIso()
           });
 
+          // Inject resident message in local channel (only if no recent resident message)
+          let conversations = ensureLocalConversation(state.conversations, location.slug);
+          const visitMessage = buildResidentVisitMessage(location.slug, nextStats);
+          if (visitMessage) {
+            const localId = `local-${location.slug}`;
+            const TWO_HOURS = 2 * 60 * 60 * 1000;
+            conversations = conversations.map((conv) => {
+              if (conv.id !== localId) return conv;
+              const lastResidentMsg = [...conv.messages]
+                .reverse()
+                .find((m) => m.authorId !== "self" && m.kind === "message");
+              const tooRecent = lastResidentMsg
+                ? Date.now() - new Date(lastResidentMsg.createdAt).getTime() < TWO_HOURS
+                : false;
+              if (tooRecent) return conv;
+              return {
+                ...conv,
+                unreadCount: conv.unreadCount + 1,
+                messages: [...conv.messages, visitMessage]
+              };
+            });
+          }
+
           return {
             currentLocationSlug: location.slug,
             currentNeighborhoodSlug: location.neighborhoodSlug,
-            conversations: ensureLocalConversation(state.conversations, location.slug),
+            conversations,
             stats: nextStats,
             advice: buildAdvice(nextStats),
             notifications: appendNotification(state.notifications, {

@@ -5,6 +5,7 @@ import type {
   AvatarProfile,
   AvatarStats,
   Conversation,
+  ConversationMessage,
   DailyGoal,
   InvitationRecord,
   LifeActionId,
@@ -344,6 +345,126 @@ export function buildAutomaticNotifications(stats: AvatarStats, existing: Notifi
   }
 
   return notifications.slice(0, 30);
+}
+
+// ─── Resident Social Feed ────────────────────────────────────────────────────
+
+const RESIDENT_MESSAGES: Record<string, (stats: AvatarStats) => string> = {
+  ava: (stats) => {
+    if (stats.sociability < 35) return "Le silence ne t'aide pas. Reprends contact avec quelqu'un aujourd'hui — n'importe quoi de simple.";
+    if (stats.stress > 68) return "Un cafe, pas un objectif. Laisse la pression de cote une heure.";
+    if (stats.discipline > 62) return "Je vois que tu tiens. C'est ca qui fait la difference dans le temps.";
+    return "Le lien se construit dans les petits moments, pas les grands gestes. Continue.";
+  },
+  malik: (stats) => {
+    if (stats.money < 55) return "Les ressources basses, c'est le moment de consolider, pas de depenser.";
+    if (stats.discipline < 38) return "Pas de regularite, pas de credibilite. Simple.";
+    if (stats.discipline > 65 && stats.money > 120) return "Bien. Convertis ca en reseau ou en niveau superieur, pas juste en routine.";
+    return "Le travail est un outil. Ceux qui le maitrisent choisissent mieux leur cercle.";
+  },
+  noa: (stats) => {
+    if (stats.mood < 42) return "L'energie se voit avant de s'entendre. Remets ton humeur en place.";
+    if (stats.hygiene > 72 && stats.fitness > 55) return "Tu rayonnes bien aujourd'hui. C'est le bon moment pour sortir.";
+    if (stats.attractiveness < 42) return "L'image est un langage. Travaille-la comme tu travailles le reste.";
+    return "Le style, ce n'est pas ce que tu portes. C'est comment tu tiens dans un espace.";
+  },
+  leila: (stats) => {
+    if (stats.stress > 68) return "Marche 10 minutes avant de resoudre quoi que ce soit. L'ordre fait tout.";
+    if (stats.fitness > 58) return "Tu progresses bien. Continue meme quand c'est lent — c'est ca qui compte.";
+    if (stats.energy < 38) return "Ton corps te parle. Ecoute-le avant de forcer quoi que ce soit.";
+    return "Un rythme sain se construit ici, dans les petites sorties regulieres.";
+  },
+  yan: (stats) => {
+    if (stats.streak < 2) return "Pas de serie, pas de traction. Reviens demain si aujourd'hui est dur.";
+    if (stats.discipline > 68 && stats.streak > 3) return "Bien. Maintenant ajoute une couche — reseau ou apprentissage.";
+    if (stats.motivation < 42) return "La motivation ne precede pas l'action. C'est l'inverse. Fais d'abord.";
+    return "Ce qui compte : es-tu meilleur qu'hier ? Rien d'autre.";
+  },
+  sana: (stats) => {
+    if (stats.fitness < 38) return "Tu es en dessous de ta forme. Commence leger — ne saute pas la seance.";
+    if (stats.fitness > 68) return "Bien maintenu. Regarde aussi la recuperation — c'est la que la progression se fixe.";
+    if (stats.stress > 68) return "20 minutes de sport reduisent le cortisol. C'est physio, pas metaphore.";
+    return "La constance bat l'intensite. Une seance legere vaut mieux qu'une absence.";
+  }
+};
+
+// Résident principal par lieu (pour les messages de channel)
+const LOCATION_RESIDENT: Record<string, string> = {
+  cafe:       "ava",
+  office:     "yan",
+  park:       "leila",
+  gym:        "sana",
+  restaurant: "noa"
+};
+
+// Activité préférée par résident pour les invitations proactives
+const RESIDENT_INVITE_ACTIVITY: Record<string, string> = {
+  ava:   "coffee-meetup",
+  malik: "group-outing",
+  noa:   "restaurant-date",
+  leila: "evening-walk",
+  yan:   "coffee-meetup",
+  sana:  "group-outing"
+};
+
+export function buildResidentVisitMessage(locationSlug: string, stats: AvatarStats): ConversationMessage | null {
+  const residentId = LOCATION_RESIDENT[locationSlug];
+  if (!residentId) return null;
+  const fn = RESIDENT_MESSAGES[residentId];
+  if (!fn) return null;
+  return {
+    id: `resident-visit-${residentId}-${Date.now()}`,
+    authorId: residentId,
+    body: fn(stats),
+    createdAt: nowIso(),
+    read: false,
+    kind: "message"
+  };
+}
+
+export function tryGenerateResidentInvitation(
+  stats: AvatarStats,
+  relationships: RelationshipRecord[],
+  invitations: InvitationRecord[]
+): InvitationRecord | null {
+  // Max 1 pending resident-initiated invitation at a time
+  const alreadyPending = invitations.some(
+    (inv) => inv.status === "pending" && inv.id.startsWith("resident-invite-")
+  );
+  if (alreadyPending) return null;
+
+  const pendingResidentIds = new Set(
+    invitations.filter((inv) => inv.status === "pending").map((inv) => inv.residentId)
+  );
+
+  // Eligible: score > 25, no pending invitation from them already
+  const eligible = relationships
+    .filter((rel) => rel.score > 25 && !pendingResidentIds.has(rel.residentId))
+    .sort((a, b) => b.score - a.score);
+
+  for (const rel of eligible) {
+    const resident = starterResidents.find((r) => r.id === rel.residentId);
+    if (!resident) continue;
+
+    const activitySlug = RESIDENT_INVITE_ACTIVITY[resident.id];
+    if (!activitySlug) continue;
+
+    // Stat threshold per resident
+    if (resident.id === "malik" && stats.discipline < 45) continue;
+    if (resident.id === "yan" && stats.discipline < 55) continue;
+    if (resident.id === "noa" && stats.mood < 45) continue;
+    if (resident.id === "sana" && stats.fitness < 40) continue;
+
+    return {
+      id: `resident-invite-${resident.id}-${Date.now()}`,
+      residentId: resident.id,
+      residentName: resident.name,
+      activitySlug,
+      status: "pending" as const,
+      createdAt: nowIso()
+    };
+  }
+  return null;
 }
 
 export function ensureLocalConversation(conversations: Conversation[], locationSlug: string) {
