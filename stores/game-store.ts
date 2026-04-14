@@ -14,10 +14,12 @@ import {
   appendNotification,
   buildDatePlan,
   buildAutomaticNotifications,
+  buildResidentReply,
   buildResidentVisitMessage,
   checkStreakMilestone,
   createFeedFromAction,
   createInitialRuntime,
+  seededDailyGoals,
   createStatsFromAvatar,
   ensureLocalConversation,
   getDateReadiness,
@@ -723,8 +725,45 @@ export const useGameStore = create<GameState>()(
           let datePlans = state.datePlans;
           let { dailyEvent } = state;
 
-          // Generate daily event if none today
           const today = new Date().toDateString();
+
+          // Reset daily goals at midnight
+          const lastGoalReset = (state as GameState & { lastDailyGoalResetAt?: string | null }).lastDailyGoalResetAt;
+          const goalsNeedReset = !lastGoalReset || new Date(lastGoalReset).toDateString() !== today;
+          const dailyGoals = goalsNeedReset ? seededDailyGoals() : state.dailyGoals;
+
+          // Streak warning: lastRewardAt was yesterday → still ok; was before yesterday → streak will reset on next claim
+          if (state.lastRewardAt) {
+            const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
+            const twoDaysAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toDateString();
+            const lastRewardDay = new Date(state.lastRewardAt).toDateString();
+            const streakAtRisk =
+              lastRewardDay === yesterday && state.stats.streak >= 3 && new Date(state.lastRewardAt).toDateString() !== today;
+            const streakAlreadyBroken = lastRewardDay === twoDaysAgo || (lastRewardDay !== yesterday && lastRewardDay !== today);
+
+            if (streakAtRisk && !notifications.some((n) => n.id.startsWith("streak-warning-"))) {
+              notifications.unshift({
+                id: `streak-warning-${today}`,
+                kind: "reward",
+                title: `Serie de ${state.stats.streak} jours en danger`,
+                body: "Tu n'as pas encore recupere la reward aujourd'hui. Claim-la avant minuit pour garder ta serie.",
+                createdAt: nowIso(),
+                read: false
+              });
+            }
+            if (streakAlreadyBroken && state.stats.streak >= 3 && !notifications.some((n) => n.id.startsWith("streak-lost-"))) {
+              notifications.unshift({
+                id: `streak-lost-${today}`,
+                kind: "tip",
+                title: `Serie perdue (etait ${state.stats.streak} jours)`,
+                body: "Un jour manque repart la compteur a zero. Reprends des aujourd'hui — la constance compte plus que la perfection.",
+                createdAt: nowIso(),
+                read: false
+              });
+            }
+          }
+
+          // Generate daily event if none today
           const hasEventToday = dailyEvent && new Date(dailyEvent.createdAt).toDateString() === today;
           if (!hasEventToday) {
             dailyEvent = generateDailyEvent(detectLifePattern(stats));
@@ -815,7 +854,9 @@ export const useGameStore = create<GameState>()(
             invitations,
             datePlans,
             dailyEvent,
-            lastKnownRank
+            lastKnownRank,
+            dailyGoals,
+            ...(goalsNeedReset ? { lastDailyGoalResetAt: today } : {})
           };
         }),
       performAction: (action) => set((state) => withActionApplied(state, action)),
@@ -898,26 +939,28 @@ export const useGameStore = create<GameState>()(
             lastSocialAt: createdAt
           });
 
+          // Réponse résident dans les DM (1 message sur 2, seulement direct)
+          const isDirectConv = targetConversation?.kind === "direct";
+          const selfMessages = (targetConversation?.messages ?? []).filter((m) => m.authorId === "self").length;
+          const reply = isDirectConv && residentId ? buildResidentReply(residentId, selfMessages) : null;
+
           return {
-            conversations: state.conversations.map((conversation) =>
-              conversation.id === conversationId
-                ? {
-                    ...conversation,
-                    unreadCount: 0,
-                    messages: [
-                      ...conversation.messages,
-                      {
-                        id: `msg-${Date.now()}`,
-                        authorId: "self",
-                        body: cleanBody,
-                        createdAt,
-                        read: true,
-                        kind: "message"
-                      }
-                    ]
-                  }
-                : conversation
-            ),
+            conversations: state.conversations.map((conversation) => {
+              if (conversation.id !== conversationId) return conversation;
+              const msgs = [
+                ...conversation.messages,
+                {
+                  id: `msg-${Date.now()}`,
+                  authorId: "self",
+                  body: cleanBody,
+                  createdAt,
+                  read: true,
+                  kind: "message" as const
+                },
+                ...(reply ? [reply] : [])
+              ];
+              return { ...conversation, unreadCount: reply ? 1 : 0, messages: msgs };
+            }),
             relationships,
             stats: nextStats,
             advice: buildAdvice(nextStats),
@@ -1365,6 +1408,7 @@ export const useGameStore = create<GameState>()(
         datePlans: state.datePlans,
         dailyEvent: state.dailyEvent,
         lastKnownRank: state.lastKnownRank,
+        lastDailyGoalResetAt: (state as GameState & { lastDailyGoalResetAt?: string | null }).lastDailyGoalResetAt,
         lifeFeed: state.lifeFeed
       }),
       onRehydrateStorage: () => (state) => {

@@ -439,6 +439,73 @@ export function buildResidentVisitMessage(locationSlug: string, stats: AvatarSta
   };
 }
 
+// ─── Resident Chat Replies ────────────────────────────────────────────────────
+
+const RESIDENT_REPLIES: Record<string, string[]> = {
+  ava: [
+    "Je vois ca. Continue — la constance fait plus que les grands efforts ponctuels.",
+    "C'est un bon signe. Reviens me parler si quelque chose coince.",
+    "Bien. Une sortie simple bientot ferait du bien aussi.",
+    "Le quartier evolue vite. Tiens ton rythme et ca suit.",
+    "Tu progresses. Garde ca discret — ceux qui crient fort avancent moins.",
+    "Je note. Et toi, comment tu te sens vraiment en ce moment ?"
+  ],
+  malik: [
+    "Compact. Montre les resultats, pas les intentions.",
+    "Bien. Maintenant execute — la conversation ne remplace pas l'action.",
+    "C'est le bon angle. Reste dessus.",
+    "Interessant. Reviens quand tu as quelque chose de concret a montrer.",
+    "Je retiens. Les profils qui agissent d'abord parlent apres — c'est ca qui impressionne ici.",
+    "Ok. Si tu veux avancer plus vite, travaille la discipline d'abord."
+  ],
+  noa: [
+    "J'aime ca. L'energie que tu degages en ce moment est reelle.",
+    "Sympa. Faudrait se croiser bientot — un cafe ou autre chose.",
+    "Ca colle bien avec ce que tu projettes. Reste authentique.",
+    "Interessant. Tu as un vrai truc — beaucoup ici ne voient pas ca.",
+    "Je vois ou tu vas. C'est plutot bien.",
+    "Haha ok. On devrait vraiment se voir plutot que juste ecrire."
+  ],
+  leila: [
+    "Ca fait plaisir d'entendre ca. Continue a prendre soin de toi aussi.",
+    "Bien. Une marche ensemble ca te dirait un de ces soirs ?",
+    "Le corps et le mental avancent ensemble. Tu le ressens ?",
+    "Je suis contente que tu partages ca. Garde ce rythme.",
+    "Tu progresses vraiment. Ca se voit dans comment tu tiens.",
+    "Simple et efficace. C'est tout ce qu'il faut."
+  ],
+  yan: [
+    "Court et clair. C'est le bon format.",
+    "Note. Quand les actes suivent, ca veut dire quelque chose.",
+    "Bien. Maintenant fait-le. Parler c'est facile.",
+    "Je vois. Ton streak dit plus que tes mots — continue.",
+    "Compact. Je prefere ca a de longues explications.",
+    "Retenu. Montre-le dans les prochains jours."
+  ],
+  sana: [
+    "Super. Et le sport ce soir ?",
+    "Ca m'encourage aussi. La regularite c'est contagieux.",
+    "Bien joue. Le corps retient tout ce qu'on lui donne.",
+    "Continue. La prochaine seance sera encore mieux.",
+    "Je t'entends. Garde juste ca en tete : le repos fait partie du progres aussi.",
+    "Ca c'est bien. On se croise au gym bientot ?"
+  ]
+};
+
+export function buildResidentReply(residentId: string, messageCount: number): ConversationMessage | null {
+  const replies = RESIDENT_REPLIES[residentId];
+  if (!replies || replies.length === 0) return null;
+  const idx = messageCount % replies.length;
+  return {
+    id: `reply-${residentId}-${Date.now()}`,
+    authorId: residentId,
+    body: replies[idx],
+    createdAt: nowIso(),
+    read: false,
+    kind: "message"
+  };
+}
+
 export function tryGenerateResidentInvitation(
   stats: AvatarStats,
   relationships: RelationshipRecord[],
@@ -734,7 +801,7 @@ export function getDateReadiness(
   if (!isRomanticResident) {
     return {
       allowed: false,
-      note: "Ce profil n'est pas encore oriente rendez-vous romantique dans le MVP.",
+      note: "Ce profil ne cherche pas de relation romantique pour l'instant.",
       venueOptions
     };
   }

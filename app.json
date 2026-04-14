@@ -14,13 +14,25 @@
     "scheme": "mylife",
     "plugins": [
       "expo-router",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#07111f",
+          "sounds": []
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false
     },
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "bundleIdentifier": "com.kenams.mylife",
+      "infoPlist": {
+        "NSUserNotificationsUsageDescription": "MyLife utilise les notifications pour te rappeler tes besoins vitaux et tes evenements sociaux."
+      }
     },
     "android": {
       "adaptiveIcon": {

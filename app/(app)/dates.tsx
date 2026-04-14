@@ -6,11 +6,24 @@ import { getDateReadiness, getDateVenueOptions, starterResidents } from "@/lib/g
 import { getDateVenueLabel, getRelationshipLabel } from "@/lib/selectors";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
-import type { DateVenueKind } from "@/lib/types";
+import type { AvatarProfile, DateVenueKind } from "@/lib/types";
 
-const ROMANTIC_RESIDENT_IDS = ["noa"];
+function getRomanticResidentIds(avatar: AvatarProfile | null): string[] {
+  // Tous les résidents qui déclarent chercher une relation amoureuse
+  const openToRomance = starterResidents
+    .filter((r) => r.lookingFor.includes("relation amoureuse"))
+    .map((r) => r.id);
+
+  if (!avatar) return openToRomance;
+
+  // Si l'avatar ne cherche pas de relation, restreindre à la liste de base
+  if (!avatar.lookingFor.includes("relation amoureuse")) return ["noa"];
+
+  return openToRomance;
+}
 
 export default function DatesScreen() {
+  const avatar = useGameStore((state) => state.avatar);
   const stats = useGameStore((state) => state.stats);
   const relationships = useGameStore((state) => state.relationships);
   const datePlans = useGameStore((state) => state.datePlans);
@@ -18,6 +31,7 @@ export default function DatesScreen() {
   const respondDatePlan = useGameStore((state) => state.respondDatePlan);
   const completeDatePlan = useGameStore((state) => state.completeDatePlan);
 
+  const ROMANTIC_RESIDENT_IDS = useMemo(() => getRomanticResidentIds(avatar), [avatar]);
   const [selectedResidentId, setSelectedResidentId] = useState<string>(ROMANTIC_RESIDENT_IDS[0]);
   const [selectedVenue, setSelectedVenue] = useState<DateVenueKind>("coffee");
 
