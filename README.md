@@ -46,9 +46,11 @@ Application mobile Expo + Supabase pour une simulation de vie sociale premium.
   - residents seedes avec profils
   - relations
   - invitations
+  - dates publics et sobres
   - chat prive et local
 - centre d'alertes in-app
 - conseils de vie courts et applicables
+- momentum et streak qui renforcent les bonnes routines
 - architecture realtime Supabase minimale pour le lobby social
 - schema SQL plus serieux dans `supabase/schema.sql`
 
@@ -65,6 +67,16 @@ Controle rapide :
 ```bash
 npm run typecheck
 ```
+
+## Profils de test rapides
+
+L'ecran de connexion propose maintenant trois etats de test precharges :
+
+- `Profil test equilibre` : compte stable pour valider le flux global
+- `Profil test sous pression` : faible energie, stress eleve, budget bas, utile pour tester la recuperation
+- `Profil test date & social` : vie sociale haute, date confirme, utile pour tester `discover`, `chat` et `dates`
+
+Ces profils chargent directement une session locale, un avatar complet, des stats cohérentes, des relations et des notifications.
 
 ## Variables d'environnement
 
@@ -83,7 +95,7 @@ Sans ces variables, l'application tourne en mode local persistant pour garder le
 - `components/avatar-form.tsx` : formulaire avatar complet et reutilisable
 - `components/ui.tsx` : primitives UI premium
 - `stores/game-store.ts` : orchestration et persistance locale
-- `lib/game-engine.ts` : logique de simulation, decay, feed, notifications
+- `lib/game-engine.ts` : logique de simulation, decay, feed, notifications, events, outings, dates
 - `lib/game-data.ts` : seeds du monde, jobs, activites, options onboarding
 - `hooks/use-realtime-lobby.ts` : presence Supabase minimale pour le lobby
 - `supabase/schema.sql` : schema backend MVP extensible
@@ -92,8 +104,9 @@ Sans ces variables, l'application tourne en mode local persistant pour garder le
 
 - boucle quotidienne credible
 - progression sociale visible
+- momentum lisible et utile
 - conseils concrets lies a l'etat du joueur
-- liens sociaux, chat et invitations
+- liens sociaux, chat, invitations et dates publics
 - UI plus premium et plus lisible
 
 ## Ce qui reste naturel pour une V2

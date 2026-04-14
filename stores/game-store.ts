@@ -7,15 +7,20 @@ import {
   applyActivityToStats,
   applyDecay,
   applyEventEffects,
+  applyMomentumGain,
   applyOutingToStats,
+  applyDatePlanToStats,
   appendFeed,
   appendNotification,
+  buildDatePlan,
   buildAutomaticNotifications,
   buildResidentVisitMessage,
+  checkStreakMilestone,
   createFeedFromAction,
   createInitialRuntime,
   createStatsFromAvatar,
   ensureLocalConversation,
+  getDateReadiness,
   generateDailyEvent,
   jobs,
   locations,
@@ -27,11 +32,13 @@ import {
   updateGoal,
   updateRelationshipScore
 } from "@/lib/game-engine";
-import { buildAdvice, detectLifePattern, getSocialRankLabel, RANK_ORDER } from "@/lib/selectors";
+import { buildAdvice, detectLifePattern, getMomentumState, getSocialRankLabel, RANK_ORDER } from "@/lib/selectors";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
   AvatarProfile,
   Conversation,
+  DatePlan,
+  DateVenueKind,
   DailyEvent,
   InvitationRecord,
   LifeActionId,
@@ -40,6 +47,8 @@ import type {
   SocialRank,
   UserSession
 } from "@/lib/types";
+
+type TestAccountPreset = "balanced" | "burnout" | "romantic";
 
 type GameState = {
   hasHydrated: boolean;
@@ -55,10 +64,12 @@ type GameState = {
   advice: ReturnType<typeof createInitialRuntime>["advice"];
   relationships: ReturnType<typeof createInitialRuntime>["relationships"];
   invitations: InvitationRecord[];
+  datePlans: DatePlan[];
   dailyEvent: DailyEvent | null;
   lastKnownRank: SocialRank | null;
   lifeFeed: ReturnType<typeof createInitialRuntime>["lifeFeed"];
   signIn: (email: string, password?: string) => Promise<{ ok: boolean; error?: string }>;
+  loadTestAccount: (preset?: TestAccountPreset) => void;
   signOut: () => void;
   completeAvatar: (avatar: AvatarProfile) => void;
   editAvatar: (avatar: AvatarProfile) => void;
@@ -69,6 +80,9 @@ type GameState = {
   startDirectConversation: (residentId: string, residentName: string) => void;
   sendInvitation: (residentId: string, activitySlug: string) => void;
   respondInvitation: (invitationId: string, status: "accepted" | "declined") => void;
+  proposeDate: (residentId: string, residentName: string, venueKind: DateVenueKind) => void;
+  respondDatePlan: (datePlanId: string, status: "accepted" | "declined") => void;
+  completeDatePlan: (datePlanId: string) => void;
   performOuting: (config: OutingConfig) => void;
   resolveDailyEvent: (choice: "accepted" | "skipped") => void;
   claimDailyReward: () => void;
@@ -91,6 +105,380 @@ function initialState() {
 
 function getStarterJob(slug: string) {
   return jobs.find((job) => job.slug === slug) ?? jobs[0];
+}
+
+function createTestAccountState(preset: TestAccountPreset = "balanced") {
+  const runtime = createInitialRuntime();
+  const createdAt = nowIso();
+  const avatar: AvatarProfile = {
+    displayName: "Kenan",
+    ageRange: "26-30",
+    gender: "Homme",
+    originStyle: "Mediterranee",
+    photoStyle: "Street premium",
+    bio: "Routine stable, ambition claire, recherche des liens utiles, des sorties propres et une progression visible.",
+    heightCm: 178,
+    weightKg: 74,
+    bodyFrame: "athletique",
+    skinTone: "ambre",
+    hairType: "ondulé",
+    hairColor: "noir",
+    hairLength: "court",
+    eyeColor: "marron",
+    outfitStyle: "business",
+    facialHair: "barbe courte",
+    silhouette: "tonique",
+    personalityTrait: "Strategique",
+    sociabilityStyle: "ouvert",
+    ambition: "croissance",
+    lifeRhythm: "equilibre",
+    interests: ["business", "coffee", "fitness", "mindset", "networking"],
+    leisureStyles: ["fitness", "cinema", "networking"],
+    relationshipStyle: "stable",
+    personalGoal: "monter socialement",
+    lifeHabit: "structure",
+    lookingFor: ["amis", "motivation", "relation amoureuse", "sorties"],
+    friendshipIntent: "Construire un cercle fiable, present et utile.",
+    romanceIntent: "Des rencontres sobres, publiques et avec vrai potentiel.",
+    favoriteActivities: ["fitness", "coffee", "cinema"],
+    favoriteOutings: ["coffee", "restaurant", "cinema"],
+    preferredVibe: "ambitieux",
+    appreciatedTraits: ["fiable", "discipline", "douceur"],
+    starterJob: "support-tech"
+  };
+
+  const baseStats = createStatsFromAvatar(avatar);
+  let stats = normalizeStats({
+    ...baseStats,
+    hunger: 74,
+    hydration: 78,
+    energy: 83,
+    hygiene: 80,
+    mood: 76,
+    sociability: 71,
+    health: 80,
+    fitness: 72,
+    stress: 29,
+    money: 248,
+    socialRankScore: 63,
+    reputation: 64,
+    discipline: 70,
+    motivation: 74,
+    weight: 74,
+    streak: 4,
+    lastDecayAt: createdAt,
+    lastMealAt: new Date(Date.now() - 1000 * 60 * 80).toISOString(),
+    lastWorkoutAt: new Date(Date.now() - 1000 * 60 * 60 * 18).toISOString(),
+    lastSocialAt: new Date(Date.now() - 1000 * 60 * 55).toISOString()
+  });
+
+  const relationships = runtime.relationships.map((item) => {
+    if (item.residentId === "ava") {
+      return {
+        ...item,
+        status: "ami" as const,
+        score: 58,
+        quality: "stable" as const,
+        influence: "positive" as const,
+        isFollowing: true,
+        lastInteractionAt: createdAt
+      };
+    }
+
+    if (item.residentId === "noa") {
+      return {
+        ...item,
+        status: "crush" as const,
+        score: 51,
+        quality: "inspirante" as const,
+        influence: "positive" as const,
+        isFollowing: true,
+        lastInteractionAt: createdAt
+      };
+    }
+
+    if (item.residentId === "leila") {
+      return {
+        ...item,
+        status: "ami" as const,
+        score: 46,
+        quality: "stable" as const,
+        influence: "positive" as const,
+        lastInteractionAt: createdAt
+      };
+    }
+
+    if (item.residentId === "yan") {
+      return {
+        ...item,
+        status: "contact" as const,
+        score: 42,
+        quality: "stable" as const,
+        influence: "positive" as const,
+        lastInteractionAt: createdAt
+      };
+    }
+
+    return {
+      ...item,
+      score: 34,
+      quality: "neutre" as const,
+      influence: "neutre" as const,
+      lastInteractionAt: createdAt
+    };
+  });
+
+  const conversations = [
+    ...runtime.conversations,
+    {
+      id: "dm-ava",
+      peerId: "ava",
+      title: "Ava",
+      subtitle: "conversation privee",
+      kind: "direct" as const,
+      locationSlug: null,
+      unreadCount: 1,
+      messages: [
+        {
+          id: "msg-ava-1",
+          authorId: "ava",
+          body: "Tu tiens un bon rythme. Si tu veux tester le social, commence par une sortie simple.",
+          createdAt,
+          read: false,
+          kind: "message" as const
+        },
+        {
+          id: "msg-ava-2",
+          authorId: "self",
+          body: "Je garde la ligne. Je vais probablement passer au cafe en fin de journee.",
+          createdAt,
+          read: true,
+          kind: "message" as const
+        }
+      ]
+    },
+    {
+      id: "dm-noa",
+      peerId: "noa",
+      title: "Noa",
+      subtitle: "conversation privee",
+      kind: "direct" as const,
+      locationSlug: null,
+      unreadCount: 0,
+      messages: [
+        {
+          id: "msg-noa-1",
+          authorId: "noa",
+          body: "Ton profil est propre. Un cinema ou un cafe pourrait bien se passer.",
+          createdAt,
+          read: true,
+          kind: "message" as const
+        }
+      ]
+    }
+  ];
+
+  let invitations: InvitationRecord[] = [
+    {
+      id: "invite-leila-test",
+      residentId: "leila",
+      residentName: "Leila",
+      activitySlug: "walk",
+      status: "pending",
+      createdAt
+    }
+  ];
+
+  let datePlans: DatePlan[] = [
+    {
+      id: "date-noa-test",
+      residentId: "noa",
+      residentName: "Noa",
+      venueKind: "cinema",
+      venueLabel: "Cinema public",
+      activitySlug: "cinema-night",
+      status: "accepted",
+      scheduledMoment: "ce soir, 19:30",
+      note: "Sortie sobre et publique pour tester la qualite du lien sans forcer le rythme.",
+      bridgeToRealLife: "Si l'echange reste propre, reproduis le meme format dans la vraie vie : lieu public, timing clair, duree courte.",
+      createdAt
+    }
+  ];
+
+  let dailyGoals = runtime.dailyGoals.map((goal) => ({
+    ...goal,
+    completed:
+      goal.label.includes("Manger") ||
+      goal.label.includes("Travailler") ||
+      goal.label.includes("Parler")
+  }));
+
+  let notifications = [
+    {
+      id: "test-welcome",
+      kind: "reward" as const,
+      title: "Compte test charge",
+      body: "Tu entres avec une vie deja en mouvement : social, dates, travail et momentum actifs.",
+      createdAt,
+      read: false
+    },
+    {
+      id: "test-date-reminder",
+      kind: "social" as const,
+      title: "Date confirme ce soir",
+      body: "Noa est partant pour une sortie cinema. Tu peux tester tout le flux depuis l'ecran Dates.",
+      createdAt,
+      read: false
+    },
+    ...runtime.notifications
+  ];
+
+  let lifeFeed = [
+    {
+      id: "feed-test-start",
+      title: "Vie test prechargee",
+      body: "Le compte test demarre avec un cercle social, un date prevu et assez de stats pour explorer tout le MVP.",
+      createdAt
+    },
+    ...runtime.lifeFeed
+  ];
+
+  if (preset === "burnout") {
+    stats = normalizeStats({
+      ...stats,
+      hunger: 26,
+      hydration: 32,
+      energy: 18,
+      hygiene: 28,
+      mood: 29,
+      sociability: 21,
+      health: 42,
+      fitness: 34,
+      stress: 84,
+      money: 36,
+      socialRankScore: 31,
+      reputation: 41,
+      discipline: 37,
+      motivation: 28,
+      streak: 1,
+      lastMealAt: new Date(Date.now() - 1000 * 60 * 60 * 7).toISOString(),
+      lastWorkoutAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5).toISOString(),
+      lastSocialAt: new Date(Date.now() - 1000 * 60 * 60 * 30).toISOString(),
+      lastDecayAt: createdAt
+    });
+    invitations = [];
+    datePlans = [];
+    dailyGoals = runtime.dailyGoals;
+    notifications = [
+      {
+        id: "burnout-alert",
+        kind: "needs",
+        title: "Etat test : surcharge",
+        body: "Ce profil sert a valider la recuperation, les alertes, les conseils et les priorites vitales.",
+        createdAt,
+        read: false
+      },
+      ...runtime.notifications
+    ];
+    lifeFeed = [
+      {
+        id: "feed-burnout-start",
+        title: "Profil test sous pression",
+        body: "L'avatar demarre en dette physique et sociale. Tu peux tester la remontée, les conseils et le reset de routine.",
+        createdAt
+      },
+      ...runtime.lifeFeed
+    ];
+  }
+
+  if (preset === "romantic") {
+    stats = normalizeStats({
+      ...stats,
+      hunger: 79,
+      hydration: 82,
+      energy: 86,
+      hygiene: 88,
+      mood: 84,
+      sociability: 82,
+      health: 83,
+      fitness: 75,
+      stress: 22,
+      money: 292,
+      socialRankScore: 68,
+      reputation: 69,
+      discipline: 72,
+      motivation: 78,
+      streak: 6,
+      lastMealAt: new Date(Date.now() - 1000 * 60 * 55).toISOString(),
+      lastWorkoutAt: new Date(Date.now() - 1000 * 60 * 60 * 10).toISOString(),
+      lastSocialAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+      lastDecayAt: createdAt
+    });
+    invitations = [
+      {
+        id: "invite-ava-social",
+        residentId: "ava",
+        residentName: "Ava",
+        activitySlug: "coffee-meetup",
+        status: "pending",
+        createdAt
+      }
+    ];
+    datePlans = [
+      {
+        id: "date-noa-premium",
+        residentId: "noa",
+        residentName: "Noa",
+        venueKind: "restaurant",
+        venueLabel: "Restaurant",
+        activitySlug: "restaurant-date",
+        status: "accepted",
+        scheduledMoment: "ce soir, 20:00",
+        note: "Rendez-vous public plus premium pour tester la couche romantique et l'impact social.",
+        bridgeToRealLife: "Format propre pour un vrai rendez-vous : lieu public, courte duree, intention claire et sans forcing.",
+        createdAt
+      }
+    ];
+    notifications = [
+      {
+        id: "romantic-mode",
+        kind: "social",
+        title: "Etat test : vie sociale haute",
+        body: "Ce profil sert a valider les dates, les invitations, la compatibilite et les sorties qualitatives.",
+        createdAt,
+        read: false
+      },
+      ...runtime.notifications
+    ];
+    lifeFeed = [
+      {
+        id: "feed-romantic-start",
+        title: "Profil test social premium",
+        body: "Le compte demarre avec un bon rythme, une image propre et un date deja valide pour tester la couche relationnelle.",
+        createdAt
+      },
+      ...runtime.lifeFeed
+    ];
+  }
+
+  return {
+    session: { email: "test@mylife.app", provider: "local" as const },
+    avatar,
+    stats,
+    currentLocationSlug: "cafe",
+    currentNeighborhoodSlug: "central-district",
+    conversations,
+    dailyGoals,
+    lastRewardAt: new Date(Date.now() - 1000 * 60 * 60 * 20).toISOString(),
+    notifications,
+    advice: buildAdvice(stats),
+    relationships,
+    invitations,
+    datePlans,
+    dailyEvent: generateDailyEvent(detectLifePattern(stats)),
+    lastKnownRank: getSocialRankLabel(stats.socialRankScore),
+    lifeFeed
+  };
 }
 
 function withActionApplied(state: GameState, action: LifeActionId) {
@@ -181,13 +569,15 @@ function withActionApplied(state: GameState, action: LifeActionId) {
 
   if (action === "work-shift") {
     const job = getStarterJob(state.avatar?.starterJob ?? jobs[0].slug);
+    const rewardCoins = applyMomentumGain(job.rewardCoins, nextStats);
+    const disciplineReward = applyMomentumGain(job.disciplineReward, nextStats);
     nextStats = normalizeStats({
       ...nextStats,
-      money: nextStats.money + job.rewardCoins,
+      money: nextStats.money + rewardCoins,
       energy: nextStats.energy - job.energyCost,
       hunger: nextStats.hunger - job.hungerCost,
       stress: nextStats.stress + job.stressCost,
-      discipline: nextStats.discipline + job.disciplineReward,
+      discipline: nextStats.discipline + disciplineReward,
       reputation: nextStats.reputation + job.reputationReward,
       motivation: nextStats.motivation + 3,
       lastDecayAt: nowIso()
@@ -206,10 +596,10 @@ function withActionApplied(state: GameState, action: LifeActionId) {
   if (action === "focus-task") {
     nextStats = normalizeStats({
       ...nextStats,
-      money: nextStats.money + 18,
+      money: nextStats.money + applyMomentumGain(18, nextStats),
       energy: nextStats.energy - 8,
       stress: nextStats.stress + 4,
-      discipline: nextStats.discipline + 6,
+      discipline: nextStats.discipline + applyMomentumGain(6, nextStats),
       motivation: nextStats.motivation + 4,
       reputation: nextStats.reputation + 1,
       lastDecayAt: nowIso()
@@ -289,6 +679,7 @@ export const useGameStore = create<GameState>()(
         set({ session: { email: cleanedEmail, provider: "local" } });
         return { ok: true };
       },
+      loadTestAccount: (preset = "balanced") => set((state) => ({ ...state, ...createTestAccountState(preset) })),
       signOut: () => set({ ...initialState(), hasHydrated: true }),
       completeAvatar: (avatar) => {
         const stats = createStatsFromAvatar(avatar);
@@ -329,6 +720,7 @@ export const useGameStore = create<GameState>()(
           const stats = applyDecay(state.stats);
           const notifications = buildAutomaticNotifications(stats, state.notifications);
           let invitations = state.invitations;
+          let datePlans = state.datePlans;
           let { dailyEvent } = state;
 
           // Generate daily event if none today
@@ -382,11 +774,46 @@ export const useGameStore = create<GameState>()(
             });
           }
 
+          const pendingDate = datePlans.find((item) => item.status === "accepted");
+          if (pendingDate) {
+            notifications.unshift({
+              id: `date-reminder-${Date.now()}`,
+              kind: "social",
+              title: `Date prevu : ${pendingDate.venueLabel}`,
+              body: `${pendingDate.residentName} t'attend pour un moment sobre et public. Si tu n'es pas dans un bon etat, reporte-le proprement.`,
+              createdAt: nowIso(),
+              read: false
+            });
+          }
+
+          const momentum = getMomentumState(stats);
+          if (momentum.tier === "active" && state.stats.streak < 3 && stats.streak >= 3) {
+            notifications.unshift({
+              id: `momentum-3-${Date.now()}`,
+              kind: "reward",
+              title: "Momentum actif",
+              body: "Tu viens de passer un cap de regularite. Tes bonnes actions paient un peu plus.",
+              createdAt: nowIso(),
+              read: false
+            });
+          }
+          if (momentum.tier === "locked-in" && state.stats.streak < 7 && stats.streak >= 7) {
+            notifications.unshift({
+              id: `momentum-7-${Date.now()}`,
+              kind: "reward",
+              title: "Momentum verrouille",
+              body: "Ton rythme est maintenant visible. Le quartier commence a vraiment te considerer différemment.",
+              createdAt: nowIso(),
+              read: false
+            });
+          }
+
           return {
             stats,
             advice: buildAdvice(stats),
             notifications,
             invitations,
+            datePlans,
             dailyEvent,
             lastKnownRank
           };
@@ -659,6 +1086,139 @@ export const useGameStore = create<GameState>()(
             })
           };
         }),
+      proposeDate: (residentId, residentName, venueKind) =>
+        set((state) => {
+          const relationship = state.relationships.find((item) => item.residentId === residentId);
+          const readiness = getDateReadiness(state.stats, relationship, residentId);
+          if (!readiness.allowed) {
+            return {
+              notifications: appendNotification(state.notifications, {
+                id: `date-blocked-${Date.now()}`,
+                kind: "tip",
+                title: "Date pas encore recommande",
+                body: readiness.note,
+                createdAt: nowIso(),
+                read: false
+              })
+            };
+          }
+
+          const resident = starterResidents.find((item) => item.id === residentId);
+          if (!resident) {
+            return state;
+          }
+
+          const scheduledMoment =
+            venueKind === "restaurant"
+              ? "ce soir, 20:00"
+              : venueKind === "cinema"
+                ? "ce soir, 19:30"
+                : venueKind === "park"
+                  ? "demain, 18:30"
+                  : "demain, 17:30";
+
+          const plan = buildDatePlan(residentId, residentName, venueKind, scheduledMoment);
+
+          return {
+            datePlans: [plan, ...state.datePlans].slice(0, 20),
+            conversations: state.conversations.map((conversation) =>
+              conversation.peerId === residentId
+                ? {
+                    ...conversation,
+                    messages: [
+                      ...conversation.messages,
+                      {
+                        id: `date-proposal-${plan.id}`,
+                        authorId: "self",
+                        body: `Proposition de date : ${plan.venueLabel}, ${plan.scheduledMoment}.`,
+                        createdAt: nowIso(),
+                        read: true,
+                        kind: "invitation"
+                      }
+                    ]
+                  }
+                : conversation
+            ),
+            notifications: appendNotification(state.notifications, {
+              id: `date-plan-${plan.id}`,
+              kind: "social",
+              title: `Date propose a ${resident.name}`,
+              body: `${plan.venueLabel} · ${plan.scheduledMoment}. ${plan.bridgeToRealLife}`,
+              createdAt: nowIso(),
+              read: false
+            }),
+            lifeFeed: appendFeed(state.lifeFeed, {
+              id: `feed-date-${plan.id}`,
+              title: "Date planifie",
+              body: `Tu as propose un rendez-vous sobre avec ${resident.name}. Le fond compte plus que l'effet.`,
+              createdAt: nowIso()
+            })
+          };
+        }),
+      respondDatePlan: (datePlanId, status) =>
+        set((state) => {
+          const plan = state.datePlans.find((item) => item.id === datePlanId);
+          if (!plan) {
+            return state;
+          }
+
+          return {
+            datePlans: state.datePlans.map((item) =>
+              item.id === datePlanId ? { ...item, status } : item
+            ),
+            notifications: appendNotification(state.notifications, {
+              id: `date-status-${datePlanId}-${status}`,
+              kind: "social",
+              title: status === "accepted" ? "Date confirme" : "Date refuse",
+              body:
+                status === "accepted"
+                  ? `${plan.residentName} est partant pour ${plan.venueLabel}.`
+                  : `${plan.residentName} n'est pas disponible pour ce rendez-vous.`,
+              createdAt: nowIso(),
+              read: false
+            })
+          };
+        }),
+      completeDatePlan: (datePlanId) =>
+        set((state) => {
+          const plan = state.datePlans.find((item) => item.id === datePlanId);
+          if (!plan) {
+            return state;
+          }
+
+          const nextStats = applyDatePlanToStats(state.stats, plan);
+          const resident = starterResidents.find((item) => item.id === plan.residentId);
+
+          return {
+            datePlans: state.datePlans.map((item) =>
+              item.id === datePlanId ? { ...item, status: "completed" } : item
+            ),
+            stats: nextStats,
+            advice: buildAdvice(nextStats),
+            relationships: updateRelationshipScore(
+              state.relationships,
+              plan.residentId,
+              18,
+              nextStats,
+              resident?.reputation ?? 60,
+              "crush"
+            ),
+            notifications: appendNotification(state.notifications, {
+              id: `date-done-${datePlanId}`,
+              kind: "social",
+              title: "Date termine",
+              body: `${plan.venueLabel} a bien tourne. Le lien gagne en intensite et peut passer dans la vraie vie.`,
+              createdAt: nowIso(),
+              read: false
+            }),
+            lifeFeed: appendFeed(state.lifeFeed, {
+              id: `feed-date-done-${datePlanId}`,
+              title: "Moment romantique valide",
+              body: `${plan.residentName} te percoit maintenant avec plus de confiance. L'etape suivante peut etre un vrai rendez-vous public.`,
+              createdAt: nowIso()
+            })
+          };
+        }),
       performOuting: (config: OutingConfig) =>
         set((state) => {
           const decayed = applyDecay(state.stats);
@@ -720,27 +1280,60 @@ export const useGameStore = create<GameState>()(
           const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
           const streak =
             state.lastRewardAt && new Date(state.lastRewardAt).toDateString() === yesterday ? state.stats.streak + 1 : 1;
-          const nextStats = normalizeStats({
+          const rewardCoins = applyMomentumGain(32, state.stats);
+          let nextStats = normalizeStats({
             ...state.stats,
-            money: state.stats.money + 32,
+            money: state.stats.money + rewardCoins,
             mood: state.stats.mood + 8,
             motivation: state.stats.motivation + 6,
             streak,
             lastDecayAt: nowIso()
           });
 
+          const createdAt = nowIso();
+          let notifications = appendNotification(state.notifications, {
+            id: `daily-${Date.now()}`,
+            kind: "reward",
+            title: "Reward quotidienne recuperee",
+            body: `Tu prends ${rewardCoins} credits et tu prolonges ta serie a ${streak} jour(s).`,
+            createdAt,
+            read: false
+          });
+          let lifeFeed = state.lifeFeed;
+
+          // Streak milestone bonus
+          const milestone = checkStreakMilestone(streak);
+          if (milestone) {
+            nextStats = normalizeStats({
+              ...nextStats,
+              money: nextStats.money + (milestone.effects.money ?? 0),
+              mood: nextStats.mood + (milestone.effects.mood ?? 0),
+              discipline: nextStats.discipline + (milestone.effects.discipline ?? 0),
+              motivation: nextStats.motivation + (milestone.effects.motivation ?? 0),
+              reputation: nextStats.reputation + (milestone.effects.reputation ?? 0)
+            });
+            notifications = appendNotification(notifications, {
+              id: `streak-${streak}-${Date.now()}`,
+              kind: "reward",
+              title: `Palier atteint : Jour ${milestone.day} — ${milestone.label}`,
+              body: milestone.message,
+              createdAt,
+              read: false
+            });
+            lifeFeed = appendFeed(lifeFeed, {
+              id: `feed-streak-${streak}`,
+              title: `Serie ${streak} jours : ${milestone.label}`,
+              body: milestone.message,
+              createdAt
+            });
+          }
+
           return {
             lastRewardAt: nowIso(),
             stats: nextStats,
             advice: buildAdvice(nextStats),
-            notifications: appendNotification(state.notifications, {
-              id: `daily-${Date.now()}`,
-              kind: "reward",
-              title: "Reward quotidienne recuperee",
-              body: `Tu prends 32 credits et tu prolonges ta serie a ${streak} jour(s).`,
-              createdAt: nowIso(),
-              read: false
-            })
+            notifications,
+            lifeFeed
           };
         }),
       markNotificationRead: (notificationId) =>
@@ -769,6 +1362,7 @@ export const useGameStore = create<GameState>()(
         advice: state.advice,
         relationships: state.relationships,
         invitations: state.invitations,
+        datePlans: state.datePlans,
         dailyEvent: state.dailyEvent,
         lastKnownRank: state.lastKnownRank,
         lifeFeed: state.lifeFeed

@@ -32,6 +32,9 @@ export type OutingResult = {
   socialQualityHint: "haute" | "moyenne" | "basse";
 };
 export type DailyEventKind = "opportunity" | "encounter" | "setback" | "windfall" | "social";
+export type MomentumTier = "fragile" | "building" | "active" | "locked-in";
+export type DateVenueKind = "coffee" | "park" | "cinema" | "restaurant";
+export type DatePlanStatus = "proposed" | "accepted" | "declined" | "completed";
 
 export type DailyEventEffects = {
   money?: number;
@@ -78,6 +81,14 @@ export type GuidanceItem = {
   action: string;
   category: "energy" | "social" | "budget" | "discipline" | "wellbeing";
   urgency: "high" | "medium" | "low";
+};
+
+export type MomentumState = {
+  tier: MomentumTier;
+  multiplier: number;
+  label: string;
+  hint: string;
+  nextMilestone: number | null;
 };
 
 export type NotificationKind = "needs" | "social" | "work" | "reward" | "tip";
@@ -262,6 +273,20 @@ export type InvitationRecord = {
   residentName: string;
   activitySlug: string;
   status: InvitationStatus;
+  createdAt: string;
+};
+
+export type DatePlan = {
+  id: string;
+  residentId: string;
+  residentName: string;
+  venueKind: DateVenueKind;
+  venueLabel: string;
+  activitySlug: string;
+  status: DatePlanStatus;
+  scheduledMoment: string;
+  note: string;
+  bridgeToRealLife: string;
   createdAt: string;
 };
 

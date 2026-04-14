@@ -1,12 +1,14 @@
 import { router } from "expo-router";
 import { useState } from "react";
-import { Text } from "react-native";
+import { Text, View } from "react-native";
 
 import { AppShell, Button, Card, Input, Muted, Pill, Title } from "@/components/ui";
+import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 
 export default function SignInScreen() {
   const signIn = useGameStore((state) => state.signIn);
+  const loadTestAccount = useGameStore((state) => state.loadTestAccount);
   const avatar = useGameStore((state) => state.avatar);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -21,6 +23,12 @@ export default function SignInScreen() {
     }
 
     router.replace(avatar ? "/(app)/(tabs)/home" : "/(auth)/avatar");
+  }
+
+  function handleLoadTestAccount(preset: "balanced" | "burnout" | "romantic" = "balanced") {
+    setError("");
+    loadTestAccount(preset);
+    router.replace("/(app)/(tabs)/home");
   }
 
   return (
@@ -39,6 +47,12 @@ export default function SignInScreen() {
         <Input value={password} onChangeText={setPassword} placeholder="Mot de passe" secureTextEntry />
         {error ? <Text style={{ color: "#ff8d8d" }}>{error}</Text> : null}
         <Button label="Continuer" onPress={() => void handleContinue()} />
+        <View style={{ gap: 10, paddingTop: 6 }}>
+          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>Comptes test precharges</Text>
+          <Button label="Profil test equilibre" onPress={() => handleLoadTestAccount("balanced")} />
+          <Button label="Profil test sous pression" variant="secondary" onPress={() => handleLoadTestAccount("burnout")} />
+          <Button label="Profil test date & social" variant="secondary" onPress={() => handleLoadTestAccount("romantic")} />
+        </View>
         <Button label="Mode demo instantane" variant="secondary" onPress={() => void handleContinue("demo@mylife.app", "")} />
       </Card>
     </AppShell>

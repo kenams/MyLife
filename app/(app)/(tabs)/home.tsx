@@ -3,7 +3,17 @@ import { useCallback } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import { AppShell, AvatarBadge, Button, Card, MetricCard, Muted, Pill, SectionTitle, StatMeter, Title } from "@/components/ui";
-import { getLocationName, getRecommendedAction, getSocialRankCopy, getSocialRankLabel, getUrgency, getUrgencyCopy, getWellbeingScore } from "@/lib/selectors";
+import {
+  getLocationName,
+  getMomentumState,
+  getRecommendedActionMeta,
+  getSocialRankCopy,
+  getSocialRankLabel,
+  getSystemStateSummary,
+  getUrgency,
+  getUrgencyCopy,
+  getWellbeingScore
+} from "@/lib/selectors";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 import type { DailyEvent } from "@/lib/types";
@@ -108,7 +118,9 @@ export default function HomeScreen() {
 
   const wellbeing = getWellbeingScore(stats);
   const socialRank = getSocialRankLabel(stats.socialRankScore);
-  const recommendedAction = getRecommendedAction(stats);
+  const recommendedAction = getRecommendedActionMeta(stats);
+  const systemSummary = getSystemStateSummary(stats);
+  const momentum = getMomentumState(stats);
 
   return (
     <AppShell>
@@ -133,6 +145,29 @@ export default function HomeScreen() {
       </View>
 
       <Card>
+        <SectionTitle>Pilotage du jour</SectionTitle>
+        <Pill tone={systemSummary.tone}>{systemSummary.title}</Pill>
+        <Muted>{systemSummary.body}</Muted>
+        <View style={{ padding: 12, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.04)", gap: 6 }}>
+          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>{recommendedAction.label}</Text>
+          <Muted>{recommendedAction.copy}</Muted>
+        </View>
+        <Button label={`Faire maintenant : ${recommendedAction.label}`} onPress={() => performAction(recommendedAction.action)} />
+      </Card>
+
+      <Card>
+        <SectionTitle>Momentum</SectionTitle>
+        <Pill tone={momentum.tier === "locked-in" || momentum.tier === "active" ? "accent" : momentum.tier === "building" ? "warning" : "muted"}>
+          {momentum.label}
+        </Pill>
+        <Muted>{momentum.hint}</Muted>
+        <Muted>
+          Serie actuelle : {stats.streak} jour(s) · multiplicateur discret : x{momentum.multiplier.toFixed(2)}
+        </Muted>
+        {momentum.nextMilestone ? <Muted>Prochain palier utile : jour {momentum.nextMilestone}</Muted> : null}
+      </Card>
+
+      <Card>
         <SectionTitle>Etat du corps et du mental</SectionTitle>
         <StatMeter label="Faim" value={stats.hunger} tone={stats.hunger < 35 ? "danger" : "accent"} />
         <StatMeter label="Hydratation" value={stats.hydration} tone={stats.hydration < 35 ? "warning" : "accent"} />
@@ -155,7 +190,7 @@ export default function HomeScreen() {
           <QuickAction title="Marche" copy="- stress + forme" onPress={() => performAction("walk")} />
           <QuickAction title="Cafe" copy="+ lien + humeur" onPress={() => performAction("cafe-chat")} />
         </View>
-        <Muted>Action recommandee maintenant : {recommendedAction}</Muted>
+        <Muted>Prochain move recommande : {recommendedAction.label}</Muted>
       </Card>
 
       <Card>
@@ -184,6 +219,8 @@ export default function HomeScreen() {
         <Button label="Corps, habitudes et forme" variant="secondary" onPress={() => router.push("/(app)/health")} />
         <Button label="Travail et revenus" variant="secondary" onPress={() => router.push("/(app)/work")} />
         <Button label="Sorties et vie sociale" variant="secondary" onPress={() => router.push("/(app)/outings")} />
+        <Button label="Dates et rendez-vous" variant="secondary" onPress={() => router.push("/(app)/dates")} />
+        <Button label="Mes relations" variant="secondary" onPress={() => router.push("/(app)/relations")} />
       </Card>
 
       <Card>

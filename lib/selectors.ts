@@ -1,5 +1,15 @@
 import { neighborhoods, locations, starterResidents } from "@/lib/game-data";
-import type { AdviceItem, AvatarStats, GuidanceItem, LifePattern, RelationshipRecord, SocialRank } from "@/lib/types";
+import type {
+  AdviceItem,
+  AvatarStats,
+  DateVenueKind,
+  GuidanceItem,
+  LifePattern,
+  LifeActionId,
+  MomentumState,
+  RelationshipRecord,
+  SocialRank
+} from "@/lib/types";
 
 export const RANK_ORDER: SocialRank[] = ["precaire", "modeste", "stable", "confortable", "influent", "elite"];
 
@@ -48,6 +58,53 @@ export function getSocialRankProgressData(stats: AvatarStats): RankProgressData 
     progress,
     scoreToNext: next ? next.min - score : 0,
     tips: RANK_TIPS[tier.rank]
+  };
+}
+
+export function getMomentumState(stats: AvatarStats): MomentumState {
+  const baseScore =
+    stats.streak * 8 +
+    stats.discipline * 0.35 +
+    stats.motivation * 0.25 +
+    stats.mood * 0.15 -
+    stats.stress * 0.2;
+
+  if (baseScore >= 95 && stats.streak >= 7) {
+    return {
+      tier: "locked-in",
+      multiplier: 1.18,
+      label: "Locked-in",
+      hint: "Ton rythme est solide. Les bonnes actions paient plus et les residents le sentent.",
+      nextMilestone: 14
+    };
+  }
+
+  if (baseScore >= 72 && stats.streak >= 3) {
+    return {
+      tier: "active",
+      multiplier: 1.1,
+      label: "Momentum actif",
+      hint: "Tu avances avec regularite. Le quartier commence a te percevoir comme fiable.",
+      nextMilestone: 7
+    };
+  }
+
+  if (baseScore >= 46) {
+    return {
+      tier: "building",
+      multiplier: 1.04,
+      label: "Momentum en construction",
+      hint: "Tu poses une base. Quelques jours coherents de plus changent deja ton image.",
+      nextMilestone: 3
+    };
+  }
+
+  return {
+    tier: "fragile",
+    multiplier: 0.97,
+    label: "Momentum fragile",
+    hint: "Le systeme n'est pas encore stable. Priorite aux bases, pas a l'intensite.",
+    nextMilestone: 3
   };
 }
 
@@ -134,6 +191,106 @@ export function getRecommendedAction(stats: AvatarStats) {
   if (stats.fitness < 36 || stats.stress > 72) return "walk";
   if (stats.money < 40) return "work-shift";
   return "focus-task";
+}
+
+export function getRecommendedActionMeta(stats: AvatarStats): {
+  action: LifeActionId;
+  label: string;
+  copy: string;
+} {
+  const action = getRecommendedAction(stats);
+
+  if (action === "healthy-meal") {
+    return {
+      action,
+      label: "Manger proprement",
+      copy: "Le systeme a surtout besoin d'un repas simple pour remonter faim, energie et stabilite."
+    };
+  }
+  if (action === "sleep") {
+    return {
+      action,
+      label: "Dormir et recuperer",
+      copy: "Le rendement est secondaire tant que l'energie est trop basse. Le bon move est la recuperation."
+    };
+  }
+  if (action === "shower") {
+    return {
+      action,
+      label: "Reset hygiene",
+      copy: "Ton image, ton humeur et ta confiance remontent vite apres une remise au propre."
+    };
+  }
+  if (action === "cafe-chat") {
+    return {
+      action,
+      label: "Relancer le social",
+      copy: "Une interaction simple maintenant vaut plus qu'une longue absence qui degrade la dynamique."
+    };
+  }
+  if (action === "walk") {
+    return {
+      action,
+      label: "Marcher et faire redescendre la pression",
+      copy: "Le corps a besoin d'une action legere pour soulager le stress et remettre un peu de forme."
+    };
+  }
+  if (action === "work-shift") {
+    return {
+      action,
+      label: "Faire un shift rentable",
+      copy: "Le budget devient prioritaire. Un petit bloc de travail remet de l'air dans le niveau de vie."
+    };
+  }
+  return {
+    action,
+    label: "Bloc de focus court",
+    copy: "La base est assez propre. Tu peux capitaliser avec une session de production simple et nette."
+  };
+}
+
+export function getSystemStateSummary(stats: AvatarStats): {
+  tone: "accent" | "warning";
+  title: string;
+  body: string;
+} {
+  if (stats.energy < 24 || stats.hunger < 24 || stats.hydration < 24) {
+    return {
+      tone: "warning",
+      title: "Priorite vitale",
+      body: "Le corps passe avant la progression sociale. Tant que les besoins critiques restent bas, toute autre action est un mauvais arbitrage."
+    };
+  }
+
+  if (stats.stress > 74 || stats.mentalStability === "sature") {
+    return {
+      tone: "warning",
+      title: "Recuperation imposee",
+      body: "L'avatar tient encore, mais le systeme nerveux est surcharge. Il faut ralentir, pas pousser plus fort."
+    };
+  }
+
+  if (stats.sociability < 34) {
+    return {
+      tone: "warning",
+      title: "Dette sociale",
+      body: "L'isolement commence a abimer humeur, motivation et qualite des opportunites. Une presence simple suffit pour inverser la courbe."
+    };
+  }
+
+  if (stats.discipline > 64 && stats.streak >= 3 && stats.stress < 48) {
+    return {
+      tone: "accent",
+      title: "Fenetre de progression",
+      body: "Le rythme est bon. C'est le moment d'ajouter une action qualitative : travail propre, nouvelle relation ou sortie utile."
+    };
+  }
+
+  return {
+    tone: "accent",
+    title: "Base stable",
+    body: "Le systeme est globalement propre. Continue les fondamentaux et choisis une action qui fait avancer ton image ou ton reseau."
+  };
 }
 
 export function buildAdvice(stats: AvatarStats): AdviceItem[] {
@@ -450,4 +607,11 @@ export function getResidentAccessibility(residentId: string, stats: AvatarStats)
   const check = RESIDENT_CRITERIA[residentId];
   if (!check) return { level: "receptif", hint: "Profil en cours d'evaluation." };
   return check(stats);
+}
+
+export function getDateVenueLabel(kind: DateVenueKind) {
+  if (kind === "coffee") return "Cafe public";
+  if (kind === "park") return "Balade au parc";
+  if (kind === "cinema") return "Cinema";
+  return "Restaurant";
 }

@@ -38,6 +38,7 @@ export default function SocialScreen() {
           La progression sociale ne vient pas seulement du chat. Elle vient du rythme, des invites, de la presence et
           de la regularite dans les interactions.
         </Muted>
+        <Button label="Ouvrir les dates" variant="secondary" onPress={() => router.push("/(app)/dates")} />
       </Card>
 
       <Card>

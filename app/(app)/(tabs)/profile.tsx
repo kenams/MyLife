@@ -2,7 +2,7 @@ import { router } from "expo-router";
 import { Text, View } from "react-native";
 
 import { AppShell, AvatarBadge, Button, Card, MetricCard, Muted, Pill, SectionTitle, Title } from "@/components/ui";
-import { getSocialRankLabel, getSocialRankProgressData, RANK_ORDER } from "@/lib/selectors";
+import { getMomentumState, getSocialRankLabel, getSocialRankProgressData, RANK_ORDER } from "@/lib/selectors";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 
@@ -20,8 +20,10 @@ export default function ProfileScreen() {
   const avatar = useGameStore((state) => state.avatar);
   const stats = useGameStore((state) => state.stats);
   const relationships = useGameStore((state) => state.relationships);
+  const datePlans = useGameStore((state) => state.datePlans);
   const signOut = useGameStore((state) => state.signOut);
   const resetAll = useGameStore((state) => state.resetAll);
+  const momentum = getMomentumState(stats);
 
   return (
     <AppShell>
@@ -49,6 +51,11 @@ export default function ProfileScreen() {
           label="Etat mental"
           value={stats.mentalStability === "stable" ? "Stable" : stats.mentalStability === "fragile" ? "Fragile" : "Sature"}
           hint="derive du stress, humeur et regularite"
+        />
+        <MetricCard
+          label="Momentum"
+          value={momentum.label}
+          hint={`serie ${stats.streak} j · x${momentum.multiplier.toFixed(2)}`}
         />
       </View>
 
@@ -115,6 +122,7 @@ export default function ProfileScreen() {
         <Muted>Interets : {avatar?.interests.join(", ") ?? "-"}</Muted>
         <Muted>Traits apprecies : {avatar?.appreciatedTraits.join(", ") ?? "-"}</Muted>
         <Muted>Relations actives : {relationships.filter((item) => item.score > 30).length}</Muted>
+        <Muted>Dates planifies : {datePlans.filter((item) => item.status === "accepted" || item.status === "proposed").length}</Muted>
       </Card>
 
       <Card>

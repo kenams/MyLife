@@ -1,11 +1,13 @@
 import { activities, dailyGoalLabels, jobs, locations, neighborhoods, starterResidents } from "@/lib/game-data";
-import { buildAdvice } from "@/lib/selectors";
+import { buildAdvice, getDateVenueLabel, getMomentumState } from "@/lib/selectors";
 import type {
   AdviceItem,
   AvatarProfile,
   AvatarStats,
   Conversation,
   ConversationMessage,
+  DatePlan,
+  DateVenueKind,
   DailyEvent,
   DailyEventEffects,
   DailyGoal,
@@ -657,6 +659,159 @@ export function applyOutingToStats(stats: AvatarStats, result: OutingResult): Av
   });
 }
 
+// ─── Streak Milestones ────────────────────────────────────────────────────────
+
+export type StreakReward = {
+  day: number;
+  label: string;
+  effects: { money?: number; mood?: number; discipline?: number; motivation?: number; reputation?: number };
+  message: string;
+};
+
+const STREAK_MILESTONES: StreakReward[] = [
+  {
+    day: 3,
+    label: "Routine lancee",
+    effects: { mood: 10, discipline: 8, motivation: 6 },
+    message: "3 jours de suite. La regularite commence a s'installer. Le quartier le remarque deja."
+  },
+  {
+    day: 7,
+    label: "Semaine complete",
+    effects: { money: 60, mood: 12, discipline: 10, motivation: 10, reputation: 6 },
+    message: "7 jours. Une vraie semaine propre. Ton rang social et ta reputation progressent plus vite maintenant."
+  },
+  {
+    day: 14,
+    label: "Deux semaines locked-in",
+    effects: { money: 100, mood: 15, discipline: 14, motivation: 12, reputation: 10 },
+    message: "14 jours. Tu es dans une categorie a part. Le multiplicateur de progression est maintenant a son maximum."
+  },
+  {
+    day: 30,
+    label: "Un mois de vie construite",
+    effects: { money: 200, mood: 20, discipline: 18, motivation: 16, reputation: 15 },
+    message: "30 jours. Mode de vie consolide. Tu attires maintenant des profils de qualite superieure naturellement."
+  }
+];
+
+export function checkStreakMilestone(streak: number): StreakReward | null {
+  return STREAK_MILESTONES.find((m) => m.day === streak) ?? null;
+}
+
+export function applyMomentumGain(baseValue: number, stats: AvatarStats) {
+  const momentum = getMomentumState(stats);
+  return Math.round(baseValue * momentum.multiplier);
+}
+
+export function getDateVenueOptions(stats: AvatarStats): DateVenueKind[] {
+  const options: DateVenueKind[] = [];
+
+  if (stats.money >= 8) options.push("coffee");
+  if (stats.energy >= 34 && stats.stress <= 74) options.push("park");
+  if (stats.money >= 18 && stats.energy >= 36) options.push("cinema");
+  if (stats.money >= 30 && stats.hygiene >= 48 && stats.mood >= 44) options.push("restaurant");
+
+  return options.length > 0 ? options : ["coffee"];
+}
+
+export function getDateActivityForVenue(venueKind: DateVenueKind) {
+  if (venueKind === "coffee") return "coffee-meetup";
+  if (venueKind === "park") return "evening-walk";
+  if (venueKind === "cinema") return "cinema-night";
+  return "restaurant-date";
+}
+
+export function getDateReadiness(
+  stats: AvatarStats,
+  relationship: RelationshipRecord | undefined,
+  residentId: string
+): { allowed: boolean; note: string; venueOptions: DateVenueKind[] } {
+  const relationshipScore = relationship?.score ?? 0;
+  const isRomanticResident = starterResidents.find((resident) => resident.id === residentId)?.lookingFor.includes("relation amoureuse");
+  const venueOptions = getDateVenueOptions(stats);
+
+  if (!isRomanticResident) {
+    return {
+      allowed: false,
+      note: "Ce profil n'est pas encore oriente rendez-vous romantique dans le MVP.",
+      venueOptions
+    };
+  }
+
+  if (relationshipScore < 36) {
+    return {
+      allowed: false,
+      note: "Le lien est encore trop faible. Quelques echanges et une sortie simple d'abord.",
+      venueOptions
+    };
+  }
+
+  if (stats.hygiene < 44 || stats.mood < 40 || stats.sociability < 40) {
+    return {
+      allowed: false,
+      note: "Ton avatar doit d'abord remonter hygiene, humeur et presence sociale.",
+      venueOptions
+    };
+  }
+
+  if (stats.mentalStability === "sature" || stats.energy < 28) {
+    return {
+      allowed: false,
+      note: "Pas le bon timing. Recuperer d'abord augmente la qualite du rendez-vous.",
+      venueOptions
+    };
+  }
+
+  return {
+    allowed: true,
+    note: "Le lien et ton etat actuel permettent un date propre dans un lieu public.",
+    venueOptions
+  };
+}
+
+export function buildDatePlan(
+  residentId: string,
+  residentName: string,
+  venueKind: DateVenueKind,
+  scheduledMoment: string
+): DatePlan {
+  return {
+    id: `date-${residentId}-${Date.now()}`,
+    residentId,
+    residentName,
+    venueKind,
+    venueLabel: getDateVenueLabel(venueKind),
+    activitySlug: getDateActivityForVenue(venueKind),
+    status: "proposed",
+    scheduledMoment,
+    note: "Lieu public, timing clair, intention simple. L'objectif est un vrai moment propre, pas un forcing.",
+    bridgeToRealLife:
+      "Si le lien reste bon, tu peux reproduire ce format dans la vraie vie : lieu public, horaire clair, sortie courte et sobre.",
+    createdAt: nowIso()
+  };
+}
+
+export function applyDatePlanToStats(stats: AvatarStats, plan: DatePlan) {
+  const activitySlug = getDateActivityForVenue(plan.venueKind);
+  const outingResult = resolveOutingResult(
+    {
+      activitySlug,
+      intensity: "chill",
+      context: "romantique"
+    },
+    stats
+  );
+
+  return normalizeStats({
+    ...applyOutingToStats(stats, outingResult),
+    reputation: stats.reputation + 2,
+    motivation: stats.motivation + 4,
+    lastSocialAt: nowIso(),
+    lastDecayAt: nowIso()
+  });
+}
+
 export function createInitialRuntime() {
   const stats = createStatsFromAvatar(null);
   return {
@@ -670,6 +825,7 @@ export function createInitialRuntime() {
     advice: buildAdvice(stats),
     relationships: seededRelationships(),
     invitations: [] as InvitationRecord[],
+    datePlans: [] as DatePlan[],
     lifeFeed: seededFeed()
   };
 }

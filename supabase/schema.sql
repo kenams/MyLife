@@ -102,6 +102,8 @@ create table if not exists avatar_stats (
   discipline int not null default 52,
   motivation int not null default 60,
   weight numeric(5,2) not null default 70,
+  attractiveness int not null default 50,
+  mental_stability text not null default 'stable',
   streak int not null default 0,
   last_decay_at timestamptz not null default now(),
   last_meal_at timestamptz not null default now(),
@@ -161,6 +163,20 @@ create table if not exists invitations (
   receiver_avatar_id uuid not null references avatars(id) on delete cascade,
   activity_slug text not null references activities(slug),
   status text not null default 'pending',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists date_plans (
+  id uuid primary key default gen_random_uuid(),
+  initiator_avatar_id uuid not null references avatars(id) on delete cascade,
+  target_avatar_id uuid not null references avatars(id) on delete cascade,
+  venue_kind text not null,
+  venue_label text not null,
+  activity_slug text not null references activities(slug),
+  status text not null default 'proposed',
+  scheduled_moment text not null,
+  note text not null default '',
+  bridge_to_real_life text not null default '',
   created_at timestamptz not null default now()
 );
 
@@ -226,6 +242,7 @@ alter table notifications enable row level security;
 alter table advice_logs enable row level security;
 alter table presence enable row level security;
 alter table invitations enable row level security;
+alter table date_plans enable row level security;
 
 create policy "profiles own row" on profiles for all using (auth.uid() = id) with check (auth.uid() = id);
 create policy "avatars own row" on avatars for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -313,6 +330,12 @@ for all using (
   or exists (select 1 from avatars where avatars.id = invitations.receiver_avatar_id and avatars.user_id = auth.uid())
 );
 
+create policy "date_plans visible to participants" on date_plans
+for all using (
+  exists (select 1 from avatars where avatars.id = date_plans.initiator_avatar_id and avatars.user_id = auth.uid())
+  or exists (select 1 from avatars where avatars.id = date_plans.target_avatar_id and avatars.user_id = auth.uid())
+);
+
 insert into neighborhoods (slug, name, vibe, lifestyle, cost_level) values
   ('central-district', 'Central District', 'dense et social', 'sorties, carriere, rencontres rapides', 'balanced'),
   ('riverside', 'Riverside', 'calme et sain', 'bien-etre, marche, respiration', 'accessible'),
@@ -343,5 +366,9 @@ insert into activities (slug, name, kind, location_slug, summary, cost) values
   ('gym-session', 'Session salle', 'wellness', 'gym', 'Discipline, forme et image personnelle', 14),
   ('coffee-meetup', 'Cafe a deux', 'social', 'cafe', 'Sortie legere pour ouvrir ou renforcer un lien', 10),
   ('restaurant-date', 'Diner au restaurant', 'romantic', 'restaurant', 'Sortie premium, sobre et relationnelle', 26),
-  ('cinema-night', 'Cinema du soir', 'social', 'cinema', 'Moment calme utile pour l''humeur et la relation', 18)
+  ('cinema-night', 'Cinema du soir', 'social', 'cinema', 'Moment calme utile pour l''humeur et la relation', 18),
+  ('evening-walk', 'Balade du soir', 'solo', 'park', 'Sortie legere pour souffler et reconnecter avec soi', 0),
+  ('group-outing', 'Sortie en groupe', 'social', 'cafe', 'Sortie de groupe utile pour la sociabilite', 16),
+  ('party-night', 'Soiree festive', 'social', 'cinema', 'Sortie intense avec forte depense sociale et budgetaire', 38),
+  ('solo-cafe', 'Cafe solo', 'solo', 'cafe', 'Moment discret pour souffler ou lire hors de chez soi', 8)
 on conflict (slug) do nothing;

@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { Text, View } from "react-native";
 
 import { AppShell, Button, Card, ListRow, Muted, Pill, Title } from "@/components/ui";
@@ -62,6 +63,9 @@ export default function DiscoverScreen() {
                 />
               </View>
             </View>
+            {resident.lookingFor.includes("relation amoureuse") ? (
+              <Button label="Voir l'option date" variant="ghost" onPress={() => router.push("/(app)/dates")} />
+            ) : null}
           </Card>
         );
       })}
