@@ -27,7 +27,7 @@ import {
   updateGoal,
   updateRelationshipScore
 } from "@/lib/game-engine";
-import { buildAdvice, detectLifePattern } from "@/lib/selectors";
+import { buildAdvice, detectLifePattern, getSocialRankLabel, RANK_ORDER } from "@/lib/selectors";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
   AvatarProfile,
@@ -37,6 +37,7 @@ import type {
   LifeActionId,
   NotificationItem,
   OutingConfig,
+  SocialRank,
   UserSession
 } from "@/lib/types";
 
@@ -55,6 +56,7 @@ type GameState = {
   relationships: ReturnType<typeof createInitialRuntime>["relationships"];
   invitations: InvitationRecord[];
   dailyEvent: DailyEvent | null;
+  lastKnownRank: SocialRank | null;
   lifeFeed: ReturnType<typeof createInitialRuntime>["lifeFeed"];
   signIn: (email: string, password?: string) => Promise<{ ok: boolean; error?: string }>;
   signOut: () => void;
@@ -82,6 +84,7 @@ function initialState() {
     session: null as UserSession | null,
     avatar: null as AvatarProfile | null,
     dailyEvent: null as DailyEvent | null,
+    lastKnownRank: null as SocialRank | null,
     ...runtime
   };
 }
@@ -343,6 +346,26 @@ export const useGameStore = create<GameState>()(
             });
           }
 
+          // Rank change detection
+          const currentRank = getSocialRankLabel(stats.socialRankScore);
+          let lastKnownRank = state.lastKnownRank ?? currentRank;
+          if (state.lastKnownRank && state.lastKnownRank !== currentRank) {
+            const prevIdx = RANK_ORDER.indexOf(state.lastKnownRank);
+            const currIdx = RANK_ORDER.indexOf(currentRank);
+            const rankUp = currIdx > prevIdx;
+            notifications.unshift({
+              id: `rank-change-${Date.now()}`,
+              kind: "reward",
+              title: rankUp ? `Rang atteint : ${currentRank}` : `Rang perdu : retour en ${currentRank}`,
+              body: rankUp
+                ? `Tu es passe de ${state.lastKnownRank} a ${currentRank}. Les residents le remarqueront.`
+                : `Ton rang a baisse. Stabilise tes routines pour remonter.`,
+              createdAt: nowIso(),
+              read: false
+            });
+            lastKnownRank = currentRank;
+          }
+
           // Try resident invitation
           const newInvitation = tryGenerateResidentInvitation(stats, state.relationships, invitations);
           if (newInvitation) {
@@ -364,7 +387,8 @@ export const useGameStore = create<GameState>()(
             advice: buildAdvice(stats),
             notifications,
             invitations,
-            dailyEvent
+            dailyEvent,
+            lastKnownRank
           };
         }),
       performAction: (action) => set((state) => withActionApplied(state, action)),
@@ -746,6 +770,7 @@ export const useGameStore = create<GameState>()(
         relationships: state.relationships,
         invitations: state.invitations,
         dailyEvent: state.dailyEvent,
+        lastKnownRank: state.lastKnownRank,
         lifeFeed: state.lifeFeed
       }),
       onRehydrateStorage: () => (state) => {

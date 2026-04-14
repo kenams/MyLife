@@ -2,8 +2,18 @@ import { router } from "expo-router";
 import { Text, View } from "react-native";
 
 import { AppShell, AvatarBadge, Button, Card, MetricCard, Muted, Pill, SectionTitle, Title } from "@/components/ui";
-import { getSocialRankLabel } from "@/lib/selectors";
+import { getSocialRankLabel, getSocialRankProgressData, RANK_ORDER } from "@/lib/selectors";
+import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
+
+const RANK_LABELS: Record<string, string> = {
+  precaire:    "Précaire",
+  modeste:     "Modeste",
+  stable:      "Stable",
+  confortable: "Confortable",
+  influent:    "Influent",
+  elite:       "Élite"
+};
 
 export default function ProfileScreen() {
   const session = useGameStore((state) => state.session);
@@ -41,6 +51,51 @@ export default function ProfileScreen() {
           hint="derive du stress, humeur et regularite"
         />
       </View>
+
+      <Card>
+        <SectionTitle>Statut social</SectionTitle>
+        {(() => {
+          const rp = getSocialRankProgressData(stats);
+          const currentIdx = RANK_ORDER.indexOf(rp.rank);
+          return (
+            <>
+              <View style={{ gap: 6, marginBottom: 12 }}>
+                {RANK_ORDER.map((r, i) => {
+                  const isCurrent = r === rp.rank;
+                  const isPassed = i < currentIdx;
+                  return (
+                    <View key={r} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                      <Text style={{ fontSize: 13, color: isPassed ? "#38c793" : isCurrent ? colors.accent : colors.muted, fontWeight: isCurrent ? "800" : "400" }}>
+                        {isPassed ? "✓" : isCurrent ? "▶" : "○"} {RANK_LABELS[r]}
+                      </Text>
+                      {isCurrent ? (
+                        <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "700" }}>— actuel</Text>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+              <View style={{ marginBottom: 10 }}>
+                <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
+                  <Text style={{ color: colors.muted, fontSize: 12 }}>Score : {rp.score}</Text>
+                  {rp.nextRank ? (
+                    <Text style={{ color: colors.muted, fontSize: 12 }}>+{rp.scoreToNext} pour {RANK_LABELS[rp.nextRank]}</Text>
+                  ) : (
+                    <Text style={{ color: "#38c793", fontSize: 12, fontWeight: "700" }}>Rang maximum</Text>
+                  )}
+                </View>
+                <View style={{ height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.08)" }}>
+                  <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.accent, width: `${rp.progress}%` }} />
+                </View>
+              </View>
+              <SectionTitle>Pour monter</SectionTitle>
+              {rp.tips.map((tip, i) => (
+                <Muted key={i}>· {tip}</Muted>
+              ))}
+            </>
+          );
+        })()}
+      </Card>
 
       <Card>
         <SectionTitle>Identite et style</SectionTitle>

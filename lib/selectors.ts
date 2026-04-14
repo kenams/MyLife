@@ -1,6 +1,56 @@
 import { neighborhoods, locations, starterResidents } from "@/lib/game-data";
 import type { AdviceItem, AvatarStats, GuidanceItem, LifePattern, RelationshipRecord, SocialRank } from "@/lib/types";
 
+export const RANK_ORDER: SocialRank[] = ["precaire", "modeste", "stable", "confortable", "influent", "elite"];
+
+const RANK_TIERS: { rank: SocialRank; min: number; max: number }[] = [
+  { rank: "precaire",    min: 0,  max: 19 },
+  { rank: "modeste",     min: 20, max: 39 },
+  { rank: "stable",      min: 40, max: 57 },
+  { rank: "confortable", min: 58, max: 74 },
+  { rank: "influent",    min: 75, max: 89 },
+  { rank: "elite",       min: 90, max: 100 }
+];
+
+const RANK_TIPS: Record<SocialRank, string[]> = {
+  precaire:    ["Mange et dors regulierement", "Fais un shift de travail", "Parle a quelqu'un aujourd'hui"],
+  modeste:     ["Construis une routine de travail stable", "Maintiens ton hygiene > 50", "Monte ta discipline"],
+  stable:      ["Soigne ton image (fitness + hygiene)", "Developpe ton reseau actif", "Vise reputation > 60"],
+  confortable: ["Optimise ton budget (money > 150)", "Renforce les liens cles", "Discipline > 65"],
+  influent:    ["Vise les sorties premium", "Consolide ton cercle proche", "Stress < 35"],
+  elite:       ["Maintiens le rythme actuel", "Etends ton influence", "Inspire les profils montants"]
+};
+
+export type RankProgressData = {
+  rank: SocialRank;
+  nextRank: SocialRank | null;
+  score: number;
+  rankMin: number;
+  rankMax: number;
+  progress: number;
+  scoreToNext: number;
+  tips: string[];
+};
+
+export function getSocialRankProgressData(stats: AvatarStats): RankProgressData {
+  const score = stats.socialRankScore;
+  const tierIndex = RANK_TIERS.findIndex((r) => score >= r.min && score <= r.max);
+  const tier = RANK_TIERS[Math.max(0, tierIndex)];
+  const next = RANK_TIERS[tierIndex + 1] ?? null;
+  const tierSize = tier.max - tier.min + 1;
+  const progress = Math.round(((score - tier.min) / tierSize) * 100);
+  return {
+    rank: tier.rank,
+    nextRank: next?.rank ?? null,
+    score,
+    rankMin: tier.min,
+    rankMax: tier.max,
+    progress,
+    scoreToNext: next ? next.min - score : 0,
+    tips: RANK_TIPS[tier.rank]
+  };
+}
+
 export function getUrgency(stats: AvatarStats) {
   if (stats.hunger < 18) return "Faim critique";
   if (stats.energy < 18) return "Epuisement";

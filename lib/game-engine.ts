@@ -354,36 +354,48 @@ export function buildAutomaticNotifications(stats: AvatarStats, existing: Notifi
 
 const RESIDENT_MESSAGES: Record<string, (stats: AvatarStats) => string> = {
   ava: (stats) => {
+    if (stats.socialRankScore >= 70) return "Tu fais vraiment partie du quartier maintenant. Reste present et aide les nouveaux — c'est ca le vrai rang.";
+    if (stats.socialRankScore < 28) return "Tu debarques. Commence petit — un cafe, un sourire, une regularite. C'est tout ce qu'il faut.";
     if (stats.sociability < 35) return "Le silence ne t'aide pas. Reprends contact avec quelqu'un aujourd'hui — n'importe quoi de simple.";
     if (stats.stress > 68) return "Un cafe, pas un objectif. Laisse la pression de cote une heure.";
     if (stats.discipline > 62) return "Je vois que tu tiens. C'est ca qui fait la difference dans le temps.";
     return "Le lien se construit dans les petits moments, pas les grands gestes. Continue.";
   },
   malik: (stats) => {
+    if (stats.socialRankScore >= 75) return "Tu es maintenant dans la zone ou les opportunites s'ouvrent d'elles-memes. Ne relache pas.";
+    if (stats.socialRankScore < 30) return "Le rang se construit par les actes, pas les intentions. Montre ce que tu fais.";
     if (stats.money < 55) return "Les ressources basses, c'est le moment de consolider, pas de depenser.";
     if (stats.discipline < 38) return "Pas de regularite, pas de credibilite. Simple.";
     if (stats.discipline > 65 && stats.money > 120) return "Bien. Convertis ca en reseau ou en niveau superieur, pas juste en routine.";
     return "Le travail est un outil. Ceux qui le maitrisent choisissent mieux leur cercle.";
   },
   noa: (stats) => {
+    if (stats.socialRankScore >= 72) return "Ton image est coherente avec ton rang. Ca change la façon dont les gens t'approchent.";
+    if (stats.socialRankScore < 28) return "L'image precede souvent la realite. Travaille ce que les autres voient en premier.";
     if (stats.mood < 42) return "L'energie se voit avant de s'entendre. Remets ton humeur en place.";
     if (stats.hygiene > 72 && stats.fitness > 55) return "Tu rayonnes bien aujourd'hui. C'est le bon moment pour sortir.";
     if (stats.attractiveness < 42) return "L'image est un langage. Travaille-la comme tu travailles le reste.";
     return "Le style, ce n'est pas ce que tu portes. C'est comment tu tiens dans un espace.";
   },
   leila: (stats) => {
+    if (stats.socialRankScore >= 70) return "Tu rayonnes d'un equilibre rare ici. Continue de prendre soin de ce rythme — ca se voit.";
+    if (stats.socialRankScore < 28) return "Tout commence par le corps. Un peu de mouvement chaque jour stabilise tout le reste.";
     if (stats.stress > 68) return "Marche 10 minutes avant de resoudre quoi que ce soit. L'ordre fait tout.";
     if (stats.fitness > 58) return "Tu progresses bien. Continue meme quand c'est lent — c'est ca qui compte.";
     if (stats.energy < 38) return "Ton corps te parle. Ecoute-le avant de forcer quoi que ce soit.";
     return "Un rythme sain se construit ici, dans les petites sorties regulieres.";
   },
   yan: (stats) => {
+    if (stats.socialRankScore >= 80) return "Tu as prouve que tu peux tenir. Maintenant leverages ce que tu as construit — c'est la que ca devient interessant.";
+    if (stats.socialRankScore < 30) return "Ici, on juge sur la duree. Reviens regulierement et montre que tu tiens.";
     if (stats.streak < 2) return "Pas de serie, pas de traction. Reviens demain si aujourd'hui est dur.";
     if (stats.discipline > 68 && stats.streak > 3) return "Bien. Maintenant ajoute une couche — reseau ou apprentissage.";
     if (stats.motivation < 42) return "La motivation ne precede pas l'action. C'est l'inverse. Fais d'abord.";
     return "Ce qui compte : es-tu meilleur qu'hier ? Rien d'autre.";
   },
   sana: (stats) => {
+    if (stats.socialRankScore >= 72) return "Ta constance se voit. Tu es maintenant un exemple pour ceux qui debutent ici.";
+    if (stats.socialRankScore < 28) return "Le corps est le premier investissement. Tout le reste vient apres.";
     if (stats.fitness < 38) return "Tu es en dessous de ta forme. Commence leger — ne saute pas la seance.";
     if (stats.fitness > 68) return "Bien maintenu. Regarde aussi la recuperation — c'est la que la progression se fixe.";
     if (stats.stress > 68) return "20 minutes de sport reduisent le cortisol. C'est physio, pas metaphore.";
