@@ -153,3 +153,52 @@ export function getCompatibilityBadge(interests: string[], targetInterests: stri
   if (shared >= 1) return "point commun";
   return "a decouvrir";
 }
+
+export type AccessibilityLevel = "accessible" | "receptif" | "ferme";
+
+export type ResidentAccessibility = {
+  level: AccessibilityLevel;
+  hint: string;
+};
+
+const RESIDENT_CRITERIA: Record<
+  string,
+  (stats: AvatarStats) => ResidentAccessibility
+> = {
+  ava: (stats) => {
+    if (stats.discipline > 30) return { level: "accessible", hint: "Ava est receptive a ta regularite actuelle." };
+    if (stats.discipline > 15) return { level: "receptif", hint: "Continue de construire une routine. Ava remarquera." };
+    return { level: "ferme", hint: "Ava cherche de la regularite. Stabilise une routine de base d'abord." };
+  },
+  malik: (stats) => {
+    if (stats.discipline > 55 && stats.reputation > 55) return { level: "accessible", hint: "Malik voit des resultats concrets. Tu peux avancer avec lui." };
+    if (stats.discipline > 40 || stats.reputation > 40) return { level: "receptif", hint: "Tu es dans le radar de Malik. Renforce discipline et reputation." };
+    return { level: "ferme", hint: "Malik regarde les resultats. Travaille ta discipline et ta reputation d'abord." };
+  },
+  noa: (stats) => {
+    if (stats.mood > 55 && stats.hygiene > 50) return { level: "accessible", hint: "Noa est attire par ton energie et ton image actuelles." };
+    if (stats.mood > 40 || stats.hygiene > 40) return { level: "receptif", hint: "Noa perçoit quelque chose. Travaille ton image et ton humeur." };
+    return { level: "ferme", hint: "Noa suit les profils qui rayonnent. Image et humeur font la difference." };
+  },
+  leila: (stats) => {
+    if (stats.stress < 60 && stats.fitness > 40) return { level: "accessible", hint: "Leila sent un rythme sain en toi. Le lien peut s'approfondir." };
+    if (stats.stress < 72 || stats.fitness > 30) return { level: "receptif", hint: "Leila est ouverte. Marche plus, reduis le stress." };
+    return { level: "ferme", hint: "Leila valorise le bien-etre actif. Bouge un peu et reduis le stress." };
+  },
+  yan: (stats) => {
+    if (stats.discipline > 65 && stats.motivation > 58) return { level: "accessible", hint: "Yan reconnait un profil solide. Tu peux entrer dans son cercle." };
+    if (stats.discipline > 48 || stats.motivation > 45) return { level: "receptif", hint: "Yan t'observe. Discipline et motivation a pousser davantage." };
+    return { level: "ferme", hint: "Yan ne se lie qu'avec des profils constants. Discipline et motivation en priorite." };
+  },
+  sana: (stats) => {
+    if (stats.fitness > 55 && stats.hygiene > 50) return { level: "accessible", hint: "Sana voit un profil actif et soigne. Bon terrain pour avancer." };
+    if (stats.fitness > 40 || stats.hygiene > 40) return { level: "receptif", hint: "Sana est curieuse. Continue le sport et soigne ton image." };
+    return { level: "ferme", hint: "Sana cherche les profils actifs et soignes. Gym et hygiene a travailler." };
+  }
+};
+
+export function getResidentAccessibility(residentId: string, stats: AvatarStats): ResidentAccessibility {
+  const check = RESIDENT_CRITERIA[residentId];
+  if (!check) return { level: "receptif", hint: "Profil en cours d'evaluation." };
+  return check(stats);
+}

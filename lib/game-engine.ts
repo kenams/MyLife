@@ -11,6 +11,8 @@ import type {
   LifeFeedItem,
   MentalStabilityState,
   NotificationItem,
+  OutingConfig,
+  OutingResult,
   RelationshipQuality,
   RelationshipRecord
 } from "@/lib/types";
@@ -438,6 +440,84 @@ export function applyActivityToStats(stats: AvatarStats, activitySlug: string) {
     lastDecayAt: nowIso(),
     lastSocialAt: nowIso(),
     lastWorkoutAt: activity.kind === "wellness" ? nowIso() : stats.lastWorkoutAt
+  });
+}
+
+// Multiplicateurs selon intensité
+const INTENSITY_MULT = {
+  chill:    { energy: 0.5,  mood: 0.7,  social: 0.6, stress: 0.5, budget: 0.6, discipline: 1.2 },
+  normale:  { energy: 1.0,  mood: 1.0,  social: 1.0, stress: 1.0, budget: 1.0, discipline: 1.0 },
+  festive:  { energy: 1.8,  mood: 1.5,  social: 1.6, stress: 2.0, budget: 1.8, discipline: 0.4 }
+} as const;
+
+// Bonus/malus selon contexte
+const CONTEXT_MOD = {
+  solo:       { mood: -2, social: -8,  stress: -4, discipline: +4, qualityBonus: 0 },
+  amis:       { mood: +4, social: +6,  stress: -4, discipline: 0,  qualityBonus: 10 },
+  romantique: { mood: +8, social: +4,  stress: -6, discipline: -1, qualityBonus: 20 },
+  groupe:     { mood: +4, social: +12, stress: +6, discipline: -3, qualityBonus: -10 }
+} as const;
+
+export function resolveOutingResult(config: OutingConfig, stats: AvatarStats): OutingResult {
+  const activity = activities.find((a) => a.slug === config.activitySlug);
+  if (!activity) {
+    return {
+      label: "Sortie inconnue",
+      energyCost: 0, moodGain: 0, sociabilityGain: 0,
+      stressDelta: 0, budgetCost: 0, disciplineDelta: 0,
+      weightDelta: 0, fitnessDelta: 0, socialQualityHint: "moyenne"
+    };
+  }
+
+  const im = INTENSITY_MULT[config.intensity];
+  const cm = CONTEXT_MOD[config.context];
+
+  const energyCost  = Math.round(Math.abs(activity.energyDelta) * im.energy);
+  const moodGain    = Math.round(activity.moodDelta * im.mood + cm.mood);
+  const sociabilityGain = Math.round(activity.sociabilityDelta * im.social + cm.social);
+  const stressDelta = Math.round(activity.stressDelta * im.stress + cm.stress);
+  const budgetCost  = Math.round(activity.cost * im.budget);
+  const disciplineDelta = Math.round(activity.disciplineDelta * im.discipline + cm.discipline);
+  const weightDelta = activity.weightDelta;
+  const fitnessDelta = activity.fitnessDelta;
+
+  // Qualité sociale = dépend du mode de vie + contexte + discipline
+  const lifestyleScore = stats.discipline * 0.4 + stats.mood * 0.3 + (100 - stats.stress) * 0.3;
+  const qualityScore = lifestyleScore + cm.qualityBonus;
+  const socialQualityHint: OutingResult["socialQualityHint"] =
+    qualityScore > 65 ? "haute" : qualityScore > 40 ? "moyenne" : "basse";
+
+  const intensityLabel =
+    config.intensity === "festive" ? "Soiree festive" :
+    config.intensity === "chill"   ? "Sortie chill" : "Sortie normale";
+  const contextLabel =
+    config.context === "romantique" ? "en mode romantique" :
+    config.context === "groupe"     ? "en groupe" :
+    config.context === "amis"       ? "entre amis" : "en solo";
+
+  return {
+    label: `${activity.name} — ${intensityLabel} ${contextLabel}`,
+    energyCost, moodGain, sociabilityGain,
+    stressDelta, budgetCost, disciplineDelta,
+    weightDelta, fitnessDelta, socialQualityHint
+  };
+}
+
+export function applyOutingToStats(stats: AvatarStats, result: OutingResult): AvatarStats {
+  return normalizeStats({
+    ...stats,
+    energy:      stats.energy - result.energyCost,
+    mood:        stats.mood + result.moodGain,
+    sociability: stats.sociability + result.sociabilityGain,
+    stress:      stats.stress + result.stressDelta,
+    money:       clampMoney(stats.money - result.budgetCost),
+    discipline:  stats.discipline + result.disciplineDelta,
+    weight:      stats.weight + result.weightDelta,
+    fitness:     stats.fitness + result.fitnessDelta,
+    reputation:  stats.reputation + (result.socialQualityHint === "haute" ? 3 : result.socialQualityHint === "moyenne" ? 1 : 0),
+    motivation:  stats.motivation + (result.moodGain > 10 ? 4 : 2),
+    lastDecayAt: nowIso(),
+    lastSocialAt: nowIso()
   });
 }
 

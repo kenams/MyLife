@@ -235,6 +235,66 @@ export const activities: ActivitySeed[] = [
     stressDelta: -5,
     weightDelta: 0,
     disciplineDelta: 1
+  },
+  {
+    slug: "evening-walk",
+    name: "Balade du soir",
+    kind: "solo",
+    locationSlug: "park",
+    summary: "Sortie legere pour souffler et reconnecte avec soi-meme sans depenser.",
+    cost: 0,
+    energyDelta: -3,
+    moodDelta: 10,
+    sociabilityDelta: 2,
+    fitnessDelta: 4,
+    stressDelta: -14,
+    weightDelta: -0.05,
+    disciplineDelta: 3
+  },
+  {
+    slug: "group-outing",
+    name: "Sortie en groupe",
+    kind: "social",
+    locationSlug: "cafe",
+    summary: "Sortie en groupe qui monte vite la sociabilite mais fatigue plus.",
+    cost: 16,
+    energyDelta: -10,
+    moodDelta: 16,
+    sociabilityDelta: 22,
+    fitnessDelta: 0,
+    stressDelta: 4,
+    weightDelta: 0,
+    disciplineDelta: -1
+  },
+  {
+    slug: "party-night",
+    name: "Soiree festive",
+    kind: "social",
+    locationSlug: "cinema",
+    summary: "Sortie intense. Humeur et sociabilite explosent, mais fatigue et budget aussi.",
+    cost: 38,
+    energyDelta: -22,
+    moodDelta: 20,
+    sociabilityDelta: 28,
+    fitnessDelta: -2,
+    stressDelta: 8,
+    weightDelta: 0.1,
+    disciplineDelta: -6
+  },
+  {
+    slug: "solo-cafe",
+    name: "Cafe solo",
+    kind: "solo",
+    locationSlug: "cafe",
+    summary: "S'isoler dans un cafe pour lire, reflechir ou travailler. Discret mais efficace.",
+    cost: 8,
+    energyDelta: 4,
+    moodDelta: 8,
+    sociabilityDelta: 3,
+    fitnessDelta: 0,
+    stressDelta: -8,
+    weightDelta: 0,
+    disciplineDelta: 5
   }
 ];
 

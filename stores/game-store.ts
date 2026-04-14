@@ -6,6 +6,7 @@ import {
   activities,
   applyActivityToStats,
   applyDecay,
+  applyOutingToStats,
   appendFeed,
   appendNotification,
   buildAutomaticNotifications,
@@ -17,6 +18,7 @@ import {
   locations,
   normalizeStats,
   nowIso,
+  resolveOutingResult,
   starterResidents,
   updateGoal,
   updateRelationshipScore
@@ -29,6 +31,7 @@ import type {
   InvitationRecord,
   LifeActionId,
   NotificationItem,
+  OutingConfig,
   UserSession
 } from "@/lib/types";
 
@@ -58,6 +61,7 @@ type GameState = {
   startDirectConversation: (residentId: string, residentName: string) => void;
   sendInvitation: (residentId: string, activitySlug: string) => void;
   respondInvitation: (invitationId: string, status: "accepted" | "declined") => void;
+  performOuting: (config: OutingConfig) => void;
   claimDailyReward: () => void;
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: () => void;
@@ -559,6 +563,37 @@ export const useGameStore = create<GameState>()(
                 status === "accepted"
                   ? `La sortie ${activity.name.toLowerCase()} a renforce ton lien et ton humeur.`
                   : "Toutes les approches ne convertissent pas. La constance compte plus que la perfection.",
+              createdAt
+            })
+          };
+        }),
+      performOuting: (config: OutingConfig) =>
+        set((state) => {
+          const decayed = applyDecay(state.stats);
+          const result = resolveOutingResult(config, decayed);
+          const nextStats = applyOutingToStats(decayed, result);
+          const createdAt = nowIso();
+          const qualityMsg =
+            result.socialQualityHint === "haute"
+              ? "Rencontres de qualite probables — ton mode de vie attire des profils solides."
+              : result.socialQualityHint === "basse"
+                ? "Sortie risquee. Un niveau de vie instable attire des liens moins solides."
+                : "Sortie correcte. Maintiens tes routines pour remonter la qualite sociale.";
+          return {
+            stats: nextStats,
+            advice: buildAdvice(nextStats),
+            notifications: appendNotification(state.notifications, {
+              id: `outing-${createdAt}`,
+              kind: "social",
+              title: result.label,
+              body: `Humeur +${result.moodGain}, sociabilite +${result.sociabilityGain}, budget -${result.budgetCost}. ${qualityMsg}`,
+              createdAt,
+              read: false
+            }),
+            lifeFeed: appendFeed(state.lifeFeed, {
+              id: `feed-outing-${createdAt}`,
+              title: result.label,
+              body: `Qualite sociale : ${result.socialQualityHint}. Stress ${result.stressDelta > 0 ? "+" : ""}${result.stressDelta}, discipline ${result.disciplineDelta >= 0 ? "+" : ""}${result.disciplineDelta}.`,
               createdAt
             })
           };

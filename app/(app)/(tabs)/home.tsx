@@ -114,6 +114,7 @@ export default function HomeScreen() {
         <SectionTitle>Navigation utile</SectionTitle>
         <Button label="Corps, habitudes et forme" variant="secondary" onPress={() => router.push("/(app)/health")} />
         <Button label="Travail et revenus" variant="secondary" onPress={() => router.push("/(app)/work")} />
+        <Button label="Sorties et vie sociale" variant="secondary" onPress={() => router.push("/(app)/outings")} />
       </Card>
 
       <Card>

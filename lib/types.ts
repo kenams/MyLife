@@ -10,6 +10,27 @@ export type PresenceState = "online" | "recent" | "busy" | "out" | "working" | "
 export type RelationshipStatus = "contact" | "ami" | "cercle-proche" | "crush" | "relation";
 export type LocationKind = "home" | "food" | "social" | "work" | "wellness" | "public";
 export type ActivityKind = "solo" | "social" | "romantic" | "wellness" | "work";
+export type OutingIntensity = "chill" | "normale" | "festive";
+export type OutingContext = "solo" | "amis" | "romantique" | "groupe";
+
+export type OutingConfig = {
+  activitySlug: string;
+  intensity: OutingIntensity;
+  context: OutingContext;
+};
+
+export type OutingResult = {
+  label: string;
+  energyCost: number;
+  moodGain: number;
+  sociabilityGain: number;
+  stressDelta: number;
+  budgetCost: number;
+  disciplineDelta: number;
+  weightDelta: number;
+  fitnessDelta: number;
+  socialQualityHint: "haute" | "moyenne" | "basse";
+};
 export type NotificationKind = "needs" | "social" | "work" | "reward" | "tip";
 export type ConversationKind = "local" | "direct";
 export type ConversationMessageKind = "message" | "system" | "invitation";
@@ -29,7 +50,8 @@ export type LifeActionId =
   | "cafe-chat"
   | "restaurant-outing"
   | "cinema-date"
-  | "rest-home";
+  | "rest-home"
+  | "go-out";
 
 export type AvatarProfile = {
   displayName: string;
