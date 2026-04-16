@@ -2,11 +2,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { applyActionToMissions, claimMissionReward } from "@/lib/missions";
 import { seedNpcs, tickAllNpcs } from "@/lib/npc-brain";
 import { BOOSTS, COSMETICS, getBoostMultiplier } from "@/lib/premium";
 import { getActionTimeScore, getTimeContext } from "@/lib/time-context";
-import { pullAvatarFromSupabase, syncAvatarToSupabase, syncStatsToSupabase, logSocialTransferToSupabase } from "@/lib/supabase-sync";
-import type { BoostItem, CosmeticItem, MoneyTransfer, NpcState, PremiumTier, Room, RoomKind, SecretRoom, SecretMessage } from "@/lib/types";
+import {
+  pullAvatarFromSupabase,
+  syncAvatarToSupabase,
+  syncPremiumToSupabase,
+  syncProgressionToSupabase,
+  syncStatsToSupabase,
+  logSocialTransferToSupabase,
+  syncStudyProgressToSupabase
+} from "@/lib/supabase-sync";
+import type { BoostItem, CosmeticItem, MoneyTransfer, NpcState, PremiumTier, Room, RoomKind, SecretRoom, SecretMessage, StudyProgress, StudySessionInput } from "@/lib/types";
 import {
   activities,
   applyActivityToStats,
@@ -52,11 +61,12 @@ import type {
   LifeActionId,
   NotificationItem,
   OutingConfig,
+  RelationshipRecord,
   SocialRank,
   UserSession
 } from "@/lib/types";
 
-type TestAccountPreset = "balanced" | "burnout" | "romantic";
+type TestAccountPreset = "balanced" | "burnout" | "romantic" | "live";
 
 type GameState = {
   hasHydrated: boolean;
@@ -117,9 +127,20 @@ type GameState = {
   jobXp: number;
   jobLevel: number;
   shiftHistory: import("@/lib/types").ShiftRecord[];
+  playerXp: number;
+  playerLevel: number;
+  // Missions
+  missionProgresses: import("@/lib/missions").MissionProgress[];
+  claimMission: (missionId: string) => void;
+  // Progression talents
+  unlockedTalents: string[];
+  unlockTalent: (talentId: string) => void;
   startWorkShift: (jobSlug: string) => void;
   completeWorkShift: () => void;
   cancelWorkShift: () => void;
+  // Etudes
+  studyProgress: StudyProgress[];
+  recordStudySession: (input: StudySessionInput) => StudyProgress;
   // Economie sociale
   moneyTransfers: MoneyTransfer[];
   sendMoneyToResident: (residentId: string, residentName: string, amount: number) => { ok: boolean; error?: string };
@@ -184,6 +205,11 @@ function initialState() {
     jobXp: 0,
     jobLevel: 1,
     shiftHistory: [] as import("@/lib/types").ShiftRecord[],
+    playerXp: 0,
+    playerLevel: 1,
+    missionProgresses: [] as import("@/lib/missions").MissionProgress[],
+    unlockedTalents: [] as string[],
+    studyProgress: [] as StudyProgress[],
     moneyTransfers: [] as MoneyTransfer[],
     secretRooms: [] as SecretRoom[],
     secretMessages: {} as Record<string, SecretMessage[]>,
@@ -264,7 +290,7 @@ function createTestAccountState(preset: TestAccountPreset = "balanced") {
     lastSocialAt: new Date(Date.now() - 1000 * 60 * 55).toISOString()
   });
 
-  const relationships = runtime.relationships.map((item) => {
+  let relationships: RelationshipRecord[] = runtime.relationships.map((item) => {
     if (item.residentId === "ava") {
       return {
         ...item,
@@ -320,7 +346,7 @@ function createTestAccountState(preset: TestAccountPreset = "balanced") {
     };
   });
 
-  const conversations = [
+  let conversations = [
     ...runtime.conversations,
     {
       id: "dm-ava",
@@ -553,12 +579,157 @@ function createTestAccountState(preset: TestAccountPreset = "balanced") {
     ];
   }
 
+  if (preset === "live") {
+    stats = normalizeStats({
+      ...stats,
+      hunger: 96,
+      hydration: 96,
+      energy: 97,
+      hygiene: 98,
+      mood: 96,
+      sociability: 98,
+      health: 96,
+      fitness: 92,
+      stress: 8,
+      money: 2500,
+      socialRankScore: 92,
+      reputation: 94,
+      discipline: 95,
+      motivation: 96,
+      streak: 30,
+      lastMealAt: new Date(Date.now() - 1000 * 60 * 20).toISOString(),
+      lastWorkoutAt: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(),
+      lastSocialAt: new Date(Date.now() - 1000 * 60 * 10).toISOString(),
+      lastDecayAt: createdAt
+    });
+
+    relationships = relationships.map((item) => {
+      const resident = starterResidents.find((r) => r.id === item.residentId);
+      return {
+        ...item,
+        status: item.residentId === "noa" ? "relation" as const : "cercle-proche" as const,
+        score: item.residentId === "noa" ? 92 : resident?.socialRank === "influent" ? 86 : 78,
+        quality: "inspirante" as const,
+        influence: "positive" as const,
+        isFollowing: true,
+        lastInteractionAt: createdAt
+      };
+    });
+
+    conversations = [
+      ...starterResidents.map((resident) => ({
+        id: `dm-${resident.id}-live`,
+        peerId: resident.id,
+        title: resident.name,
+        subtitle: "conversation test live",
+        kind: "direct" as const,
+        locationSlug: null,
+        unreadCount: 1,
+        messages: [
+          {
+            id: `live-${resident.id}-1`,
+            authorId: resident.id,
+            body: `Mode test live actif. ${resident.name} est disponible pour tester les relations, messages et invitations.`,
+            createdAt,
+            read: false,
+            kind: "message" as const
+          },
+          {
+            id: `live-${resident.id}-2`,
+            authorId: "self",
+            body: "Je teste le parcours complet.",
+            createdAt,
+            read: true,
+            kind: "message" as const
+          }
+        ]
+      })),
+      ...runtime.conversations
+    ];
+
+    invitations = starterResidents.slice(0, 4).map((resident, index) => ({
+      id: `live-invite-${resident.id}`,
+      residentId: resident.id,
+      residentName: resident.name,
+      activitySlug: ["coffee-meetup", "group-outing", "evening-walk", "gym-session"][index] ?? "coffee-meetup",
+      status: "pending" as const,
+      createdAt
+    }));
+
+    datePlans = [
+      {
+        id: "live-date-noa-restaurant",
+        residentId: "noa",
+        residentName: "Noa",
+        venueKind: "restaurant",
+        venueLabel: "Restaurant",
+        activitySlug: "restaurant-date",
+        status: "accepted",
+        scheduledMoment: "ce soir, 20:00",
+        note: "Date test premium deja accepte pour valider tout le flow.",
+        bridgeToRealLife: "Lieu public, intention claire, duree courte.",
+        createdAt
+      },
+      {
+        id: "live-date-noa-cinema",
+        residentId: "noa",
+        residentName: "Noa",
+        venueKind: "cinema",
+        venueLabel: "Cinema public",
+        activitySlug: "cinema-night",
+        status: "proposed",
+        scheduledMoment: "demain, 19:30",
+        note: "Deuxieme date propose pour tester les statuts.",
+        bridgeToRealLife: "Format calme et public.",
+        createdAt
+      }
+    ];
+
+    dailyGoals = runtime.dailyGoals.map((goal) => ({ ...goal, completed: true }));
+    notifications = [
+      {
+        id: "live-mode-ready",
+        kind: "reward" as const,
+        title: "Mode test live active",
+        body: "Toutes les capacites de test sont chargees : premium, social, dates, rooms, economie, travail, etudes.",
+        createdAt,
+        read: false
+      },
+      {
+        id: "live-premium-ready",
+        kind: "reward" as const,
+        title: "Premium test actif",
+        body: "Boosts, cosmetiques et features premium sont disponibles pour validation.",
+        createdAt,
+        read: false
+      },
+      ...runtime.notifications
+    ];
+    lifeFeed = [
+      {
+        id: "feed-live-mode",
+        title: "Compte test complet charge",
+        body: "Tu peux maintenant parcourir tous les ecrans avec des donnees riches et des droits debloques.",
+        createdAt
+      },
+      ...runtime.lifeFeed
+    ];
+  }
+
+  const livePremiumExpiresAt = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString();
+  const liveStudyProgress: StudyProgress[] = [
+    { moduleId: "dev-web", title: "Developpement Web", sessionsCompleted: 9, level: 3, xp: 315, progressPct: 100, updatedAt: createdAt, completedAt: createdAt },
+    { moduleId: "finance-perso", title: "Finance Personnelle", sessionsCompleted: 5, level: 2, xp: 150, progressPct: 83, updatedAt: createdAt, completedAt: null },
+    { moduleId: "communication", title: "Communication & Charisme", sessionsCompleted: 4, level: 2, xp: 112, progressPct: 67, updatedAt: createdAt, completedAt: null },
+    { moduleId: "fitness-coach", title: "Coach Fitness", sessionsCompleted: 6, level: 3, xp: 180, progressPct: 100, updatedAt: createdAt, completedAt: createdAt }
+  ];
+
   return {
-    session: { email: "test@mylife.app", provider: "local" as const },
+    session: { email: preset === "live" ? "test-live@mylife.app" : "test@mylife.app", provider: "local" as const },
     avatar,
     stats,
-    currentLocationSlug: "cafe",
-    currentNeighborhoodSlug: "central-district",
+    currentLocationSlug: preset === "live" ? "studio-heights" : "cafe",
+    currentNeighborhoodSlug: preset === "live" ? "studio-heights" : "central-district",
     conversations,
     dailyGoals,
     lastRewardAt: new Date(Date.now() - 1000 * 60 * 60 * 20).toISOString(),
@@ -567,13 +738,90 @@ function createTestAccountState(preset: TestAccountPreset = "balanced") {
     relationships,
     invitations,
     datePlans,
+    studyProgress: preset === "live" ? liveStudyProgress : [],
     dailyEvent: generateDailyEvent(detectLifePattern(stats)),
     lastKnownRank: getSocialRankLabel(stats.socialRankScore),
-    lifeFeed
+    lifeFeed,
+    ...(preset === "live"
+      ? {
+          isPremium: true,
+          premiumTier: "yearly" as const,
+          premiumExpiresAt: livePremiumExpiresAt,
+          activeBoosts: BOOSTS.map((boost) => ({ ...boost, activeUntil: livePremiumExpiresAt })),
+          equippedCosmetics: COSMETICS.map((cosmetic) => cosmetic.id),
+          jobXp: 85,
+          jobLevel: 8,
+          shiftHistory: [
+            { id: "live-shift-support", jobSlug: "support-tech", jobName: "Support tech", earnedCoins: 112, earnedXp: 24, completedAt: createdAt },
+            { id: "live-shift-creator", jobSlug: "creator-studio", jobName: "Creator studio", earnedCoins: 104, earnedXp: 22, completedAt: createdAt }
+          ],
+          moneyTransfers: [
+            { id: "live-transfer-ava", kind: "sent" as const, residentId: "ava", residentName: "Ava", amount: -50, description: "Test transfert social", createdAt },
+            { id: "live-reward", kind: "received" as const, residentId: null, residentName: null, amount: 500, description: "Bonus mode test live", createdAt },
+            { id: "live-boost", kind: "boost" as const, residentId: null, residentName: null, amount: -15, description: "Boost test actif", createdAt }
+          ] as MoneyTransfer[],
+          rooms: [
+            {
+              id: "room-test-live",
+              name: "Room Live - Ava, Noa & Leila",
+              kind: "public" as RoomKind,
+              code: "LIVE",
+              ownerId: "system",
+              ownerName: "Systeme",
+              locationSlug: "cafe",
+              memberCount: 3,
+              maxMembers: 20,
+              description: "Room test avec 3 residents autonomes.",
+              createdAt,
+              isActive: true
+            },
+            {
+              id: "room-live-premium",
+              name: "Premium Test Lounge",
+              kind: "event" as RoomKind,
+              code: "VIP777",
+              ownerId: "test-live@mylife.app",
+              ownerName: avatar.displayName,
+              locationSlug: "restaurant",
+              memberCount: 8,
+              maxMembers: 20,
+              description: "Room evenement pour tester les salons premium et la presence.",
+              createdAt,
+              isActive: true
+            }
+          ] as Room[],
+          secretRooms: [
+            {
+              id: "secret-live",
+              name: "Secret Test",
+              code: "SECRET",
+              ownerId: "test-live@mylife.app",
+              ownerName: avatar.displayName,
+              memberIds: ["test-live@mylife.app"],
+              maxMembers: 4,
+              expiresAt: livePremiumExpiresAt,
+              createdAt,
+              isActive: true
+            }
+          ] as SecretRoom[],
+          secretMessages: {
+            "secret-live": [
+              {
+                id: "secret-live-msg",
+                authorId: "system",
+                authorName: "Systeme",
+                body: "Room secrete test active. Code : SECRET.",
+                createdAt,
+                expiresAt: livePremiumExpiresAt
+              }
+            ]
+          }
+        }
+      : {})
   };
 }
 
-function withActionApplied(state: GameState, action: LifeActionId) {
+function withActionApplied(state: GameState, action: LifeActionId): Partial<GameState> {
   const boostMultiplier = getBoostMultiplier(state.activeBoosts ?? []);
   // Bonus/malus selon l'heure réelle de l'appareil
   const timeCtx = getTimeContext();
@@ -831,12 +1079,33 @@ function withActionApplied(state: GameState, action: LifeActionId) {
   notifications = buildAutomaticNotifications(nextStats, notifications);
   lifeFeed = appendFeed(lifeFeed, createFeedFromAction(action));
 
+  // XP joueur par action
+  const XP_TABLE: Partial<Record<LifeActionId, number>> = {
+    "work-shift": 30, "team-sport": 25, "gym": 25, "walk": 20,
+    "read-book": 15, "meditate": 12, "healthy-meal": 8, "home-cooking": 10,
+    "cafe-chat": 8, "shower": 5, "sleep": 5, "nap": 3, "shopping": 6,
+  };
+  const rawXp = Math.round((XP_TABLE[action] ?? 5) * boostMultiplier * timeMult);
+  const newPlayerXp = (state.playerXp ?? 0) + rawXp;
+  const XP_PER_LEVEL = 200;
+  const newPlayerLevel = Math.max(1, Math.floor(newPlayerXp / XP_PER_LEVEL) + 1);
+
+  // Missions progress
+  const { updatedProgresses } = applyActionToMissions(
+    state.missionProgresses ?? [],
+    action,
+    newPlayerLevel
+  );
+
   return {
     stats: nextStats,
     dailyGoals: nextGoals,
     notifications,
     advice: buildAdvice(nextStats),
-    lifeFeed
+    lifeFeed,
+    playerXp: newPlayerXp,
+    playerLevel: newPlayerLevel,
+    missionProgresses: updatedProgresses,
   };
 }
 
@@ -1111,6 +1380,20 @@ export const useGameStore = create<GameState>()(
           };
         }),
       performAction: (action) => set((state) => withActionApplied(state, action)),
+      claimMission: (missionId) => set((state) => {
+        const { updatedProgresses, xp, money } = claimMissionReward(state.missionProgresses ?? [], missionId);
+        const newPlayerXp = (state.playerXp ?? 0) + xp;
+        const newPlayerLevel = Math.max(1, Math.floor(newPlayerXp / 200) + 1);
+        return {
+          missionProgresses: updatedProgresses,
+          playerXp: newPlayerXp,
+          playerLevel: newPlayerLevel,
+          stats: normalizeStats({ ...state.stats, money: state.stats.money + money }),
+        };
+      }),
+      unlockTalent: (talentId) => set((state) => ({
+        unlockedTalents: [...(state.unlockedTalents ?? []), talentId],
+      })),
       travelTo: (locationSlug) =>
         set((state) => {
           const location = locations.find((item) => item.slug === locationSlug) ?? locations[0];
@@ -1656,6 +1939,13 @@ export const useGameStore = create<GameState>()(
             read: false
           })
         }));
+        const session = get().session;
+        if (session?.provider === "supabase" && supabase) {
+          void supabase.auth.getUser().then(({ data }) => {
+            const userId = data.user?.id;
+            if (userId) void syncPremiumToSupabase(userId, tier, expiresAt);
+          });
+        }
       },
       deactivatePremium: () => set({ isPremium: false, premiumTier: null, premiumExpiresAt: null }),
 
@@ -1869,6 +2159,51 @@ export const useGameStore = create<GameState>()(
       },
 
       // ── NPCs ──────────────────────────────────────────────────────────────
+      recordStudySession: (input) => {
+        const state = get();
+        const current = state.studyProgress.find((item) => item.moduleId === input.moduleId);
+        const sessionsCompleted = Math.min(input.totalSessions, (current?.sessionsCompleted ?? 0) + 1);
+        const level =
+          sessionsCompleted >= input.totalSessions ? 3 :
+          sessionsCompleted >= Math.floor(input.totalSessions * 0.67) ? 2 :
+          sessionsCompleted >= Math.floor(input.totalSessions * 0.33) ? 1 :
+          0;
+        const progressPct = Math.min(100, Math.round((sessionsCompleted / input.totalSessions) * 100));
+        const updatedAt = nowIso();
+        const progress: StudyProgress = {
+          moduleId: input.moduleId,
+          title: input.title,
+          sessionsCompleted,
+          level,
+          xp: (current?.xp ?? 0) + input.xpPerSession,
+          progressPct,
+          updatedAt,
+          completedAt: level === 3 ? (current?.completedAt ?? updatedAt) : null
+        };
+
+        set((s) => ({
+          studyProgress: [
+            progress,
+            ...s.studyProgress.filter((item) => item.moduleId !== input.moduleId)
+          ]
+        }));
+
+        const avatarId = state.supabaseAvatarId;
+        if (avatarId) {
+          void syncStudyProgressToSupabase(
+            avatarId,
+            progress.moduleId,
+            progress.title,
+            progress.progressPct,
+            progress.level,
+            progress.xp,
+            progress.completedAt
+          );
+        }
+
+        return progress;
+      },
+
       tickNpcs: () => set((s) => ({ npcs: tickAllNpcs(s.npcs) })),
 
       // ── Rooms live ────────────────────────────────────────────────────────
@@ -2076,6 +2411,26 @@ export const useGameStore = create<GameState>()(
         if (avatarId) {
           set({ supabaseAvatarId: avatarId });
           await syncStatsToSupabase(avatarId, state.stats);
+          if (state.isPremium && state.premiumTier && state.premiumExpiresAt) {
+            await syncPremiumToSupabase(userId, state.premiumTier, state.premiumExpiresAt);
+          }
+          await Promise.all(state.studyProgress.map((progress) =>
+            syncStudyProgressToSupabase(
+              avatarId,
+              progress.moduleId,
+              progress.title,
+              progress.progressPct,
+              progress.level,
+              progress.xp,
+              progress.completedAt
+            )
+          ));
+          await syncProgressionToSupabase(avatarId, {
+            playerXp: state.playerXp ?? 0,
+            playerLevel: state.playerLevel ?? 1,
+            unlockedTalents: state.unlockedTalents ?? [],
+            missionsClaimed: (state.missionProgresses ?? []).filter((p) => p.status === "claimed").length,
+          });
         }
       },
 
@@ -2115,7 +2470,12 @@ export const useGameStore = create<GameState>()(
         activeBoosts: state.activeBoosts,
         equippedCosmetics: state.equippedCosmetics,
         moneyTransfers: state.moneyTransfers,
-        supabaseAvatarId: state.supabaseAvatarId
+        studyProgress: state.studyProgress,
+        supabaseAvatarId: state.supabaseAvatarId,
+        playerXp: state.playerXp,
+        playerLevel: state.playerLevel,
+        missionProgresses: state.missionProgresses,
+        unlockedTalents: state.unlockedTalents,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) {

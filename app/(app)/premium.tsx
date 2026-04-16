@@ -1,23 +1,25 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Linking from "expo-linking";
-import { useState } from "react";
-import { Alert, Pressable, ScrollView, Text, View } from "react-native";
+import { router } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Animated, Easing, Pressable, ScrollView, Text, View } from "react-native";
 
-import { AppShell, Button, Card, Muted, NavBack, Pill, SectionTitle, Title } from "@/components/ui";
 import { BOOSTS, COSMETICS, PREMIUM_FEATURES, PREMIUM_PRICES } from "@/lib/premium";
 import { colors } from "@/lib/theme";
-import type { BoostItem, CosmeticItem, PremiumTier } from "@/lib/types";
+import type { PremiumTier } from "@/lib/types";
 import { useGameStore } from "@/stores/game-store";
 
 function FeatureRow({ icon, label, description }: { icon: string; label: string; description: string }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12, paddingVertical: 10 }}>
-      <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: "rgba(139,124,255,0.15)", alignItems: "center", justifyContent: "center" }}>
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10,
+      borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)" }}>
+      <View style={{ width: 38, height: 38, borderRadius: 11, backgroundColor: "rgba(139,124,255,0.15)",
+        alignItems: "center", justifyContent: "center" }}>
         <Ionicons name={icon as never} size={18} color={colors.accent} />
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ color: colors.text, fontWeight: "700", fontSize: 14 }}>{label}</Text>
-        <Muted>{description}</Muted>
+        <Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{label}</Text>
+        <Text style={{ color: colors.muted, fontSize: 11, marginTop: 1 }}>{description}</Text>
       </View>
       <Ionicons name="checkmark-circle" size={18} color="#38c793" />
     </View>
@@ -27,237 +29,268 @@ function FeatureRow({ icon, label, description }: { icon: string; label: string;
 function PlanCard({ tier, selected, onSelect }: { tier: PremiumTier; selected: boolean; onSelect: () => void }) {
   const plan = PREMIUM_PRICES[tier];
   const isYearly = tier === "yearly";
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (selected) {
+      Animated.spring(scaleAnim, { toValue: 1.03, useNativeDriver: true, speed: 40 }).start();
+    } else {
+      Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 40 }).start();
+    }
+  }, [selected]);
+
   return (
-    <Pressable
-      onPress={onSelect}
-      style={{
-        flex: 1,
-        padding: 16,
-        borderRadius: 14,
-        borderWidth: 2,
+    <Animated.View style={{ flex: 1, transform: [{ scale: scaleAnim }] }}>
+      <Pressable onPress={onSelect} style={{
+        flex: 1, padding: 16, borderRadius: 18,
+        borderWidth: selected ? 2 : 1,
         borderColor: selected ? colors.accent : "rgba(255,255,255,0.1)",
-        backgroundColor: selected ? "rgba(139,124,255,0.12)" : "rgba(255,255,255,0.04)",
-        alignItems: "center",
-        gap: 6
-      }}
-    >
-      {isYearly && (
-        <View style={{ backgroundColor: "#38c793", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 }}>
-          <Text style={{ color: "#07111f", fontSize: 10, fontWeight: "800" }}>MEILLEURE OFFRE</Text>
-        </View>
-      )}
-      <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>{plan.label}</Text>
-      <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 22 }}>{plan.price.split("/")[0]}</Text>
-      <Muted>/{plan.price.split("/")[1]}</Muted>
-      {isYearly && <Text style={{ color: colors.muted, fontSize: 11 }}>Économise 30€/an</Text>}
-    </Pressable>
-  );
-}
-
-function BoostCard({ boost, onBuy, canAfford }: { boost: BoostItem; onBuy: () => void; canAfford: boolean }) {
-  return (
-    <Card>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
-        <Text style={{ color: colors.text, fontWeight: "800", fontSize: 14 }}>{boost.name}</Text>
-        <Pill>{boost.price} crédits</Pill>
-      </View>
-      <Muted>{boost.description}</Muted>
-      <View style={{ marginTop: 10 }}>
-        <Button
-          label={canAfford ? "Acheter" : "Solde insuffisant"}
-          onPress={onBuy}
-          disabled={!canAfford}
-        />
-      </View>
-    </Card>
-  );
-}
-
-function CosmeticCard({ item, owned, isPremium, canAfford, onBuy }: {
-  item: CosmeticItem; owned: boolean; isPremium: boolean; canAfford: boolean; onBuy: () => void;
-}) {
-  const locked = item.requiresPremium && !isPremium;
-  return (
-    <Pressable
-      onPress={locked ? undefined : onBuy}
-      style={{
-        width: "48%",
-        padding: 14,
-        borderRadius: 14,
-        backgroundColor: owned ? "rgba(56,199,147,0.1)" : "rgba(255,255,255,0.04)",
-        borderWidth: 1,
-        borderColor: owned ? "#38c793" : item.requiresPremium ? colors.accent : "rgba(255,255,255,0.08)",
-        alignItems: "center",
-        gap: 8,
-        opacity: locked ? 0.5 : 1
-      }}
-    >
-      <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: item.color + "33", borderWidth: 3, borderColor: item.color, alignItems: "center", justifyContent: "center" }}>
-        <Ionicons
-          name={item.kind === "badge" ? "ribbon" : item.kind === "border" ? "ellipse" : "sparkles"}
-          size={20}
-          color={item.color}
-        />
-      </View>
-      <Text style={{ color: colors.text, fontWeight: "700", fontSize: 13, textAlign: "center" }}>{item.name}</Text>
-      {owned ? (
-        <Text style={{ color: "#38c793", fontSize: 11, fontWeight: "700" }}>ÉQUIPÉ</Text>
-      ) : locked ? (
-        <Text style={{ color: colors.accent, fontSize: 11, fontWeight: "700" }}>PREMIUM</Text>
-      ) : item.price > 0 ? (
-        <Text style={{ color: canAfford ? colors.muted : "#f87171", fontSize: 11 }}>{item.price} crédits</Text>
-      ) : (
-        <Text style={{ color: "#38c793", fontSize: 11, fontWeight: "700" }}>GRATUIT</Text>
-      )}
-    </Pressable>
+        backgroundColor: selected ? "rgba(139,124,255,0.14)" : "rgba(255,255,255,0.04)",
+        alignItems: "center", gap: 6
+      }}>
+        {isYearly && (
+          <View style={{ backgroundColor: "#38c793", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 2 }}>
+            <Text style={{ color: "#07111f", fontSize: 10, fontWeight: "800" }}>MEILLEURE OFFRE</Text>
+          </View>
+        )}
+        <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>{plan.label}</Text>
+        <Text style={{ color: selected ? colors.accent : colors.text, fontWeight: "900", fontSize: 24 }}>
+          {plan.price.split("/")[0]}
+        </Text>
+        <Text style={{ color: colors.muted, fontSize: 11 }}>/{tier === "yearly" ? "an" : "mois"}</Text>
+        {isYearly && (
+          <Text style={{ color: "#38c793", fontSize: 10, fontWeight: "700" }}>Économise 50%</Text>
+        )}
+        {selected && (
+          <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent,
+            alignItems: "center", justifyContent: "center", marginTop: 4 }}>
+            <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>✓</Text>
+          </View>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 
 export default function PremiumScreen() {
-  const [selectedTier, setSelectedTier] = useState<PremiumTier>("yearly");
-  const [premiumSuccess, setPremiumSuccess] = useState("");
-  const [inlineMsg, setInlineMsg] = useState("");
-  const isPremium = useGameStore((s) => s.isPremium);
-  const premiumTier = useGameStore((s) => s.premiumTier);
+  const isPremium        = useGameStore((s) => s.isPremium);
+  const premiumTier      = useGameStore((s) => s.premiumTier);
   const premiumExpiresAt = useGameStore((s) => s.premiumExpiresAt);
-  const money = useGameStore((s) => s.stats.money);
+  const activeBoosts     = useGameStore((s) => s.activeBoosts);
   const equippedCosmetics = useGameStore((s) => s.equippedCosmetics);
-  const activatePremium = useGameStore((s) => s.activatePremium);
-  const buyBoost = useGameStore((s) => s.buyBoost);
-  const buyCosmetic = useGameStore((s) => s.buyCosmetic);
+  const activatePremium  = useGameStore((s) => s.activatePremium);
+  const deactivatePremium = useGameStore((s) => s.deactivatePremium);
+  const buyBoost         = useGameStore((s) => s.buyBoost);
+  const buyCosmetic      = useGameStore((s) => s.buyCosmetic);
+  const stats            = useGameStore((s) => s.stats);
 
-  const handleSubscribe = async () => {
-    if (isPremium) {
-      setPremiumSuccess(`Abonnement ${premiumTier} actif jusqu'au ${premiumExpiresAt ? new Date(premiumExpiresAt).toLocaleDateString("fr-FR") : "—"}.`);
-      return;
-    }
-    const stripeUrl = PREMIUM_PRICES[selectedTier].stripeLink;
-    const isPlaceholder = stripeUrl.includes("mylife_");
+  const [selectedTier, setSelectedTier] = useState<PremiumTier>("yearly");
 
-    if (isPlaceholder) {
-      // Mode dev : activation locale directe
-      activatePremium(selectedTier);
-      setPremiumSuccess(`Premium ${selectedTier === "yearly" ? "annuel" : "mensuel"} activé ✓ (mode dev)`);
-      return;
-    }
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 350, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+  }, []);
 
-    // Production : ouvrir Stripe
-    const supported = await Linking.canOpenURL(stripeUrl);
-    if (supported) {
-      await Linking.openURL(stripeUrl);
-      setPremiumSuccess("Redirection vers Stripe... Reviens ensuite et appuie sur 'Vérifier mon abonnement'.");
-    } else {
-      Alert.alert("Impossible d'ouvrir le lien de paiement.");
-    }
-  };
+  async function handleSubscribe() {
+    const plan = PREMIUM_PRICES[selectedTier];
+    // Stripe checkout
+    await Linking.openURL(plan.stripeLink);
+    // Activation locale (en prod : webhook Stripe → Supabase → store)
+    activatePremium(selectedTier);
+    Alert.alert("✅ Premium activé", `Merci ! Tu bénéficies maintenant de l'abonnement ${plan.label}.`);
+  }
 
-  const handleVerifySubscription = async () => {
-    // Synchronise avec Supabase pour vérifier le statut premium
-    const syncFn = useGameStore.getState().syncToSupabase;
-    await syncFn();
-    setPremiumSuccess("Statut vérifié depuis le serveur.");
-  };
-
-  const handleBuyBoost = (boostId: string) => {
-    const result = buyBoost(boostId);
-    setInlineMsg(result.ok ? "Boost activé ✓" : (result.error ?? "Erreur"));
-    setTimeout(() => setInlineMsg(""), 3000);
-  };
-
-  const handleBuyCosmetic = (cosmeticId: string) => {
-    const result = buyCosmetic(cosmeticId);
-    setInlineMsg(result.ok ? "Cosmétique équipé ✓" : (result.error ?? "Erreur"));
-    setTimeout(() => setInlineMsg(""), 3000);
-  };
+  const now = Date.now();
+  const activeBoostItem = activeBoosts.find((b) => b.activeUntil && new Date(b.activeUntil).getTime() > now);
 
   return (
-    <AppShell>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ gap: 20, paddingBottom: 40 }}>
+    <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} showsVerticalScrollIndicator={false}>
 
-        {/* Header */}
-        <View style={{ alignItems: "center", paddingTop: 8, gap: 8 }}>
-          {isPremium ? (
-            <>
-              <Pill tone="accent">PREMIUM ACTIF</Pill>
-              <Title>Tu es membre Premium</Title>
-              <Muted>Abonnement {premiumTier} · expire le {premiumExpiresAt ? new Date(premiumExpiresAt).toLocaleDateString("fr-FR") : "—"}</Muted>
-            </>
-          ) : (
-            <>
-              <Ionicons name="sparkles" size={36} color={colors.accent} />
-              <Title>MyLife Premium</Title>
-              <Text style={{ color: colors.muted, textAlign: "center" }}>Débloque tout le potentiel de ton avatar social.</Text>
-            </>
+        {/* Header hero */}
+        <View style={{
+          backgroundColor: "#060d18",
+          paddingHorizontal: 20, paddingTop: 56, paddingBottom: 28,
+          alignItems: "center", gap: 8,
+          borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)"
+        }}>
+          <Pressable onPress={() => router.back()} style={{ alignSelf: "flex-start", marginBottom: 8 }}>
+            <Text style={{ color: colors.muted, fontSize: 13 }}>← Retour</Text>
+          </Pressable>
+          <View style={{ width: 72, height: 72, borderRadius: 36,
+            backgroundColor: colors.accent + "22", borderWidth: 2.5, borderColor: colors.accent,
+            alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontSize: 36 }}>⭐</Text>
+          </View>
+          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 28, textAlign: "center" }}>
+            MyLife Premium
+          </Text>
+          <Text style={{ color: colors.muted, fontSize: 14, textAlign: "center", lineHeight: 20 }}>
+            Booste ta vie, débloques plus de features{"\n"}et progresse 2× plus vite.
+          </Text>
+          {isPremium && (
+            <View style={{ backgroundColor: "#38c79320", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8,
+              borderWidth: 1, borderColor: "#38c79350", marginTop: 4 }}>
+              <Text style={{ color: "#38c793", fontWeight: "800", fontSize: 13 }}>
+                ✓ Actif — {premiumTier === "yearly" ? "Annuel" : "Mensuel"}
+                {premiumExpiresAt ? ` jusqu'au ${new Date(premiumExpiresAt).toLocaleDateString("fr-FR")}` : ""}
+              </Text>
+            </View>
           )}
         </View>
 
-        {/* Features */}
-        <Card>
-          <SectionTitle>Ce que tu débloquas</SectionTitle>
-          {PREMIUM_FEATURES.map((f) => (
-            <FeatureRow key={f.id} icon={f.icon} label={f.label} description={f.description} />
-          ))}
-        </Card>
+        <View style={{ padding: 20, gap: 24 }}>
 
-        {/* Plans */}
-        {!isPremium && (
-          <View style={{ gap: 12 }}>
-            <SectionTitle>Choisir un plan</SectionTitle>
-            <View style={{ flexDirection: "row", gap: 12 }}>
-              <PlanCard tier="monthly" selected={selectedTier === "monthly"} onSelect={() => setSelectedTier("monthly")} />
-              <PlanCard tier="yearly" selected={selectedTier === "yearly"} onSelect={() => setSelectedTier("yearly")} />
+          {/* Plans */}
+          {!isPremium && (
+            <View style={{ gap: 14 }}>
+              <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1.5 }}>
+                CHOISIR UN PLAN
+              </Text>
+              <View style={{ flexDirection: "row", gap: 12 }}>
+                <PlanCard tier="monthly" selected={selectedTier === "monthly"} onSelect={() => setSelectedTier("monthly")} />
+                <PlanCard tier="yearly"  selected={selectedTier === "yearly"}  onSelect={() => setSelectedTier("yearly")}  />
+              </View>
+              <Pressable onPress={handleSubscribe}
+                style={{ backgroundColor: colors.accent, borderRadius: 16, padding: 18,
+                  alignItems: "center", shadowColor: colors.accent, shadowOpacity: 0.4, shadowRadius: 12 }}>
+                <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
+                  ⭐ S'abonner — {PREMIUM_PRICES[selectedTier].price}
+                </Text>
+              </Pressable>
+              <Text style={{ color: colors.muted, fontSize: 10, textAlign: "center" }}>
+                Paiement sécurisé par Stripe · Annulable à tout moment
+              </Text>
             </View>
-            <Button label={`S'abonner — ${PREMIUM_PRICES[selectedTier].price}`} onPress={() => void handleSubscribe()} />
-            <Button label="Vérifier mon abonnement" variant="secondary" onPress={() => void handleVerifySubscription()} />
-            <Text style={{ color: colors.muted, textAlign: "center", fontSize: 11 }}>
-              Paiement sécurisé via Stripe. Annulation à tout moment.
+          )}
+
+          {/* Features */}
+          <View style={{ gap: 0, backgroundColor: "rgba(255,255,255,0.03)", borderRadius: 18, padding: 16,
+            borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" }}>
+            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1.5, marginBottom: 8 }}>
+              AVANTAGES PREMIUM
             </Text>
-          </View>
-        )}
-
-        {/* Boosts */}
-        <View style={{ gap: 12 }}>
-          <SectionTitle>Boosts (crédits in-game)</SectionTitle>
-          <Muted>Solde actuel : {money} crédits</Muted>
-          {BOOSTS.map((boost) => (
-            <BoostCard
-              key={boost.id}
-              boost={boost}
-              canAfford={money >= boost.price}
-              onBuy={() => handleBuyBoost(boost.id)}
-            />
-          ))}
-        </View>
-
-        {/* Cosmétiques */}
-        <View style={{ gap: 12 }}>
-          <SectionTitle>Cosmétiques</SectionTitle>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {COSMETICS.map((item) => (
-              <CosmeticCard
-                key={item.id}
-                item={item}
-                owned={equippedCosmetics.includes(item.id)}
-                isPremium={isPremium}
-                canAfford={money >= item.price}
-                onBuy={() => handleBuyCosmetic(item.id)}
-              />
+            {PREMIUM_FEATURES.map((f) => (
+              <FeatureRow key={f.id} icon={f.icon} label={f.label} description={f.description} />
             ))}
           </View>
-        </View>
 
-        {premiumSuccess ? (
-          <View style={{ backgroundColor: "rgba(56,199,147,0.1)", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "rgba(56,199,147,0.3)" }}>
-            <Text style={{ color: "#38c793", fontWeight: "700", textAlign: "center" }}>{premiumSuccess}</Text>
+          {/* Boosts actifs */}
+          {activeBoostItem && (
+            <View style={{ backgroundColor: "#f6b94f10", borderRadius: 16, padding: 14,
+              borderWidth: 1.5, borderColor: "#f6b94f35", flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Text style={{ fontSize: 24 }}>⚡</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: "#f6b94f", fontWeight: "800", fontSize: 14 }}>{activeBoostItem.name}</Text>
+                <Text style={{ color: colors.muted, fontSize: 11 }}>
+                  Actif jusqu'à {new Date(activeBoostItem.activeUntil!).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                </Text>
+              </View>
+              <Text style={{ color: "#f6b94f", fontWeight: "900", fontSize: 18 }}>x{activeBoostItem.multiplier}</Text>
+            </View>
+          )}
+
+          {/* Boosts shop */}
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1.5 }}>
+              BOOSTS TEMPORAIRES
+            </Text>
+            {BOOSTS.map((boost) => {
+              const isActive = activeBoosts.find((b) => b.id === boost.id && b.activeUntil && new Date(b.activeUntil).getTime() > now);
+              return (
+                <View key={boost.id} style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 16, padding: 14,
+                  borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", flexDirection: "row", alignItems: "center", gap: 12 }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: "#f6b94f20",
+                    alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontWeight: "900", color: "#f6b94f", fontSize: 16 }}>x{boost.multiplier}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontWeight: "700", fontSize: 14 }}>{boost.name}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 11 }}>{boost.description}</Text>
+                  </View>
+                  {isActive ? (
+                    <View style={{ backgroundColor: "#38c79320", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                      <Text style={{ color: "#38c793", fontWeight: "700", fontSize: 12 }}>Actif</Text>
+                    </View>
+                  ) : (
+                    <Pressable
+                      onPress={() => {
+                        const result = buyBoost(boost.id);
+                        if (!result.ok) Alert.alert("Erreur", result.error ?? "Impossible d'acheter");
+                      }}
+                      style={{ backgroundColor: "#f6b94f25", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
+                        borderWidth: 1, borderColor: "#f6b94f50" }}>
+                      <Text style={{ color: "#f6b94f", fontWeight: "800", fontSize: 13 }}>{boost.price} cr</Text>
+                    </Pressable>
+                  )}
+                </View>
+              );
+            })}
           </View>
-        ) : null}
-        {inlineMsg ? (
-          <View style={{ backgroundColor: "rgba(139,124,255,0.1)", borderRadius: 10, padding: 12, borderWidth: 1, borderColor: "rgba(139,124,255,0.3)" }}>
-            <Text style={{ color: colors.accent, fontWeight: "700", textAlign: "center" }}>{inlineMsg}</Text>
+
+          {/* Cosmétiques */}
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1.5 }}>
+              COSMÉTIQUES
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+              {COSMETICS.map((cosm) => {
+                const owned = equippedCosmetics.includes(cosm.id);
+                const locked = cosm.requiresPremium && !isPremium;
+                return (
+                  <Pressable
+                    key={cosm.id}
+                    disabled={locked}
+                    onPress={() => {
+                      if (owned) return;
+                      const result = buyCosmetic(cosm.id);
+                      if (!result.ok) Alert.alert("Erreur", result.error ?? "Impossible");
+                    }}
+                    style={{
+                      width: "47%", backgroundColor: owned ? cosm.color + "18" : "rgba(255,255,255,0.04)",
+                      borderRadius: 14, padding: 14, gap: 8,
+                      borderWidth: owned ? 1.5 : 1,
+                      borderColor: owned ? cosm.color + "55" : locked ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.1)",
+                      opacity: locked ? 0.4 : 1,
+                    }}>
+                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: cosm.color + "30",
+                      alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ color: cosm.color, fontWeight: "900", fontSize: 14 }}>
+                        {cosm.kind === "badge" ? "🏅" : cosm.kind === "border" ? "🔲" : "✨"}
+                      </Text>
+                    </View>
+                    <Text style={{ color: owned ? cosm.color : colors.text, fontWeight: "700", fontSize: 13 }}>{cosm.name}</Text>
+                    {locked ? (
+                      <Text style={{ color: colors.muted, fontSize: 10 }}>🔒 Premium requis</Text>
+                    ) : owned ? (
+                      <Text style={{ color: cosm.color, fontSize: 10, fontWeight: "700" }}>✓ Possédé</Text>
+                    ) : (
+                      <Text style={{ color: "#f6b94f", fontWeight: "700", fontSize: 12 }}>
+                        {cosm.price === 0 ? "Gratuit" : `${cosm.price} cr`}
+                      </Text>
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
-        ) : null}
-        <NavBack fallback="/(app)/(tabs)/profile" />
+
+          {/* Désactiver premium (debug) */}
+          {isPremium && (
+            <Pressable
+              onPress={() => { deactivatePremium(); Alert.alert("Premium désactivé"); }}
+              style={{ paddingVertical: 12, borderRadius: 12, backgroundColor: "rgba(255,80,80,0.08)",
+                borderWidth: 1, borderColor: "rgba(255,80,80,0.2)", alignItems: "center" }}>
+              <Text style={{ color: "#ff8d8d", fontWeight: "700", fontSize: 12 }}>Désactiver (debug)</Text>
+            </Pressable>
+          )}
+
+        </View>
       </ScrollView>
-    </AppShell>
+    </Animated.View>
   );
 }

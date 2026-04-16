@@ -25,6 +25,7 @@ export default function ProfileScreen() {
   const datePlans     = useGameStore((s) => s.datePlans);
   const signOut       = useGameStore((s) => s.signOut);
   const resetAll      = useGameStore((s) => s.resetAll);
+  const loadTestAccount = useGameStore((s) => s.loadTestAccount);
   const syncToSupabase = useGameStore((s) => s.syncToSupabase);
 
   const isPremium        = useGameStore((s) => s.isPremium);
@@ -191,6 +192,18 @@ export default function ProfileScreen() {
         label="🏠 Rejoindre une Room live"
         onPress={() => router.push("/(app)/rooms")}
       />
+
+      <Card>
+        <SectionTitle>Mode test</SectionTitle>
+        <Muted>Charge instantanement toutes les donnees de test : premium, boosts, relations, dates, rooms, argent, travail et etudes.</Muted>
+        <Button
+          label="Activer test live complet"
+          onPress={() => {
+            loadTestAccount("live");
+            router.replace("/(app)/(tabs)/home");
+          }}
+        />
+      </Card>
 
       {/* Zone danger */}
       <View style={{

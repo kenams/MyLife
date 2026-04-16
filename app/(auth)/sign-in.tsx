@@ -13,7 +13,6 @@ export default function SignInScreen() {
   const signUp       = useGameStore((s) => s.signUp);
   const resetPassword = useGameStore((s) => s.resetPassword);
   const loadTestAccount = useGameStore((s) => s.loadTestAccount);
-  const avatar       = useGameStore((s) => s.avatar);
 
   const [tab, setTab]           = useState<Tab>("signin");
   const [email, setEmail]       = useState("");
@@ -32,7 +31,8 @@ export default function SignInScreen() {
     const result = await signIn(email, password || undefined);
     setLoading(false);
     if (!result.ok) { setError(result.error ?? "Connexion impossible."); return; }
-    router.replace(avatar ? "/(app)/(tabs)/home" : "/(auth)/avatar");
+    const currentAvatar = useGameStore.getState().avatar;
+    router.replace(currentAvatar ? "/(app)/(tabs)/home" : "/(auth)/avatar");
   }
 
   async function handleSignUp() {
@@ -57,7 +57,7 @@ export default function SignInScreen() {
     setSuccess("Lien envoyé. Vérifie ta boîte mail.");
   }
 
-  function handleLoadTestAccount(preset: "balanced" | "burnout" | "romantic" = "balanced") {
+  function handleLoadTestAccount(preset: "balanced" | "burnout" | "romantic" | "live" = "balanced") {
     clearMessages();
     loadTestAccount(preset);
     router.replace("/(app)/(tabs)/home");
@@ -148,6 +148,7 @@ export default function SignInScreen() {
             <Button label="Profil équilibré" onPress={() => handleLoadTestAccount("balanced")} />
             <Button label="Profil sous pression" variant="secondary" onPress={() => handleLoadTestAccount("burnout")} />
             <Button label="Profil date & social" variant="secondary" onPress={() => handleLoadTestAccount("romantic")} />
+            <Button label="Mode test live complet" onPress={() => handleLoadTestAccount("live")} />
             <Button label="Mode démo instantané" variant="secondary" onPress={() => void handleDemo()} />
           </View>
         </Card>

@@ -487,6 +487,42 @@ alter table blocks enable row level security;
 alter table analytics_events enable row level security;
 alter table push_tokens enable row level security;
 
+-- Drop policies first so the full schema can be re-run after a partial setup.
+drop policy if exists "profiles own row" on profiles;
+drop policy if exists "avatars own row" on avatars;
+drop policy if exists "avatar_preferences own row" on avatar_preferences;
+drop policy if exists "avatar_stats own row" on avatar_stats;
+drop policy if exists "action_logs own row" on action_logs;
+drop policy if exists "transactions own row" on transactions;
+drop policy if exists "currencies own row" on currencies;
+drop policy if exists "inventory own row" on inventory;
+drop policy if exists "studies own row" on studies;
+drop policy if exists "events own row" on events;
+drop policy if exists "relationships visible to involved avatars" on relationships;
+drop policy if exists "conversation members own access" on conversation_members;
+drop policy if exists "messages visible to members" on messages;
+drop policy if exists "notifications own row" on notifications;
+drop policy if exists "advice_logs own row" on advice_logs;
+drop policy if exists "presence own row" on presence;
+drop policy if exists "invitations visible to participants" on invitations;
+drop policy if exists "date_plans visible to participants" on date_plans;
+drop policy if exists "rooms public read" on rooms;
+drop policy if exists "rooms owner write" on rooms;
+drop policy if exists "room_members visible" on room_members;
+drop policy if exists "room_messages visible to members" on room_messages;
+drop policy if exists "world_presence own row" on world_presence;
+drop policy if exists "world_presence read all" on world_presence;
+drop policy if exists "user_premium own row" on user_premium;
+drop policy if exists "social_transfers own row" on social_transfers;
+drop policy if exists "active_boosts own row" on active_boosts;
+drop policy if exists "equipped_cosmetics own row" on equipped_cosmetics;
+drop policy if exists "reports create" on reports;
+drop policy if exists "reports own read" on reports;
+drop policy if exists "blocks own row" on blocks;
+drop policy if exists "analytics insert" on analytics_events;
+drop policy if exists "analytics own read" on analytics_events;
+drop policy if exists "push_tokens own row" on push_tokens;
+
 -- Profils
 create policy "profiles own row" on profiles
   for all using (auth.uid() = id) with check (auth.uid() = id);

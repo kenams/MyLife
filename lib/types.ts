@@ -414,6 +414,24 @@ export type ShiftRecord = {
 
 // ─── Rooms ────────────────────────────────────────────────────────────────────
 
+export type StudyProgress = {
+  moduleId: string;
+  title: string;
+  sessionsCompleted: number;
+  level: number;
+  xp: number;
+  progressPct: number;
+  updatedAt: string;
+  completedAt: string | null;
+};
+
+export type StudySessionInput = {
+  moduleId: string;
+  title: string;
+  totalSessions: number;
+  xpPerSession: number;
+};
+
 export type RoomKind = "public" | "private" | "event" | "secret";
 
 // Room éphémère — messages auto-supprimés après 2h, max 4 personnes

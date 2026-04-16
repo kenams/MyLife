@@ -17,6 +17,7 @@ import {
 } from "react-native";
 
 import { colors } from "@/lib/theme";
+import type { StudyProgress } from "@/lib/types";
 import { useGameStore } from "@/stores/game-store";
 
 // ─── Catalogue de formations ──────────────────────────────────────────────────
@@ -149,12 +150,6 @@ const MODULES: StudyModule[] = [
 ];
 
 // ─── Types progression ────────────────────────────────────────────────────────
-
-type StudyProgress = {
-  moduleId: string;
-  sessionsCompleted: number;
-  level: number;           // 0, 1, 2, 3
-};
 
 function getLevelFromSessions(sessions: number, total: number): number {
   if (sessions === 0) return 0;
@@ -365,22 +360,18 @@ const BIG_EVENTS = [
 export default function StudiesScreen() {
   const stats = useGameStore((s) => s.stats);
   const performAction = useGameStore((s) => s.performAction);
+  const studyProgress = useGameStore((s) => s.studyProgress);
+  const recordStudySession = useGameStore((s) => s.recordStudySession);
 
-  const [studyProgress, setStudyProgress] = useState<StudyProgress[]>([]);
   const [tab, setTab] = useState<"modules" | "events">("modules");
   const [studiedNow, setStudiedNow] = useState<string | null>(null);
 
   function handleStudy(module: StudyModule) {
-    const current = studyProgress.find((p) => p.moduleId === module.id);
-    const sessions = (current?.sessionsCompleted ?? 0) + 1;
-    const level    = getLevelFromSessions(sessions, module.totalSessions);
-
-    setStudyProgress((prev) => {
-      const existing = prev.find((p) => p.moduleId === module.id);
-      if (existing) {
-        return prev.map((p) => p.moduleId === module.id ? { ...p, sessionsCompleted: sessions, level } : p);
-      }
-      return [...prev, { moduleId: module.id, sessionsCompleted: sessions, level }];
+    recordStudySession({
+      moduleId: module.id,
+      title: module.title,
+      totalSessions: module.totalSessions,
+      xpPerSession: module.xpPerSession
     });
 
     setStudiedNow(module.id);

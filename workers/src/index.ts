@@ -43,13 +43,13 @@ export default {
 
       switch (url.pathname) {
         case "/webhook/invitation":
-          return await handleInvitationWebhook(body as SupabaseWebhookPayload<InvitationRow>, env);
+          return await handleInvitationWebhook(body as unknown as SupabaseWebhookPayload<InvitationRow>, env);
 
         case "/webhook/message":
-          return await handleMessageWebhook(body as SupabaseWebhookPayload<MessageRow>, env);
+          return await handleMessageWebhook(body as unknown as SupabaseWebhookPayload<MessageRow>, env);
 
         case "/webhook/notification":
-          return await handleNotificationWebhook(body as SupabaseWebhookPayload<NotificationRow>, env);
+          return await handleNotificationWebhook(body as unknown as SupabaseWebhookPayload<NotificationRow>, env);
 
         default:
           return json({ ok: false, error: "Route inconnue" }, 404);

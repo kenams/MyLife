@@ -253,6 +253,29 @@ export async function syncStudyProgressToSupabase(
 
 // ─── Currency ledger ──────────────────────────────────────────────────────────
 
+export async function registerPushTokenToSupabase(
+  userId: string,
+  avatarId: string,
+  token: string,
+  platform: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: "Supabase non configurÃ©" };
+
+  const { error } = await supabase.from("push_tokens").upsert(
+    {
+      user_id: userId,
+      avatar_id: avatarId,
+      token,
+      platform,
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: "avatar_id" }
+  );
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function logCurrencyEventToSupabase(
   avatarId: string,
   kind: "coins" | "gems" | "tokens",
@@ -370,6 +393,35 @@ export async function unblockUser(
     .delete()
     .eq("blocker_user_id", blockerUserId)
     .eq("blocked_user_id", blockedUserId);
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+// ─── Progression (XP, missions, talents) ─────────────────────────────────────
+
+export async function syncProgressionToSupabase(
+  avatarId: string,
+  data: {
+    playerXp: number;
+    playerLevel: number;
+    unlockedTalents: string[];
+    missionsClaimed: number;
+  }
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: "Supabase non configuré" };
+
+  const { error } = await supabase.from("progression").upsert(
+    {
+      avatar_id: avatarId,
+      player_xp: data.playerXp,
+      player_level: data.playerLevel,
+      unlocked_talents: data.unlockedTalents,
+      missions_claimed: data.missionsClaimed,
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: "avatar_id" }
+  );
 
   if (error) return { ok: false, error: error.message };
   return { ok: true };
