@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { seedNpcs, tickAllNpcs } from "@/lib/npc-brain";
 import { BOOSTS, COSMETICS, getBoostMultiplier } from "@/lib/premium";
+import { getActionTimeScore, getTimeContext } from "@/lib/time-context";
 import { pullAvatarFromSupabase, syncAvatarToSupabase, syncStatsToSupabase, logSocialTransferToSupabase } from "@/lib/supabase-sync";
 import type { BoostItem, CosmeticItem, MoneyTransfer, NpcState, PremiumTier, Room, RoomKind, SecretRoom, SecretMessage } from "@/lib/types";
 import {
@@ -574,6 +575,10 @@ function createTestAccountState(preset: TestAccountPreset = "balanced") {
 
 function withActionApplied(state: GameState, action: LifeActionId) {
   const boostMultiplier = getBoostMultiplier(state.activeBoosts ?? []);
+  // Bonus/malus selon l'heure réelle de l'appareil
+  const timeCtx = getTimeContext();
+  const timeScore = getActionTimeScore(action, timeCtx);
+  const timeMult: number = timeScore.multiplier;
   let nextStats = applyDecay(state.stats);
   let nextGoals = state.dailyGoals;
   let notifications = [...state.notifications];
@@ -583,11 +588,11 @@ function withActionApplied(state: GameState, action: LifeActionId) {
     nextStats = normalizeStats({
       ...nextStats,
       money: nextStats.money - 14,
-      hunger: nextStats.hunger + 34,
-      hydration: nextStats.hydration + 6,
-      health: nextStats.health + 4,
-      mood: nextStats.mood + 6,
-      discipline: nextStats.discipline + 4,
+      hunger: nextStats.hunger + Math.round(34 * timeMult),
+      hydration: nextStats.hydration + Math.round(6 * timeMult),
+      health: nextStats.health + Math.round(4 * timeMult),
+      mood: nextStats.mood + Math.round(6 * timeMult),
+      discipline: nextStats.discipline + Math.round(4 * timeMult),
       weight: nextStats.weight + 0.05,
       lastDecayAt: nowIso(),
       lastMealAt: nowIso()
@@ -625,12 +630,12 @@ function withActionApplied(state: GameState, action: LifeActionId) {
   if (action === "sleep") {
     nextStats = normalizeStats({
       ...nextStats,
-      energy: nextStats.energy + 44,
-      stress: nextStats.stress - 12,
+      energy: nextStats.energy + Math.round(44 * timeMult),
+      stress: nextStats.stress - Math.round(12 * timeMult),
       hunger: nextStats.hunger - 8,
       hydration: nextStats.hydration - 4,
-      mood: nextStats.mood + 6,
-      motivation: nextStats.motivation + 6,
+      mood: nextStats.mood + Math.round(6 * timeMult),
+      motivation: nextStats.motivation + Math.round(6 * timeMult),
       lastDecayAt: nowIso()
     });
     nextGoals = updateGoal(nextGoals, ["hygiene"]);
@@ -661,8 +666,8 @@ function withActionApplied(state: GameState, action: LifeActionId) {
 
   if (action === "work-shift") {
     const job = getStarterJob(state.avatar?.starterJob ?? jobs[0].slug);
-    const rewardCoins = Math.round(applyMomentumGain(job.rewardCoins, nextStats) * boostMultiplier);
-    const disciplineReward = Math.round(applyMomentumGain(job.disciplineReward, nextStats) * boostMultiplier);
+    const rewardCoins = Math.round(applyMomentumGain(job.rewardCoins, nextStats) * boostMultiplier * timeMult);
+    const disciplineReward = Math.round(applyMomentumGain(job.disciplineReward, nextStats) * boostMultiplier * timeMult);
     nextStats = normalizeStats({
       ...nextStats,
       money: nextStats.money + rewardCoins,
@@ -688,11 +693,11 @@ function withActionApplied(state: GameState, action: LifeActionId) {
   if (action === "focus-task") {
     nextStats = normalizeStats({
       ...nextStats,
-      money: nextStats.money + applyMomentumGain(18, nextStats),
+      money: nextStats.money + Math.round(applyMomentumGain(18, nextStats) * timeMult),
       energy: nextStats.energy - 8,
       stress: nextStats.stress + 4,
-      discipline: nextStats.discipline + applyMomentumGain(6, nextStats),
-      motivation: nextStats.motivation + 4,
+      discipline: nextStats.discipline + Math.round(applyMomentumGain(6, nextStats) * timeMult),
+      motivation: nextStats.motivation + Math.round(4 * timeMult),
       reputation: nextStats.reputation + 1,
       lastDecayAt: nowIso()
     });
@@ -738,11 +743,11 @@ function withActionApplied(state: GameState, action: LifeActionId) {
   if (action === "meditate") {
     nextStats = normalizeStats({
       ...nextStats,
-      stress: nextStats.stress - 18,
-      mood: nextStats.mood + 10,
-      energy: nextStats.energy + 6,
-      discipline: nextStats.discipline + applyMomentumGain(5, nextStats),
-      motivation: nextStats.motivation + 8,
+      stress: nextStats.stress - Math.round(18 * timeMult),
+      mood: nextStats.mood + Math.round(10 * timeMult),
+      energy: nextStats.energy + Math.round(6 * timeMult),
+      discipline: nextStats.discipline + Math.round(applyMomentumGain(5, nextStats) * timeMult),
+      motivation: nextStats.motivation + Math.round(8 * timeMult),
       mentalStability: nextStats.stress > 30 ? "fragile" : "stable",
       lastDecayAt: nowIso()
     });
@@ -753,11 +758,11 @@ function withActionApplied(state: GameState, action: LifeActionId) {
     nextStats = normalizeStats({
       ...nextStats,
       money: nextStats.money - 8,
-      hunger: nextStats.hunger + 38,
-      hydration: nextStats.hydration + 8,
-      health: nextStats.health + 6,
-      mood: nextStats.mood + 8,
-      discipline: nextStats.discipline + applyMomentumGain(6, nextStats),
+      hunger: nextStats.hunger + Math.round(38 * timeMult),
+      hydration: nextStats.hydration + Math.round(8 * timeMult),
+      health: nextStats.health + Math.round(6 * timeMult),
+      mood: nextStats.mood + Math.round(8 * timeMult),
+      discipline: nextStats.discipline + Math.round(applyMomentumGain(6, nextStats) * timeMult),
       weight: nextStats.weight + 0.03,
       lastDecayAt: nowIso(),
       lastMealAt: nowIso()
@@ -796,11 +801,11 @@ function withActionApplied(state: GameState, action: LifeActionId) {
     nextStats = normalizeStats({
       ...nextStats,
       energy: nextStats.energy - 20,
-      fitness: nextStats.fitness + applyMomentumGain(10, nextStats),
-      sociability: nextStats.sociability + 12,
-      mood: nextStats.mood + 10,
-      stress: nextStats.stress - 8,
-      health: nextStats.health + 4,
+      fitness: nextStats.fitness + Math.round(applyMomentumGain(10, nextStats) * timeMult),
+      sociability: nextStats.sociability + Math.round(12 * timeMult),
+      mood: nextStats.mood + Math.round(10 * timeMult),
+      stress: nextStats.stress - Math.round(8 * timeMult),
+      health: nextStats.health + Math.round(4 * timeMult),
       hunger: nextStats.hunger - 10,
       hydration: nextStats.hydration - 8,
       weight: nextStats.weight - 0.1,
@@ -1771,9 +1776,10 @@ export const useGameStore = create<GameState>()(
         const boostMultiplier = getBoostMultiplier(state.activeBoosts);
         const level = state.jobLevel;
         const levelBonus = 1 + (level - 1) * 0.05;
-        const earnedCoins = Math.round(applyMomentumGain(job.rewardCoins, state.stats) * boostMultiplier * levelBonus);
+        const timeMult = getActionTimeScore("work-shift", getTimeContext()).multiplier;
+        const earnedCoins = Math.round(applyMomentumGain(job.rewardCoins, state.stats) * boostMultiplier * levelBonus * timeMult);
         const earnedXp = Math.round(15 + job.disciplineReward * 0.5);
-        const earnedDiscipline = Math.round(applyMomentumGain(job.disciplineReward, state.stats) * boostMultiplier);
+        const earnedDiscipline = Math.round(applyMomentumGain(job.disciplineReward, state.stats) * boostMultiplier * timeMult);
         const earnedReputation = job.reputationReward;
         set({
           workSession: {

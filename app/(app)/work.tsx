@@ -14,6 +14,7 @@ import {
 
 import { Button, NavBack, Pill } from "@/components/ui";
 import { jobs } from "@/lib/game-engine";
+import { getActionTimeScore, useTimeContext } from "@/lib/time-context";
 import { colors } from "@/lib/theme";
 import type { ShiftRecord } from "@/lib/types";
 import { useGameStore } from "@/stores/game-store";
@@ -156,9 +157,15 @@ export default function WorkScreen() {
     prevLevel.current = jobLevel;
   }, [jobLevel]);
 
+  // Contexte temps réel
+  const timeCtx = useTimeContext();
+  const workTimeScore = getActionTimeScore("work-shift", timeCtx);
+  const isWorkPrime = workTimeScore.multiplier > 1;
+  const isWorkOff   = workTimeScore.multiplier < 1;
+
   const energyTooLow    = stats.energy < 15;
   const levelBonus      = 1 + (jobLevel - 1) * 0.05;
-  const projectedEarnings = Math.round(currentJob.rewardCoins * levelBonus);
+  const projectedEarnings = Math.round(currentJob.rewardCoins * levelBonus * workTimeScore.multiplier);
 
   function switchJob(slug: string) {
     if (!avatar) return;
@@ -188,7 +195,23 @@ export default function WorkScreen() {
               <Text style={{ fontSize: 28 }}>{jobEmoji}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <View style={{ alignSelf: "flex-start", marginBottom: 4 }}><Pill tone="accent">Travail</Pill></View>
+              <View style={{ flexDirection: "row", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
+                <Pill tone="accent">Travail</Pill>
+                {isWorkPrime && (
+                  <View style={{ backgroundColor: "#38c79322", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ color: "#38c793", fontSize: 10, fontWeight: "800" }}>
+                      ⚡ {timeCtx.label} · +30%
+                    </Text>
+                  </View>
+                )}
+                {isWorkOff && (
+                  <View style={{ backgroundColor: "#f8717122", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ color: "#f87171", fontSize: 10, fontWeight: "800" }}>
+                      ⚠️ Hors horaire · -25%
+                    </Text>
+                  </View>
+                )}
+              </View>
               <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>{currentJob.name}</Text>
               <Text style={{ color: jobColor, fontSize: 13, fontWeight: "700" }}>
                 ~{projectedEarnings} cr / shift · Niveau {jobLevel}
@@ -196,6 +219,16 @@ export default function WorkScreen() {
             </View>
           </View>
           <XpBar xp={jobXp} level={jobLevel} />
+          {/* Bande horaire */}
+          <View style={{
+            flexDirection: "row", alignItems: "center", gap: 8,
+            paddingTop: 10, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.06)",
+          }}>
+            <Text style={{ fontSize: 14 }}>{timeCtx.emoji}</Text>
+            <Text style={{ color: colors.muted, fontSize: 11, flex: 1 }}>
+              {timeCtx.hour.toString().padStart(2, "0")}h{timeCtx.minutes.toString().padStart(2, "0")} · {timeCtx.isWeekend ? "Weekend" : "Semaine"} · Pic productivité 9h-12h et 14h-17h
+            </Text>
+          </View>
         </View>
 
         {/* ── Level up toast ── */}
@@ -234,6 +267,31 @@ export default function WorkScreen() {
         {/* ── Zone shift ── */}
         {workSession.phase === "idle" && (
           <View style={{ marginBottom: 14 }}>
+            {isWorkOff && workTimeScore.hint && (
+              <View style={{
+                backgroundColor: "rgba(248,113,113,0.08)", borderRadius: 12, padding: 12,
+                borderWidth: 1, borderColor: "rgba(248,113,113,0.25)",
+                flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10,
+              }}>
+                <Text style={{ fontSize: 20 }}>🌙</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: "#f87171", fontSize: 12, fontWeight: "700" }}>Hors horaire de travail</Text>
+                  <Text style={{ color: colors.muted, fontSize: 11 }}>{workTimeScore.hint} — revenus réduits de 25%.</Text>
+                </View>
+              </View>
+            )}
+            {isWorkPrime && (
+              <View style={{
+                backgroundColor: "rgba(56,199,147,0.08)", borderRadius: 12, padding: 10,
+                borderWidth: 1, borderColor: "rgba(56,199,147,0.2)",
+                flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10,
+              }}>
+                <Text style={{ fontSize: 18 }}>⚡</Text>
+                <Text style={{ color: "#38c793", fontSize: 12, fontWeight: "700", flex: 1 }}>
+                  Créneau productif — bonus +30% sur les gains
+                </Text>
+              </View>
+            )}
             {energyTooLow && (
               <View style={{
                 backgroundColor: "rgba(248,113,113,0.1)", borderRadius: 12, padding: 12,

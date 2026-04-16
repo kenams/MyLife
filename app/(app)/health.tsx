@@ -18,6 +18,7 @@ import {
   View,
 } from "react-native";
 
+import { getActionTimeScore, useTimeContext } from "@/lib/time-context";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 
@@ -499,6 +500,11 @@ export default function HealthScreen() {
   const stats         = useGameStore((s) => s.stats);
   const performAction = useGameStore((s) => s.performAction);
 
+  // Contexte temps réel
+  const timeCtx = useTimeContext();
+  const gymTimeScore = getActionTimeScore("gym", timeCtx);
+  const walkTimeScore = getActionTimeScore("walk", timeCtx);
+
   const [session, setSession] = useState<SessionState>({ phase: "idle" });
   const [cooldowns, setCooldowns] = useState<CooldownState>({});
   const [tick, setTick] = useState(0);
@@ -640,6 +646,35 @@ export default function HealthScreen() {
         {/* ── Liste des activités ── */}
         {session.phase === "idle" && (
           <View style={{ gap: 10 }}>
+            {/* Badge créneau sport */}
+            <View style={{
+              flexDirection: "row", alignItems: "center", gap: 10,
+              backgroundColor: timeCtx.gymPrime ? "rgba(56,199,147,0.08)" : "rgba(255,255,255,0.03)",
+              borderRadius: 12, padding: 10,
+              borderWidth: 1,
+              borderColor: timeCtx.gymPrime ? "rgba(56,199,147,0.2)" : "rgba(255,255,255,0.06)",
+            }}>
+              <Text style={{ fontSize: 18 }}>{timeCtx.emoji}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: timeCtx.gymPrime ? "#38c793" : colors.muted, fontWeight: "700", fontSize: 12 }}>
+                  {timeCtx.gymPrime
+                    ? `Créneau sport idéal — ${timeCtx.label}`
+                    : `${timeCtx.label} · ${timeCtx.hour.toString().padStart(2, "0")}h${timeCtx.minutes.toString().padStart(2, "0")}`
+                  }
+                </Text>
+                <Text style={{ color: colors.muted, fontSize: 11 }}>
+                  {timeCtx.gymPrime
+                    ? "Le sport avant 9h ou après 17h maximise les gains de forme."
+                    : "Créneau optimal : 6h-9h ou 17h-21h pour le sport intensif."
+                  }
+                </Text>
+              </View>
+              {timeCtx.gymPrime && (
+                <View style={{ backgroundColor: "#38c79322", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                  <Text style={{ color: "#38c793", fontSize: 10, fontWeight: "800" }}>+30%</Text>
+                </View>
+              )}
+            </View>
             <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800", letterSpacing: 1 }}>
               ACTIVITÉS DISPONIBLES
             </Text>

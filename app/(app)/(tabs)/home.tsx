@@ -3,8 +3,28 @@ import { useCallback, useState } from "react";
 import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 
 import { getLocationName, getMomentumState, getRecommendedActionMeta, getWellbeingScore } from "@/lib/selectors";
+import { getActionTimeScore, getTimeModeDescription, getSuggestedActions, useTimeContext } from "@/lib/time-context";
 import { colors } from "@/lib/theme";
+import type { LifeActionId } from "@/lib/types";
 import { useGameStore } from "@/stores/game-store";
+
+// ─── Catalogue actions ────────────────────────────────────────────────────────
+const ALL_ACTIONS: { id: LifeActionId; emoji: string; label: string; cost: string; reward: string; minEnergy?: number; minMoney?: number }[] = [
+  { id: "healthy-meal",     emoji: "🍽️", label: "Repas sain",      cost: "-14 cr",   reward: "+faim +santé" },
+  { id: "home-cooking",     emoji: "🥘", label: "Cuisiner",         cost: "-8 cr",    reward: "+faim ×2" },
+  { id: "sleep",            emoji: "😴", label: "Dormir",           cost: "-temps",   reward: "+énergie" },
+  { id: "nap",              emoji: "💤", label: "Sieste",           cost: "-temps",   reward: "+énergie" },
+  { id: "shower",           emoji: "🚿", label: "Douche",           cost: "-3 cr",    reward: "+hygiène" },
+  { id: "work-shift",       emoji: "💼", label: "Travailler",       cost: "-énergie", reward: "+argent",     minEnergy: 20 },
+  { id: "walk",             emoji: "🏃", label: "Marcher",          cost: "-énergie", reward: "+humeur" },
+  { id: "team-sport",       emoji: "🏀", label: "Sport collectif",  cost: "-énergie", reward: "+social",     minEnergy: 25 },
+  { id: "meditate",         emoji: "🧘", label: "Méditer",          cost: "-énergie", reward: "+zen" },
+  { id: "read-book",        emoji: "📚", label: "Lire",             cost: "-énergie", reward: "+motivation" },
+  { id: "cafe-chat",        emoji: "☕", label: "Café social",      cost: "-argent",  reward: "+social",     minMoney: 5 },
+  { id: "shopping",         emoji: "🛍️", label: "Shopping",         cost: "-35 cr",   reward: "+image",      minMoney: 35 },
+];
+
+const ACTION_META = Object.fromEntries(ALL_ACTIONS.map((a) => [a.id, a])) as Record<LifeActionId, typeof ALL_ACTIONS[0]>;
 
 // ─── Barre de stat ────────────────────────────────────────────────────────────
 function StatBar({ label, value, color, icon }: { label: string; value: number; color: string; icon: string }) {
@@ -228,6 +248,9 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => { bootstrap(); }, [bootstrap]));
 
+  // Contexte temporel live (mis à jour toutes les minutes)
+  const timeCtx = useTimeContext();
+
   const wellbeing = getWellbeingScore(stats);
   const momentum  = getMomentumState(stats);
   const recommended = getRecommendedActionMeta(stats);
@@ -238,6 +261,13 @@ export default function HomeScreen() {
   const wbColor = wellbeing > 65 ? "#38c793" : wellbeing > 40 ? "#f6b94f" : "#ff6b6b";
 
   const hasPendingEvent = dailyEvent && !dailyEvent.resolved;
+
+  // Actions suggérées pour ce créneau horaire
+  const suggestedActions = getSuggestedActions(timeCtx);
+
+  // Helper pour savoir si une action est dans le top créneau du moment
+  const isActionPrime = (id: LifeActionId) => suggestedActions.includes(id);
+  const getActionScore = (id: LifeActionId) => getActionTimeScore(id, timeCtx);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} showsVerticalScrollIndicator={false}>
@@ -318,6 +348,39 @@ export default function HomeScreen() {
 
       <View style={{ padding: 20, gap: 24 }}>
 
+        {/* ── HUD TEMPS LIVE ── */}
+        <View style={{
+          backgroundColor: timeCtx.color + "14",
+          borderRadius: 16, padding: 14,
+          borderWidth: 1, borderColor: timeCtx.color + "35",
+          flexDirection: "row", alignItems: "center", gap: 12,
+        }}>
+          <View style={{
+            width: 42, height: 42, borderRadius: 12,
+            backgroundColor: timeCtx.color + "25",
+            alignItems: "center", justifyContent: "center",
+          }}>
+            <Text style={{ fontSize: 22 }}>{timeCtx.emoji}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ color: timeCtx.color, fontWeight: "900", fontSize: 14 }}>{timeCtx.label}</Text>
+              <Text style={{ color: colors.muted, fontSize: 11 }}>
+                {timeCtx.hour.toString().padStart(2, "0")}:{timeCtx.minutes.toString().padStart(2, "0")}
+                {timeCtx.isWeekend ? " · Weekend" : " · Semaine"}
+              </Text>
+            </View>
+            <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>
+              {getTimeModeDescription(timeCtx)}
+            </Text>
+          </View>
+          {!timeCtx.workAvailable && (
+            <View style={{ backgroundColor: "rgba(248,113,113,0.15)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Text style={{ color: "#f87171", fontSize: 10, fontWeight: "700" }}>Hors bureau</Text>
+            </View>
+          )}
+        </View>
+
         {/* ── ÉVÉNEMENT DU JOUR (banner si non résolu) ── */}
         {hasPendingEvent && (
           <Pressable
@@ -367,22 +430,70 @@ export default function HomeScreen() {
 
         {/* ── ACTIONS RAPIDES ── */}
         <View>
-          <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700", marginBottom: 10, letterSpacing: 1 }}>
-            ACTIONS
-          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1 }}>
+              ACTIONS
+            </Text>
+            <Text style={{ color: timeCtx.color, fontSize: 11, fontWeight: "700" }}>
+              {timeCtx.emoji} {timeCtx.label}
+            </Text>
+          </View>
+          {/* Actions du créneau en priorité */}
+          {suggestedActions.length > 0 && (
+            <View style={{
+              backgroundColor: timeCtx.color + "0f", borderRadius: 14, padding: 10,
+              borderWidth: 1, borderColor: timeCtx.color + "25", marginBottom: 10,
+            }}>
+              <Text style={{ color: timeCtx.color, fontSize: 10, fontWeight: "800", letterSpacing: 1, marginBottom: 8 }}>
+                ★ PRIORITÉ CRÉNEAU
+              </Text>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {suggestedActions.slice(0, 4).map((actionId) => {
+                  const meta = ACTION_META[actionId];
+                  if (!meta) return null;
+                  const disabled = !!(meta.minEnergy && stats.energy < meta.minEnergy) || !!(meta.minMoney && stats.money < meta.minMoney);
+                  return (
+                    <Pressable
+                      key={actionId}
+                      onPress={() => performAction(actionId)}
+                      disabled={disabled}
+                      style={{
+                        flex: 1, minWidth: "45%",
+                        backgroundColor: disabled ? "rgba(255,255,255,0.03)" : timeCtx.color + "18",
+                        borderRadius: 12, padding: 12, gap: 4,
+                        borderWidth: 1.5, borderColor: disabled ? "rgba(255,255,255,0.06)" : timeCtx.color + "50",
+                        opacity: disabled ? 0.5 : 1,
+                      }}
+                    >
+                      <Text style={{ fontSize: 22 }}>{meta.emoji}</Text>
+                      <Text style={{ color: colors.text, fontWeight: "800", fontSize: 12 }}>{meta.label}</Text>
+                      <Text style={{ color: timeCtx.color, fontSize: 10, fontWeight: "700" }}>
+                        +30% créneau idéal
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+          )}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            <ActionBtn emoji="🍽️" label="Repas sain"    cost="-14 cr"   reward="+faim +santé"    onPress={() => performAction("healthy-meal")} />
-            <ActionBtn emoji="🥘" label="Cuisiner"      cost="-8 cr"    reward="+faim ×2"        onPress={() => performAction("home-cooking")} />
-            <ActionBtn emoji="😴" label="Dormir"        cost="-temps"   reward="+44 énergie"     onPress={() => performAction("sleep")} />
-            <ActionBtn emoji="💤" label="Sieste"        cost="-temps"   reward="+22 énergie"     onPress={() => performAction("nap")} />
-            <ActionBtn emoji="🚿" label="Douche"        cost="-3 cr"    reward="+hygiène"        onPress={() => performAction("shower")} />
-            <ActionBtn emoji="💼" label="Travailler"    cost="-énergie" reward="+argent"         onPress={() => performAction("work-shift")} disabled={stats.energy < 20} />
-            <ActionBtn emoji="🏃" label="Marcher"       cost="-énergie" reward="+humeur"         onPress={() => performAction("walk")} />
-            <ActionBtn emoji="🏀" label="Sport collectif" cost="-énergie" reward="+social +forme" onPress={() => performAction("team-sport")} disabled={stats.energy < 25} />
-            <ActionBtn emoji="🧘" label="Méditer"       cost="-énergie" reward="+zen +motivation" onPress={() => performAction("meditate")} />
-            <ActionBtn emoji="📚" label="Lire"          cost="-énergie" reward="+motivation"     onPress={() => performAction("read-book")} />
-            <ActionBtn emoji="☕" label="Café social"   cost="-argent"  reward="+social"         onPress={() => performAction("cafe-chat")} disabled={stats.money < 5} />
-            <ActionBtn emoji="🛍️" label="Shopping"      cost="-35 cr"   reward="+image"          onPress={() => performAction("shopping")} disabled={stats.money < 35} />
+            {ALL_ACTIONS.map(({ id, emoji, label, cost, reward, minEnergy, minMoney }) => {
+              const score = getActionScore(id);
+              const disabled = (minEnergy && stats.energy < minEnergy) || (minMoney && stats.money < minMoney) || false;
+              const isPrime = isActionPrime(id);
+              if (isPrime) return null; // déjà affiché dans le bloc priorité
+              return (
+                <ActionBtn
+                  key={id}
+                  emoji={emoji}
+                  label={label}
+                  cost={cost}
+                  reward={score.multiplier < 1 ? `${reward} ⚠️` : reward}
+                  onPress={() => performAction(id)}
+                  disabled={disabled}
+                />
+              );
+            })}
           </View>
         </View>
 
