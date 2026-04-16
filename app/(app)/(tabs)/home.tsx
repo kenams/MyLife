@@ -384,28 +384,70 @@ export default function HomeScreen() {
           {/* ── HUD TEMPS LIVE ── */}
           <View style={{
             backgroundColor: timeCtx.color + "12", borderRadius: 16, padding: 14,
-            borderWidth: 1, borderColor: timeCtx.color + "30",
-            flexDirection: "row", alignItems: "center", gap: 12,
+            borderWidth: 1, borderColor: timeCtx.color + "30", gap: 10,
           }}>
-            <View style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: timeCtx.color + "25",
-              alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 24 }}>{timeCtx.emoji}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: timeCtx.color + "25",
+                alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ fontSize: 24 }}>{timeCtx.emoji}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Text style={{ color: timeCtx.color, fontWeight: "900", fontSize: 14 }}>{timeCtx.label}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 11 }}>
+                    {timeCtx.hour.toString().padStart(2, "0")}:{timeCtx.minutes.toString().padStart(2, "0")}
+                    {timeCtx.isWeekend ? " · Weekend" : " · Semaine"}
+                  </Text>
+                </View>
+                <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>{getTimeModeDescription(timeCtx)}</Text>
+              </View>
+              {!timeCtx.workAvailable && (
+                <View style={{ backgroundColor: "rgba(248,113,113,0.15)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+                  <Text style={{ color: "#f87171", fontSize: 10, fontWeight: "700" }}>Hors bureau</Text>
+                </View>
+              )}
             </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                <Text style={{ color: timeCtx.color, fontWeight: "900", fontSize: 14 }}>{timeCtx.label}</Text>
-                <Text style={{ color: colors.muted, fontSize: 11 }}>
-                  {timeCtx.hour.toString().padStart(2, "0")}:{timeCtx.minutes.toString().padStart(2, "0")}
-                  {timeCtx.isWeekend ? " · Weekend" : " · Semaine"}
+            {/* Météo + jours fériés */}
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6,
+                backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 8 }}>
+                <Text style={{ fontSize: 18 }}>{timeCtx.weatherEmoji}</Text>
+                <View>
+                  <Text style={{ color: colors.text, fontSize: 12, fontWeight: "700" }}>
+                    {timeCtx.weather === "sunny" ? "Ensoleillé" : timeCtx.weather === "rainy" ? "Pluvieux" :
+                     timeCtx.weather === "cloudy" ? "Nuageux" : timeCtx.weather === "stormy" ? "Orageux" :
+                     timeCtx.weather === "snowy" ? "Neigeux" : "Venteux"}
+                  </Text>
+                  {timeCtx.weatherBonus !== 1 && (
+                    <Text style={{ color: timeCtx.weatherBonus > 1 ? "#38c793" : "#ff8d8d", fontSize: 10 }}>
+                      {timeCtx.weatherBonus > 1 ? `+${Math.round((timeCtx.weatherBonus - 1) * 100)}%` : `${Math.round((timeCtx.weatherBonus - 1) * 100)}%`} actions extérieures
+                    </Text>
+                  )}
+                </View>
+              </View>
+              {timeCtx.isPublicHoliday && (
+                <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6,
+                  backgroundColor: "rgba(246,185,79,0.1)", borderRadius: 10, padding: 8,
+                  borderWidth: 1, borderColor: "rgba(246,185,79,0.3)" }}>
+                  <Text style={{ fontSize: 18 }}>🎉</Text>
+                  <View>
+                    <Text style={{ color: "#f6b94f", fontSize: 11, fontWeight: "700" }}>Jour Férié</Text>
+                    <Text style={{ color: colors.muted, fontSize: 10 }}>{timeCtx.holidayName}</Text>
+                  </View>
+                </View>
+              )}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4,
+                backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 8 }}>
+                <Text style={{ fontSize: 16 }}>
+                  {timeCtx.season === "spring" ? "🌸" : timeCtx.season === "summer" ? "☀️" :
+                   timeCtx.season === "autumn" ? "🍂" : "❄️"}
+                </Text>
+                <Text style={{ color: colors.muted, fontSize: 10 }}>
+                  {timeCtx.season === "spring" ? "Printemps" : timeCtx.season === "summer" ? "Été" :
+                   timeCtx.season === "autumn" ? "Automne" : "Hiver"}
                 </Text>
               </View>
-              <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>{getTimeModeDescription(timeCtx)}</Text>
             </View>
-            {!timeCtx.workAvailable && (
-              <View style={{ backgroundColor: "rgba(248,113,113,0.15)", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
-                <Text style={{ color: "#f87171", fontSize: 10, fontWeight: "700" }}>Hors bureau</Text>
-              </View>
-            )}
           </View>
 
           {/* ── ÉVÉNEMENT DU JOUR ── */}
@@ -551,6 +593,39 @@ export default function HomeScreen() {
             )}
           </View>
 
+          {/* ── GAME HUB ── */}
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "700", letterSpacing: 1.5 }}>
+              GAME HUB
+            </Text>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable onPress={() => router.push("/(app)/missions")}
+                style={{ flex: 1, backgroundColor: "rgba(56,199,147,0.1)", borderRadius: 14, padding: 12,
+                  borderWidth: 1, borderColor: "rgba(56,199,147,0.25)", alignItems: "center", gap: 4 }}>
+                <Text style={{ fontSize: 22 }}>🎯</Text>
+                <Text style={{ color: "#38c793", fontWeight: "700", fontSize: 11 }}>Missions</Text>
+              </Pressable>
+              <Pressable onPress={() => router.push("/(app)/progression")}
+                style={{ flex: 1, backgroundColor: "rgba(246,185,79,0.1)", borderRadius: 14, padding: 12,
+                  borderWidth: 1, borderColor: "rgba(246,185,79,0.25)", alignItems: "center", gap: 4 }}>
+                <Text style={{ fontSize: 22 }}>⚡</Text>
+                <Text style={{ color: "#f6b94f", fontWeight: "700", fontSize: 11 }}>Progression</Text>
+              </Pressable>
+              <Pressable onPress={() => router.push("/(app)/leaderboard")}
+                style={{ flex: 1, backgroundColor: "rgba(192,132,252,0.1)", borderRadius: 14, padding: 12,
+                  borderWidth: 1, borderColor: "rgba(192,132,252,0.25)", alignItems: "center", gap: 4 }}>
+                <Text style={{ fontSize: 22 }}>🏆</Text>
+                <Text style={{ color: "#c084fc", fontWeight: "700", fontSize: 11 }}>Classement</Text>
+              </Pressable>
+              <Pressable onPress={() => router.push("/(app)/trading")}
+                style={{ flex: 1, backgroundColor: "rgba(96,165,250,0.1)", borderRadius: 14, padding: 12,
+                  borderWidth: 1, borderColor: "rgba(96,165,250,0.25)", alignItems: "center", gap: 4 }}>
+                <Text style={{ fontSize: 22 }}>💱</Text>
+                <Text style={{ color: "#60a5fa", fontWeight: "700", fontSize: 11 }}>Trading</Text>
+              </Pressable>
+            </View>
+          </View>
+
           {/* ── NAVIGATION ── */}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {[
@@ -564,6 +639,7 @@ export default function HomeScreen() {
               { label: "📚 Études",        route: "/(app)/studies"},
               { label: "📊 Stats",         route: "/(app)/tips"   },
               { label: "⭐ Premium",       route: "/(app)/premium" },
+              { label: "👤 Mon profil",    route: "/(app)/profile-public" },
             ].map((item) => (
               <Pressable key={item.route} onPress={() => router.push(item.route as never)}
                 style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20,

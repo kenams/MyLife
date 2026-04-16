@@ -3,6 +3,25 @@ import { Tabs } from "expo-router";
 import { View } from "react-native";
 
 import { colors } from "@/lib/theme";
+import { useGameStore } from "@/stores/game-store";
+
+function MissionsBadge({ color }: { color: string }) {
+  const missions = useGameStore((s) => s.missionProgresses ?? []);
+  const claimable = missions.filter((m) => m.status === "completed").length;
+  if (claimable === 0) return <Ionicons name="trophy-outline" color={color} size={24} />;
+  return (
+    <View style={{ position: "relative" }}>
+      <Ionicons name="trophy" color={color} size={24} />
+      <View style={{
+        position: "absolute", top: -4, right: -6,
+        width: 16, height: 16, borderRadius: 8,
+        backgroundColor: "#ff6b6b", alignItems: "center", justifyContent: "center"
+      }}>
+        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" }} />
+      </View>
+    </View>
+  );
+}
 
 export default function TabsLayout() {
   return (
@@ -26,9 +45,7 @@ export default function TabsLayout() {
         options={{
           title: "Vie",
           tabBarIcon: ({ color, focused }) => (
-            <View style={{ position: "relative" }}>
-              <Ionicons name={focused ? "sparkles" : "sparkles-outline"} color={color} size={24} />
-            </View>
+            <Ionicons name={focused ? "sparkles" : "sparkles-outline"} color={color} size={24} />
           )
         }}
       />
@@ -53,10 +70,8 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="notifications"
         options={{
-          title: "Alertes",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "notifications" : "notifications-outline"} color={color} size={24} />
-          )
+          title: "Quêtes",
+          tabBarIcon: ({ color }) => <MissionsBadge color={color} />,
         }}
       />
       <Tabs.Screen

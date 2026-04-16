@@ -16,18 +16,27 @@ export type TimeSlot =
 
 export type DayKind = "weekday" | "weekend";
 
+export type WeatherKind = "sunny" | "cloudy" | "rainy" | "stormy" | "snowy" | "windy";
+
 export type TimeContext = {
   hour: number;
   minutes: number;
   slot: TimeSlot;
   dayKind: DayKind;
   isWeekend: boolean;
-  label: string;       // ex: "Soirée libre"
+  label: string;
   emoji: string;
   color: string;
   workAvailable: boolean;
-  gymPrime: boolean;   // créneau optimal sport
-  socialPrime: boolean; // créneau optimal sorties
+  gymPrime: boolean;
+  socialPrime: boolean;
+  // Nouveaux champs
+  isPublicHoliday: boolean;
+  holidayName: string | null;
+  weather: WeatherKind;
+  weatherEmoji: string;
+  weatherBonus: number;  // multiplicateur d'action selon météo
+  season: "spring" | "summer" | "autumn" | "winter";
 };
 
 export type ActionTimeScore = {
@@ -37,24 +46,120 @@ export type ActionTimeScore = {
   hint: string | null;
 };
 
+// ─── Jours fériés français ────────────────────────────────────────────────────
+
+function getFrenchHolidays(year: number): Map<string, string> {
+  const h = new Map<string, string>();
+  const fmt = (d: Date) => `${d.getMonth() + 1}/${d.getDate()}`;
+
+  // Fixes
+  h.set(`1/1`,   "Nouvel An");
+  h.set(`5/1`,   "Fête du Travail");
+  h.set(`5/8`,   "Victoire 1945");
+  h.set(`7/14`,  "Fête Nationale");
+  h.set(`8/15`,  "Assomption");
+  h.set(`11/1`,  "Toussaint");
+  h.set(`11/11`, "Armistice");
+  h.set(`12/25`, "Noël");
+
+  // Pâques (algorithme de Butcher)
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d2 = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), k = (19 * a + b - d2 - g + 15) % 30;
+  const l = Math.floor(c / 4), m = c % 4, n = (32 + 2 * e + 2 * l - k - m) % 7;
+  const o = Math.floor((a + 11 * k + 22 * n) / 451);
+  const month = Math.floor((k + n - 7 * o + 114) / 31);
+  const day   = ((k + n - 7 * o + 114) % 31) + 1;
+  const easter = new Date(year, month - 1, day);
+
+  const addDays = (d: Date, n: number) => new Date(d.getTime() + n * 86400000);
+  h.set(fmt(addDays(easter, 1)),  "Lundi de Pâques");
+  h.set(fmt(addDays(easter, 39)), "Ascension");
+  h.set(fmt(addDays(easter, 50)), "Lundi de Pentecôte");
+
+  return h;
+}
+
+// ─── Météo simulée basée sur date + hash ─────────────────────────────────────
+
+function getSimulatedWeather(now: Date): { weather: WeatherKind; emoji: string; bonus: number } {
+  const month = now.getMonth() + 1;
+  const day   = now.getDate();
+  // Seed pseudo-aléatoire basé sur la date (stable dans la journée)
+  const seed  = (month * 31 + day * 7 + now.getFullYear()) % 100;
+
+  // Pondération selon saison
+  const isSummer = month >= 6 && month <= 8;
+  const isWinter = month === 12 || month <= 2;
+  const isSpring = month >= 3 && month <= 5;
+
+  if (isWinter) {
+    if (seed < 10) return { weather: "snowy",  emoji: "❄️",  bonus: 0.7 };
+    if (seed < 30) return { weather: "stormy", emoji: "⛈️",  bonus: 0.6 };
+    if (seed < 60) return { weather: "rainy",  emoji: "🌧️",  bonus: 0.85 };
+    if (seed < 80) return { weather: "cloudy", emoji: "☁️",  bonus: 0.95 };
+    return                 { weather: "sunny",  emoji: "🌤️",  bonus: 1.1 };
+  }
+  if (isSummer) {
+    if (seed < 5)  return { weather: "stormy", emoji: "⛈️",  bonus: 0.7 };
+    if (seed < 15) return { weather: "rainy",  emoji: "🌧️",  bonus: 0.85 };
+    if (seed < 30) return { weather: "cloudy", emoji: "⛅",  bonus: 1.0 };
+    if (seed < 40) return { weather: "windy",  emoji: "💨",  bonus: 0.9 };
+    return                 { weather: "sunny",  emoji: "☀️",  bonus: 1.2 };
+  }
+  if (isSpring) {
+    if (seed < 20) return { weather: "rainy",  emoji: "🌦️",  bonus: 0.9 };
+    if (seed < 40) return { weather: "cloudy", emoji: "⛅",  bonus: 1.0 };
+    if (seed < 50) return { weather: "windy",  emoji: "💨",  bonus: 0.95 };
+    return                 { weather: "sunny",  emoji: "🌸",  bonus: 1.15 };
+  }
+  // Automne
+  if (seed < 30) return { weather: "rainy",  emoji: "🍂",  bonus: 0.85 };
+  if (seed < 50) return { weather: "cloudy", emoji: "☁️",  bonus: 0.95 };
+  if (seed < 60) return { weather: "windy",  emoji: "🍃",  bonus: 0.9 };
+  return                 { weather: "sunny",  emoji: "🌤️",  bonus: 1.05 };
+}
+
+function getSeason(month: number): TimeContext["season"] {
+  if (month >= 3 && month <= 5)  return "spring";
+  if (month >= 6 && month <= 8)  return "summer";
+  if (month >= 9 && month <= 11) return "autumn";
+  return "winter";
+}
+
 // ─── Contexte courant ─────────────────────────────────────────────────────────
 
 export function getTimeContext(): TimeContext {
   const now = new Date();
   const hour = now.getHours();
   const minutes = now.getMinutes();
-  const dow = now.getDay(); // 0 = dimanche, 6 = samedi
+  const dow = now.getDay();
   const isWeekend = dow === 0 || dow === 6;
   const dayKind: DayKind = isWeekend ? "weekend" : "weekday";
 
   const slot = getSlot(hour);
-  const workAvailable = isWorkAvailable(hour, isWeekend);
-  const gymPrime = (hour >= 6 && hour < 9) || (hour >= 17 && hour < 21);
-  const socialPrime = (hour >= 17 && hour < 24) || isWeekend;
-
   const { label, emoji, color } = getSlotMeta(slot, isWeekend);
 
-  return { hour, minutes, slot, dayKind, isWeekend, label, emoji, color, workAvailable, gymPrime, socialPrime };
+  // Jours fériés
+  const holidays = getFrenchHolidays(now.getFullYear());
+  const dayKey = `${now.getMonth() + 1}/${now.getDate()}`;
+  const holidayName = holidays.get(dayKey) ?? null;
+  const isPublicHoliday = !!holidayName;
+  const effectiveWeekend = isWeekend || isPublicHoliday;
+
+  const workAvailable = isWorkAvailable(hour, effectiveWeekend);
+  const gymPrime   = (hour >= 6 && hour < 9) || (hour >= 17 && hour < 21);
+  const socialPrime = (hour >= 17 && hour < 24) || effectiveWeekend;
+
+  // Météo simulée
+  const { weather, emoji: weatherEmoji, bonus: weatherBonus } = getSimulatedWeather(now);
+  const season = getSeason(now.getMonth() + 1);
+
+  return {
+    hour, minutes, slot, dayKind, isWeekend, label, emoji, color,
+    workAvailable, gymPrime, socialPrime,
+    isPublicHoliday, holidayName, weather, weatherEmoji, weatherBonus, season,
+  };
 }
 
 function getSlot(hour: number): TimeSlot {

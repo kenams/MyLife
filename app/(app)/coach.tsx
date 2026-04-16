@@ -274,6 +274,44 @@ function getAriaResponse(
     return genericResponses[pattern].join("\n");
   }
 
+  // Réponse sur le niveau/XP
+  if (input.includes("niveau") || input.includes("xp") || input.includes("progression") || input.includes("talent")) {
+    const lvl = stats.playerLevel ?? 1;
+    const xp  = stats.playerXp ?? 0;
+    const talents = stats.talentCount ?? 0;
+    return [
+      `Tu es actuellement **niveau ${lvl}** avec ${xp} XP.`,
+      "",
+      "**Pour progresser plus vite :**",
+      "• Effectue des actions en créneau idéal (+30% XP)",
+      "• Réclamez vos missions terminées — chaque claim rapporte 40-300 XP",
+      "• Les actions de travail rapportent 30 XP chacune",
+      "• Un boost XP ×2 (disponible en premium) double tout ça",
+      "",
+      `Tu as ${talents} talent(s) débloqué(s). Chaque groupe de 3 niveaux = 1 point talent.`,
+      "",
+      "**Conseil :** concentre-toi d'abord sur un arbre de talents (corps, esprit, social ou travail).",
+      "La spécialisation est plus efficace que la dispersion.",
+    ].join("\n");
+  }
+
+  // Réponse sur les missions
+  if (input.includes("mission") || input.includes("quête") || input.includes("objectif")) {
+    const done   = stats.missionsDone ?? 0;
+    const active = stats.missionsActive ?? 0;
+    return [
+      `Tu as complété **${done} missions** et en as **${active} en cours**.`,
+      "",
+      "**Stratégie missions :**",
+      "• Les missions daily se réinitialisent chaque jour — commence par elles",
+      "• Les missions weekly rapportent 2-4× plus de XP",
+      "• Les missions story sont permanentes et débloqueables par niveau",
+      "",
+      "Tip : certaines actions font progresser plusieurs missions simultanément.",
+      "Exemple : 'team-sport' avance la mission sport ET la mission sociale.",
+    ].join("\n");
+  }
+
   return [
     "Je t'écoute. Voici quelques pistes selon ton profil actuel :",
     "",
@@ -287,6 +325,8 @@ function getAriaResponse(
     "• Ta **santé** et sport",
     "• Tes **études** et formation",
     "• Ta **motivation** et objectifs",
+    "• Ton **niveau** et XP",
+    "• Tes **missions** actives",
     "",
     "Je suis là pour aller au fond des choses, pas juste pour les chiffres.",
   ].join("\n");
@@ -302,15 +342,25 @@ const QUICK_TOPICS = [
   { label: "Plan santé", icon: "💪" },
   { label: "Études et formation", icon: "📚" },
   { label: "Objectifs de vie", icon: "🎯" },
+  { label: "Mon niveau et XP", icon: "⚡" },
+  { label: "Mes missions actives", icon: "🎯" },
 ];
 
 // ─── Screen principal ──────────────────────────────────────────────────────────
 export default function CoachScreen() {
-  const stats    = useGameStore((s) => s.stats);
-  const avatar   = useGameStore((s) => s.avatar);
+  const stats             = useGameStore((s) => s.stats);
+  const avatar            = useGameStore((s) => s.avatar);
+  const playerLevel       = useGameStore((s) => s.playerLevel ?? 1);
+  const playerXp          = useGameStore((s) => s.playerXp ?? 0);
+  const unlockedTalents   = useGameStore((s) => s.unlockedTalents ?? []);
+  const missionProgresses = useGameStore((s) => s.missionProgresses ?? []);
 
   const pattern  = detectLifePattern(stats);
   const momentum = getMomentumState(stats);
+
+  const missionsDone    = missionProgresses.filter((p) => p.status === "claimed").length;
+  const missionsActive  = missionProgresses.filter((p) => p.status === "active").length;
+  const talentCount     = unlockedTalents.length;
 
   const [messages, setMessages] = useState<AriaMessage[]>([{
     id: "intro",
@@ -347,6 +397,10 @@ export default function CoachScreen() {
         motivation:  stats.motivation,
         mood:        stats.mood,
         weight:      stats.weight,
+        playerLevel,
+        playerXp,
+        missionsDone,
+        talentCount,
       };
       const response = getAriaResponse(text, statsObj, pattern, String(momentum));
       const ariaMsg: AriaMessage = {
@@ -405,7 +459,9 @@ export default function CoachScreen() {
         </View>
         <View style={{ flex: 1 }}>
           <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>Coach ARIA</Text>
-          <Text style={{ color: colors.muted, fontSize: 11 }}>Intelligence de vie · Toujours disponible</Text>
+          <Text style={{ color: colors.muted, fontSize: 11 }}>
+            Niv. {playerLevel} · {missionsDone} missions · {talentCount} talents
+          </Text>
         </View>
         {/* Badge pattern */}
         <View style={{

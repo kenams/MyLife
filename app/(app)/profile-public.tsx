@@ -1,12 +1,73 @@
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Easing, Pressable, ScrollView, Share, Text, View } from "react-native";
+import { Animated, Easing, Modal, Pressable, ScrollView, Share, Text, View } from "react-native";
+import Svg, { Rect } from "react-native-svg";
 
 import { getLevelTitle } from "@/lib/progression";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 
 const XP_PER_LEVEL = 200;
+
+// ─── QR Code minimal SVG ──────────────────────────────────────────────────────
+// Génère un pattern QR-like décoratif basé sur un hash du texte
+function QrCode({ value, size = 140, color = "#8b7cff" }: { value: string; size?: number; color?: string }) {
+  const CELLS = 21;
+  const cellSize = size / CELLS;
+
+  // Hash simple du texte → bits
+  function hashBits(s: string): boolean[][] {
+    const grid: boolean[][] = Array.from({ length: CELLS }, () => Array(CELLS).fill(false));
+    // Finder patterns (coins)
+    const drawFinder = (r: number, c: number) => {
+      for (let dr = 0; dr < 7; dr++) for (let dc = 0; dc < 7; dc++) {
+        const inner = dr >= 1 && dr <= 5 && dc >= 1 && dc <= 5;
+        const core  = dr >= 2 && dr <= 4 && dc >= 2 && dc <= 4;
+        if (!inner || core) grid[r + dr][c + dc] = true;
+      }
+    };
+    drawFinder(0, 0);
+    drawFinder(0, 14);
+    drawFinder(14, 0);
+    // Data bits from string hash
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+    for (let r = 8; r < CELLS - 8; r++) {
+      for (let c = 8; c < CELLS - 8; c++) {
+        const bit = ((h ^ (r * 31 + c * 17)) & 1) === 1;
+        grid[r][c] = bit;
+      }
+    }
+    // Timing patterns
+    for (let i = 8; i < CELLS - 8; i++) {
+      grid[6][i] = grid[i][6] = i % 2 === 0;
+    }
+    return grid;
+  }
+
+  const grid = hashBits(value);
+
+  return (
+    <Svg width={size} height={size}>
+      <Rect x={0} y={0} width={size} height={size} fill="#0b1a2d" rx={8} />
+      {grid.map((row, r) =>
+        row.map((on, c) =>
+          on ? (
+            <Rect
+              key={`${r}-${c}`}
+              x={c * cellSize + 1}
+              y={r * cellSize + 1}
+              width={cellSize - 1}
+              height={cellSize - 1}
+              fill={color}
+              rx={1}
+            />
+          ) : null
+        )
+      )}
+    </Svg>
+  );
+}
 
 function StatChip({ icon, label, value, color }: { icon: string; label: string; value: number; color: string }) {
   const pct = Math.max(0, Math.min(100, value));
@@ -59,6 +120,8 @@ export default function ProfilePublicScreen() {
   const isPremium       = useGameStore((s) => s.isPremium);
   const missionProgresses = useGameStore((s) => s.missionProgresses ?? []);
   const relationships   = useGameStore((s) => s.relationships);
+
+  const [showQr, setShowQr] = useState(false);
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -145,13 +208,45 @@ export default function ProfilePublicScreen() {
             </Text>
           </View>
 
-          {/* Bouton partager */}
-          <Pressable onPress={handleShare}
-            style={{ backgroundColor: colors.accent + "20", borderRadius: 14, paddingHorizontal: 20, paddingVertical: 10,
-              borderWidth: 1, borderColor: colors.accent + "40", flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <Text style={{ fontSize: 16 }}>📤</Text>
-            <Text style={{ color: colors.accent, fontWeight: "700", fontSize: 13 }}>Partager ma carte</Text>
-          </Pressable>
+          {/* Boutons partager + QR */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable onPress={handleShare}
+              style={{ flex: 1, backgroundColor: colors.accent + "20", borderRadius: 14,
+                paddingHorizontal: 16, paddingVertical: 10,
+                borderWidth: 1, borderColor: colors.accent + "40",
+                flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <Text style={{ fontSize: 16 }}>📤</Text>
+              <Text style={{ color: colors.accent, fontWeight: "700", fontSize: 13 }}>Partager</Text>
+            </Pressable>
+            <Pressable onPress={() => setShowQr(true)}
+              style={{ backgroundColor: "#c084fc20", borderRadius: 14, paddingHorizontal: 16, paddingVertical: 10,
+                borderWidth: 1, borderColor: "#c084fc40",
+                flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <Text style={{ fontSize: 16 }}>📱</Text>
+              <Text style={{ color: "#c084fc", fontWeight: "700", fontSize: 13 }}>QR Code</Text>
+            </Pressable>
+          </View>
+
+          {/* Modal QR */}
+          <Modal visible={showQr} transparent animationType="fade" onRequestClose={() => setShowQr(false)}>
+            <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.85)",
+              justifyContent: "center", alignItems: "center" }}
+              onPress={() => setShowQr(false)}>
+              <View style={{ backgroundColor: "#0b1a2d", borderRadius: 24, padding: 28, alignItems: "center", gap: 16,
+                borderWidth: 1.5, borderColor: "#c084fc30" }}>
+                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>
+                  {avatar?.displayName ?? "Mon profil"}
+                </Text>
+                <QrCode value={`mylife://profile/${avatar?.displayName ?? "player"}`} size={180} color="#c084fc" />
+                <Text style={{ color: colors.muted, fontSize: 11 }}>Scanne pour voir mon profil</Text>
+                <Pressable onPress={() => setShowQr(false)}
+                  style={{ paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12,
+                    backgroundColor: "rgba(255,255,255,0.08)" }}>
+                  <Text style={{ color: colors.muted, fontWeight: "700" }}>Fermer</Text>
+                </Pressable>
+              </View>
+            </Pressable>
+          </Modal>
         </View>
 
         <View style={{ padding: 20, gap: 22 }}>
