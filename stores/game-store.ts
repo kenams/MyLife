@@ -42,6 +42,7 @@ import { buildAdvice, detectLifePattern, getMomentumState, getSocialRankLabel, R
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
   AvatarProfile,
+  AvatarStats,
   Conversation,
   DatePlan,
   DateVenueKind,
@@ -79,6 +80,9 @@ type GameState = {
   resetPassword: (email: string) => Promise<{ ok: boolean; error?: string }>;
   loadTestAccount: (preset?: TestAccountPreset) => void;
   signOut: () => void;
+  // Méthodes internes utilisées par useAuthListener
+  _setSupabaseSession: (email: string, userId: string) => void;
+  _hydrateFromSupabase: (avatar: AvatarProfile, stats: Partial<AvatarStats> | undefined, avatarId: string) => void;
   completeAvatar: (avatar: AvatarProfile) => void;
   editAvatar: (avatar: AvatarProfile) => void;
   bootstrap: () => void;
@@ -881,7 +885,22 @@ export const useGameStore = create<GameState>()(
       loadTestAccount: (preset = "balanced") => set((state) => ({ ...state, ...createTestAccountState(preset) })),
       signOut: () => {
         void AsyncStorage.removeItem("mylife-storage");
+        if (isSupabaseConfigured && supabase) void supabase.auth.signOut();
         set({ ...initialState(), hasHydrated: true });
+      },
+
+      // ── Méthodes internes — utilisées par useAuthListener ─────────────────
+      _setSupabaseSession: (email: string, _userId: string) => {
+        set({ session: { email, provider: "supabase" } });
+      },
+      _hydrateFromSupabase: (
+        avatar: AvatarProfile,
+        stats: Partial<AvatarStats> | undefined,
+        avatarId: string
+      ) => {
+        const currentStats = get().stats;
+        const mergedStats = stats ? { ...currentStats, ...stats } : currentStats;
+        set({ avatar, stats: mergedStats, supabaseAvatarId: avatarId });
       },
       completeAvatar: (avatar) => {
         const stats = createStatsFromAvatar(avatar);
@@ -915,8 +934,14 @@ export const useGameStore = create<GameState>()(
             createdAt
           })
         });
+        // Sync avatar vers Supabase immédiatement après création
+        void get().syncToSupabase();
       },
-      editAvatar: (avatar) => set({ avatar }),
+      editAvatar: (avatar) => {
+        set({ avatar });
+        // Sync les changements de profil
+        void get().syncToSupabase();
+      },
       bootstrap: () =>
         set((state) => {
           const stats = applyDecay(state.stats);

@@ -1,11 +1,12 @@
+-- ============================================================
+-- MyLife — Schema complet v2
+-- À appliquer via Supabase Dashboard > SQL Editor
+-- ou : supabase db push (Supabase CLI)
+-- ============================================================
+
 create extension if not exists "pgcrypto";
 
-create table if not exists profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  username text unique not null,
-  bio text,
-  created_at timestamptz not null default now()
-);
+-- ─── Référence : neighborhoods ───────────────────────────────────────────────
 
 create table if not exists neighborhoods (
   slug text primary key,
@@ -14,6 +15,8 @@ create table if not exists neighborhoods (
   lifestyle text not null,
   cost_level text not null default 'balanced'
 );
+
+-- ─── Référence : locations ───────────────────────────────────────────────────
 
 create table if not exists locations (
   slug text primary key,
@@ -26,6 +29,8 @@ create table if not exists locations (
   capacity int not null default 120
 );
 
+-- ─── Référence : jobs ────────────────────────────────────────────────────────
+
 create table if not exists jobs (
   slug text primary key,
   name text not null,
@@ -36,6 +41,28 @@ create table if not exists jobs (
   discipline_reward int not null default 0,
   reputation_reward int not null default 0
 );
+
+-- ─── Référence : activities ──────────────────────────────────────────────────
+
+create table if not exists activities (
+  slug text primary key,
+  name text not null,
+  kind text not null,
+  location_slug text not null references locations(slug),
+  summary text not null,
+  cost int not null default 0
+);
+
+-- ─── Utilisateurs ────────────────────────────────────────────────────────────
+
+create table if not exists profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  username text unique not null,
+  bio text,
+  created_at timestamptz not null default now()
+);
+
+-- ─── Avatars ─────────────────────────────────────────────────────────────────
 
 create table if not exists avatars (
   id uuid primary key default gen_random_uuid(),
@@ -111,6 +138,99 @@ create table if not exists avatar_stats (
   last_social_at timestamptz not null default now()
 );
 
+-- ─── Économie ─────────────────────────────────────────────────────────────────
+
+create table if not exists transactions (
+  id uuid primary key default gen_random_uuid(),
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  kind text not null,
+  amount int not null,
+  description text not null,
+  created_at timestamptz not null default now()
+);
+
+-- Ledger dédié currencies (coins / gems / tokens)
+create table if not exists currencies (
+  id uuid primary key default gen_random_uuid(),
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  kind text not null default 'coins',   -- 'coins' | 'gems' | 'tokens'
+  delta int not null default 0,          -- positif = gain, négatif = dépense
+  source text not null,                  -- 'work' | 'bonus' | 'purchase' | 'gift' | 'decay'
+  balance_after int not null default 0,  -- solde cumulé après delta
+  created_at timestamptz not null default now()
+);
+
+create table if not exists social_transfers (
+  id uuid primary key default gen_random_uuid(),
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  to_resident_id text,
+  amount int not null,
+  description text not null default '',
+  created_at timestamptz not null default now()
+);
+
+-- ─── Inventaire ───────────────────────────────────────────────────────────────
+
+create table if not exists inventory (
+  id uuid primary key default gen_random_uuid(),
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  item_id text not null,
+  item_name text not null,
+  item_kind text not null default 'cosmetic',  -- 'cosmetic' | 'boost' | 'consumable'
+  quantity int not null default 1,
+  acquired_at timestamptz not null default now(),
+  expires_at timestamptz,
+  unique (avatar_id, item_id)
+);
+
+create table if not exists active_boosts (
+  id uuid primary key default gen_random_uuid(),
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  boost_id text not null,
+  boost_name text not null,
+  multiplier numeric(4,2) not null default 1,
+  active_until timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists equipped_cosmetics (
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  cosmetic_id text not null,
+  equipped_at timestamptz not null default now(),
+  primary key (avatar_id, cosmetic_id)
+);
+
+-- ─── Formations / Études ──────────────────────────────────────────────────────
+
+create table if not exists studies (
+  id uuid primary key default gen_random_uuid(),
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  course_slug text not null,
+  course_name text not null,
+  progress_pct int not null default 0 check (progress_pct between 0 and 100),
+  level int not null default 1,
+  xp int not null default 0,
+  started_at timestamptz not null default now(),
+  completed_at timestamptz,
+  updated_at timestamptz not null default now(),
+  unique (avatar_id, course_slug)
+);
+
+-- ─── Événements quotidiens ────────────────────────────────────────────────────
+
+create table if not exists events (
+  id uuid primary key default gen_random_uuid(),
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  kind text not null,   -- 'opportunity' | 'encounter' | 'setback' | 'windfall' | 'social'
+  title text not null,
+  body text not null,
+  choice text,          -- 'accepted' | 'skipped' | null si non résolu
+  effects jsonb not null default '{}',
+  created_at timestamptz not null default now()
+);
+
+-- ─── Journaux d'actions ───────────────────────────────────────────────────────
+
 create table if not exists action_logs (
   id uuid primary key default gen_random_uuid(),
   avatar_id uuid not null references avatars(id) on delete cascade,
@@ -127,14 +247,7 @@ create table if not exists action_logs (
   created_at timestamptz not null default now()
 );
 
-create table if not exists transactions (
-  id uuid primary key default gen_random_uuid(),
-  avatar_id uuid not null references avatars(id) on delete cascade,
-  kind text not null,
-  amount int not null,
-  description text not null,
-  created_at timestamptz not null default now()
-);
+-- ─── Social ───────────────────────────────────────────────────────────────────
 
 create table if not exists relationships (
   id uuid primary key default gen_random_uuid(),
@@ -146,15 +259,6 @@ create table if not exists relationships (
   last_interaction_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   unique (avatar_a, avatar_b)
-);
-
-create table if not exists activities (
-  slug text primary key,
-  name text not null,
-  kind text not null,
-  location_slug text not null references locations(slug),
-  summary text not null,
-  cost int not null default 0
 );
 
 create table if not exists invitations (
@@ -180,6 +284,8 @@ create table if not exists date_plans (
   created_at timestamptz not null default now()
 );
 
+-- ─── Messagerie ───────────────────────────────────────────────────────────────
+
 create table if not exists conversations (
   id uuid primary key default gen_random_uuid(),
   kind text not null,
@@ -203,31 +309,7 @@ create table if not exists messages (
   created_at timestamptz not null default now()
 );
 
-create table if not exists notifications (
-  id uuid primary key default gen_random_uuid(),
-  avatar_id uuid not null references avatars(id) on delete cascade,
-  kind text not null,
-  title text not null,
-  body text not null,
-  read_at timestamptz,
-  created_at timestamptz not null default now()
-);
-
-create table if not exists advice_logs (
-  id uuid primary key default gen_random_uuid(),
-  avatar_id uuid not null references avatars(id) on delete cascade,
-  category text not null,
-  title text not null,
-  body text not null,
-  created_at timestamptz not null default now()
-);
-
-create table if not exists presence (
-  avatar_id uuid primary key references avatars(id) on delete cascade,
-  status text not null default 'online',
-  location_slug text references locations(slug),
-  updated_at timestamptz not null default now()
-);
+-- ─── Rooms ────────────────────────────────────────────────────────────────────
 
 create table if not exists rooms (
   id uuid primary key default gen_random_uuid(),
@@ -241,6 +323,7 @@ create table if not exists rooms (
   max_members int not null default 20,
   description text not null default '',
   is_active boolean not null default true,
+  expires_at timestamptz,   -- null = permanent, timestamptz = secret room TTL
   created_at timestamptz not null default now()
 );
 
@@ -262,6 +345,15 @@ create table if not exists room_messages (
   created_at timestamptz not null default now()
 );
 
+-- ─── Présence world ───────────────────────────────────────────────────────────
+
+create table if not exists presence (
+  avatar_id uuid primary key references avatars(id) on delete cascade,
+  status text not null default 'online',
+  location_slug text references locations(slug),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists world_presence (
   user_id uuid primary key references auth.users(id) on delete cascade,
   avatar_name text not null,
@@ -273,6 +365,29 @@ create table if not exists world_presence (
   updated_at timestamptz not null default now()
 );
 
+-- ─── Notifications ────────────────────────────────────────────────────────────
+
+create table if not exists notifications (
+  id uuid primary key default gen_random_uuid(),
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  kind text not null,
+  title text not null,
+  body text not null,
+  read_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists advice_logs (
+  id uuid primary key default gen_random_uuid(),
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  category text not null,
+  title text not null,
+  body text not null,
+  created_at timestamptz not null default now()
+);
+
+-- ─── Premium ──────────────────────────────────────────────────────────────────
+
 create table if not exists user_premium (
   user_id uuid primary key references auth.users(id) on delete cascade,
   tier text not null,
@@ -281,31 +396,65 @@ create table if not exists user_premium (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists social_transfers (
+-- ─── Modération ───────────────────────────────────────────────────────────────
+
+create table if not exists reports (
   id uuid primary key default gen_random_uuid(),
-  avatar_id uuid not null references avatars(id) on delete cascade,
-  to_resident_id text,
-  amount int not null,
-  description text not null default '',
+  reporter_user_id uuid not null references auth.users(id) on delete cascade,
+  reported_user_id uuid references auth.users(id) on delete set null,
+  reported_message_id uuid,   -- référence libre (messages ou room_messages)
+  reason text not null,        -- 'spam' | 'harassment' | 'inappropriate' | 'other'
+  details text not null default '',
+  status text not null default 'pending',  -- 'pending' | 'reviewed' | 'resolved' | 'dismissed'
   created_at timestamptz not null default now()
 );
 
-create table if not exists active_boosts (
+create table if not exists blocks (
   id uuid primary key default gen_random_uuid(),
-  avatar_id uuid not null references avatars(id) on delete cascade,
-  boost_id text not null,
-  boost_name text not null,
-  multiplier numeric(4,2) not null default 1,
-  active_until timestamptz not null,
+  blocker_user_id uuid not null references auth.users(id) on delete cascade,
+  blocked_user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (blocker_user_id, blocked_user_id)
+);
+
+-- ─── Analytics ────────────────────────────────────────────────────────────────
+
+create table if not exists analytics_events (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete set null,
+  event_name text not null,          -- 'action_performed' | 'screen_viewed' | 'outing_done' | ...
+  properties jsonb not null default '{}',
+  platform text not null default 'mobile',  -- 'ios' | 'android' | 'web'
+  app_version text,
   created_at timestamptz not null default now()
 );
 
-create table if not exists equipped_cosmetics (
+-- ─── Push tokens (Expo — utilisé par Cloudflare Worker) ─────────────────────
+
+create table if not exists push_tokens (
+  id uuid primary key default gen_random_uuid(),
   avatar_id uuid not null references avatars(id) on delete cascade,
-  cosmetic_id text not null,
-  equipped_at timestamptz not null default now(),
-  primary key (avatar_id, cosmetic_id)
+  user_id uuid not null references auth.users(id) on delete cascade,
+  token text not null,
+  platform text not null default 'mobile',
+  updated_at timestamptz not null default now(),
+  unique (avatar_id)
 );
+
+-- ─── Index perf ───────────────────────────────────────────────────────────────
+
+create index if not exists idx_action_logs_avatar on action_logs(avatar_id, created_at desc);
+create index if not exists idx_messages_conv on messages(conversation_id, created_at asc);
+create index if not exists idx_room_messages_room on room_messages(room_id, created_at asc);
+create index if not exists idx_notifications_avatar on notifications(avatar_id, read_at, created_at desc);
+create index if not exists idx_analytics_event_name on analytics_events(event_name, created_at desc);
+create index if not exists idx_currencies_avatar on currencies(avatar_id, kind, created_at desc);
+create index if not exists idx_events_avatar on events(avatar_id, created_at desc);
+create index if not exists idx_studies_avatar on studies(avatar_id);
+create index if not exists idx_world_presence_location on world_presence(location_slug, updated_at desc);
+create index if not exists idx_push_tokens_avatar on push_tokens(avatar_id);
+
+-- ─── RLS (Row Level Security) ─────────────────────────────────────────────────
 
 alter table profiles enable row level security;
 alter table avatars enable row level security;
@@ -313,6 +462,10 @@ alter table avatar_preferences enable row level security;
 alter table avatar_stats enable row level security;
 alter table action_logs enable row level security;
 alter table transactions enable row level security;
+alter table currencies enable row level security;
+alter table inventory enable row level security;
+alter table studies enable row level security;
+alter table events enable row level security;
 alter table relationships enable row level security;
 alter table conversation_members enable row level security;
 alter table messages enable row level security;
@@ -329,133 +482,266 @@ alter table user_premium enable row level security;
 alter table social_transfers enable row level security;
 alter table active_boosts enable row level security;
 alter table equipped_cosmetics enable row level security;
+alter table reports enable row level security;
+alter table blocks enable row level security;
+alter table analytics_events enable row level security;
+alter table push_tokens enable row level security;
 
-create policy "profiles own row" on profiles for all using (auth.uid() = id) with check (auth.uid() = id);
-create policy "avatars own row" on avatars for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- Profils
+create policy "profiles own row" on profiles
+  for all using (auth.uid() = id) with check (auth.uid() = id);
 
+-- Avatars
+create policy "avatars own row" on avatars
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Avatar preferences
 create policy "avatar_preferences own row" on avatar_preferences
-for all using (
-  exists (select 1 from avatars where avatars.id = avatar_preferences.avatar_id and avatars.user_id = auth.uid())
-) with check (
-  exists (select 1 from avatars where avatars.id = avatar_preferences.avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = avatar_preferences.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = avatar_preferences.avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Avatar stats
 create policy "avatar_stats own row" on avatar_stats
-for all using (
-  exists (select 1 from avatars where avatars.id = avatar_stats.avatar_id and avatars.user_id = auth.uid())
-) with check (
-  exists (select 1 from avatars where avatars.id = avatar_stats.avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = avatar_stats.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = avatar_stats.avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Action logs
 create policy "action_logs own row" on action_logs
-for all using (
-  exists (select 1 from avatars where avatars.id = action_logs.avatar_id and avatars.user_id = auth.uid())
-) with check (
-  exists (select 1 from avatars where avatars.id = action_logs.avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = action_logs.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = action_logs.avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Transactions
 create policy "transactions own row" on transactions
-for all using (
-  exists (select 1 from avatars where avatars.id = transactions.avatar_id and avatars.user_id = auth.uid())
-) with check (
-  exists (select 1 from avatars where avatars.id = transactions.avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = transactions.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = transactions.avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Currencies
+create policy "currencies own row" on currencies
+  for all using (
+    exists (select 1 from avatars where avatars.id = currencies.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = currencies.avatar_id and avatars.user_id = auth.uid())
+  );
+
+-- Inventory
+create policy "inventory own row" on inventory
+  for all using (
+    exists (select 1 from avatars where avatars.id = inventory.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = inventory.avatar_id and avatars.user_id = auth.uid())
+  );
+
+-- Studies
+create policy "studies own row" on studies
+  for all using (
+    exists (select 1 from avatars where avatars.id = studies.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = studies.avatar_id and avatars.user_id = auth.uid())
+  );
+
+-- Events
+create policy "events own row" on events
+  for all using (
+    exists (select 1 from avatars where avatars.id = events.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = events.avatar_id and avatars.user_id = auth.uid())
+  );
+
+-- Relationships
 create policy "relationships visible to involved avatars" on relationships
-for all using (
-  exists (select 1 from avatars where avatars.id = relationships.avatar_a and avatars.user_id = auth.uid())
-  or exists (select 1 from avatars where avatars.id = relationships.avatar_b and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = relationships.avatar_a and avatars.user_id = auth.uid())
+    or exists (select 1 from avatars where avatars.id = relationships.avatar_b and avatars.user_id = auth.uid())
+  );
 
+-- Conversation members
 create policy "conversation members own access" on conversation_members
-for all using (
-  exists (select 1 from avatars where avatars.id = conversation_members.avatar_id and avatars.user_id = auth.uid())
-) with check (
-  exists (select 1 from avatars where avatars.id = conversation_members.avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = conversation_members.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = conversation_members.avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Messages
 create policy "messages visible to members" on messages
-for all using (
-  exists (
-    select 1
-    from conversation_members
-    join avatars on avatars.id = conversation_members.avatar_id
-    where conversation_members.conversation_id = messages.conversation_id
-      and avatars.user_id = auth.uid()
-  )
-) with check (
-  exists (
-    select 1 from avatars where avatars.id = messages.avatar_id and avatars.user_id = auth.uid()
-  )
-);
+  for all using (
+    exists (
+      select 1 from conversation_members
+      join avatars on avatars.id = conversation_members.avatar_id
+      where conversation_members.conversation_id = messages.conversation_id
+        and avatars.user_id = auth.uid()
+    )
+  ) with check (
+    exists (select 1 from avatars where avatars.id = messages.avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Notifications
 create policy "notifications own row" on notifications
-for all using (
-  exists (select 1 from avatars where avatars.id = notifications.avatar_id and avatars.user_id = auth.uid())
-) with check (
-  exists (select 1 from avatars where avatars.id = notifications.avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = notifications.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = notifications.avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Advice logs
 create policy "advice_logs own row" on advice_logs
-for all using (
-  exists (select 1 from avatars where avatars.id = advice_logs.avatar_id and avatars.user_id = auth.uid())
-) with check (
-  exists (select 1 from avatars where avatars.id = advice_logs.avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = advice_logs.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = advice_logs.avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Presence
 create policy "presence own row" on presence
-for all using (
-  exists (select 1 from avatars where avatars.id = presence.avatar_id and avatars.user_id = auth.uid())
-) with check (
-  exists (select 1 from avatars where avatars.id = presence.avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = presence.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = presence.avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Invitations
 create policy "invitations visible to participants" on invitations
-for all using (
-  exists (select 1 from avatars where avatars.id = invitations.sender_avatar_id and avatars.user_id = auth.uid())
-  or exists (select 1 from avatars where avatars.id = invitations.receiver_avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = invitations.sender_avatar_id and avatars.user_id = auth.uid())
+    or exists (select 1 from avatars where avatars.id = invitations.receiver_avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Date plans
 create policy "date_plans visible to participants" on date_plans
-for all using (
-  exists (select 1 from avatars where avatars.id = date_plans.initiator_avatar_id and avatars.user_id = auth.uid())
-  or exists (select 1 from avatars where avatars.id = date_plans.target_avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = date_plans.initiator_avatar_id and avatars.user_id = auth.uid())
+    or exists (select 1 from avatars where avatars.id = date_plans.target_avatar_id and avatars.user_id = auth.uid())
+  );
 
--- Rooms : publiques visibles par tous, privées par membres
-create policy "rooms public read" on rooms for select using (kind = 'public' or owner_id = auth.uid());
-create policy "rooms owner write" on rooms for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
-create policy "room_members visible" on room_members for all using (user_id = auth.uid());
+-- Rooms
+create policy "rooms public read" on rooms
+  for select using (kind = 'public' or kind = 'event' or owner_id = auth.uid());
+create policy "rooms owner write" on rooms
+  for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy "room_members visible" on room_members
+  for all using (user_id = auth.uid());
 create policy "room_messages visible to members" on room_messages
   for all using (
     exists (select 1 from room_members where room_members.room_id = room_messages.room_id and room_members.user_id = auth.uid())
     or exists (select 1 from rooms where rooms.id = room_messages.room_id and rooms.kind = 'public')
   );
-create policy "world_presence own row" on world_presence for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-create policy "world_presence read all" on world_presence for select using (true);
 
-create policy "user_premium own row" on user_premium for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+-- World presence
+create policy "world_presence own row" on world_presence
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "world_presence read all" on world_presence
+  for select using (true);
 
+-- Premium
+create policy "user_premium own row" on user_premium
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- Social transfers
 create policy "social_transfers own row" on social_transfers
-for all using (
-  exists (select 1 from avatars where avatars.id = social_transfers.avatar_id and avatars.user_id = auth.uid())
-) with check (
-  exists (select 1 from avatars where avatars.id = social_transfers.avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = social_transfers.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = social_transfers.avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Active boosts
 create policy "active_boosts own row" on active_boosts
-for all using (
-  exists (select 1 from avatars where avatars.id = active_boosts.avatar_id and avatars.user_id = auth.uid())
-) with check (
-  exists (select 1 from avatars where avatars.id = active_boosts.avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = active_boosts.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = active_boosts.avatar_id and avatars.user_id = auth.uid())
+  );
 
+-- Equipped cosmetics
 create policy "equipped_cosmetics own row" on equipped_cosmetics
-for all using (
-  exists (select 1 from avatars where avatars.id = equipped_cosmetics.avatar_id and avatars.user_id = auth.uid())
-) with check (
-  exists (select 1 from avatars where avatars.id = equipped_cosmetics.avatar_id and avatars.user_id = auth.uid())
-);
+  for all using (
+    exists (select 1 from avatars where avatars.id = equipped_cosmetics.avatar_id and avatars.user_id = auth.uid())
+  ) with check (
+    exists (select 1 from avatars where avatars.id = equipped_cosmetics.avatar_id and avatars.user_id = auth.uid())
+  );
+
+-- Reports (un user peut créer un report et voir les siens)
+create policy "reports create" on reports
+  for insert with check (auth.uid() = reporter_user_id);
+create policy "reports own read" on reports
+  for select using (auth.uid() = reporter_user_id);
+
+-- Blocks
+create policy "blocks own row" on blocks
+  for all using (auth.uid() = blocker_user_id) with check (auth.uid() = blocker_user_id);
+
+-- Analytics (insert uniquement depuis le client authentifié)
+create policy "analytics insert" on analytics_events
+  for insert with check (auth.uid() = user_id or user_id is null);
+create policy "analytics own read" on analytics_events
+  for select using (auth.uid() = user_id);
+
+-- Push tokens
+create policy "push_tokens own row" on push_tokens
+  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+-- ─── Trigger : création automatique du profil à l'inscription ────────────────
+
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  insert into public.profiles (id, username)
+  values (
+    new.id,
+    coalesce(
+      new.raw_user_meta_data->>'username',
+      split_part(new.email, '@', 1)
+    )
+  )
+  on conflict (id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function public.handle_new_user();
+
+-- ─── Trigger : updated_at auto ────────────────────────────────────────────────
+
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+drop trigger if exists set_avatars_updated_at on avatars;
+create trigger set_avatars_updated_at
+  before update on avatars
+  for each row execute function public.set_updated_at();
+
+drop trigger if exists set_studies_updated_at on studies;
+create trigger set_studies_updated_at
+  before update on studies
+  for each row execute function public.set_updated_at();
+
+-- ─── Seed data ────────────────────────────────────────────────────────────────
 
 insert into neighborhoods (slug, name, vibe, lifestyle, cost_level) values
   ('central-district', 'Central District', 'dense et social', 'sorties, carriere, rencontres rapides', 'balanced'),

@@ -1,0 +1,21 @@
+name            = "mylife-worker"
+main            = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Variables d'environnement (injectées via wrangler secret put)
+# SUPABASE_URL          — URL de ton projet Supabase
+# SUPABASE_SERVICE_KEY  — Service role key (admin, jamais exposée côté client)
+# EXPO_PUSH_TOKEN_TABLE — Nom de la table où tu stockes les push tokens
+# WORKER_SECRET         — Secret partagé pour valider les webhooks Supabase
+
+[vars]
+APP_ENV = "production"
+
+# Cron triggers
+# - Decay quotidien à minuit UTC
+# - Nettoyage des rooms expirées toutes les heures
+[[triggers.crons]]
+crons = [
+  "0 0 * * *",     # daily-decay : minuit UTC tous les jours
+  "0 * * * *"      # room-cleanup : début de chaque heure
+]

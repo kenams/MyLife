@@ -1,5 +1,5 @@
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
-import type { AvatarProfile, AvatarStats, Conversation } from "@/lib/types";
+import type { AvatarProfile, AvatarStats, Conversation, DailyEvent } from "@/lib/types";
 
 // ─── Avatar ──────────────────────────────────────────────────────────────────
 
@@ -218,6 +218,161 @@ export function subscribeToMessages(
   return () => {
     void supabase?.removeChannel(channel);
   };
+}
+
+// ─── Studies ─────────────────────────────────────────────────────────────────
+
+export async function syncStudyProgressToSupabase(
+  avatarId: string,
+  courseSlug: string,
+  courseName: string,
+  progressPct: number,
+  level: number,
+  xp: number,
+  completedAt?: string | null
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: "Supabase non configuré" };
+
+  const { error } = await supabase.from("studies").upsert(
+    {
+      avatar_id: avatarId,
+      course_slug: courseSlug,
+      course_name: courseName,
+      progress_pct: progressPct,
+      level,
+      xp,
+      completed_at: completedAt ?? null,
+      updated_at: new Date().toISOString()
+    },
+    { onConflict: "avatar_id,course_slug" }
+  );
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+// ─── Currency ledger ──────────────────────────────────────────────────────────
+
+export async function logCurrencyEventToSupabase(
+  avatarId: string,
+  kind: "coins" | "gems" | "tokens",
+  delta: number,
+  source: string,
+  balanceAfter: number
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: "Supabase non configuré" };
+
+  const { error } = await supabase.from("currencies").insert({
+    avatar_id: avatarId,
+    kind,
+    delta,
+    source,
+    balance_after: balanceAfter,
+    created_at: new Date().toISOString()
+  });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+// ─── Daily event log ──────────────────────────────────────────────────────────
+
+export async function logDailyEventToSupabase(
+  avatarId: string,
+  event: DailyEvent
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: "Supabase non configuré" };
+
+  const { error } = await supabase.from("events").insert({
+    id: event.id,
+    avatar_id: avatarId,
+    kind: event.kind,
+    title: event.title,
+    body: event.body,
+    choice: event.choice,
+    effects: event.effects,
+    created_at: event.createdAt
+  });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+// ─── Analytics ────────────────────────────────────────────────────────────────
+
+export async function trackAnalyticsEvent(
+  userId: string | null,
+  eventName: string,
+  properties: Record<string, unknown> = {},
+  platform: "ios" | "android" | "web" | "mobile" = "mobile",
+  appVersion?: string
+): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+
+  // Fire-and-forget — on ne bloque pas l'UI sur l'analytics
+  void supabase.from("analytics_events").insert({
+    user_id: userId,
+    event_name: eventName,
+    properties,
+    platform,
+    app_version: appVersion ?? null,
+    created_at: new Date().toISOString()
+  });
+}
+
+// ─── Report / Block ───────────────────────────────────────────────────────────
+
+export async function submitReport(
+  reporterUserId: string,
+  reason: string,
+  details: string,
+  reportedUserId?: string,
+  reportedMessageId?: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: "Supabase non configuré" };
+
+  const { error } = await supabase.from("reports").insert({
+    reporter_user_id: reporterUserId,
+    reported_user_id: reportedUserId ?? null,
+    reported_message_id: reportedMessageId ?? null,
+    reason,
+    details,
+    created_at: new Date().toISOString()
+  });
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function blockUser(
+  blockerUserId: string,
+  blockedUserId: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: "Supabase non configuré" };
+
+  const { error } = await supabase.from("blocks").upsert(
+    { blocker_user_id: blockerUserId, blocked_user_id: blockedUserId },
+    { onConflict: "blocker_user_id,blocked_user_id" }
+  );
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function unblockUser(
+  blockerUserId: string,
+  blockedUserId: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: "Supabase non configuré" };
+
+  const { error } = await supabase
+    .from("blocks")
+    .delete()
+    .eq("blocker_user_id", blockerUserId)
+    .eq("blocked_user_id", blockedUserId);
+
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 // ─── Pull avatar from Supabase (for sign-in restore) ─────────────────────────
