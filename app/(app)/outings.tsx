@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 
-import { AppShell, Button, Card, Muted, Pill, SectionTitle, Title } from "@/components/ui";
+import { AppShell, Button, Card, Muted, NavBack, Pill, SectionTitle, Title } from "@/components/ui";
 import { activities } from "@/lib/game-engine";
 import { resolveOutingResult } from "@/lib/game-engine";
 import { colors } from "@/lib/theme";
@@ -81,6 +81,7 @@ export default function OutingsScreen() {
 
   return (
     <AppShell>
+      <NavBack fallback="/(app)/(tabs)/home" />
       <Card accent>
         <Pill>Sorties</Pill>
         <Title>Choisir sa sortie intelligemment.</Title>

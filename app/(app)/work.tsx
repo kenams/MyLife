@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Text, TouchableOpacity, View } from "react-native";
 
-import { AppShell, Button, Card, MetricCard, Muted, Pill, SectionTitle, Title } from "@/components/ui";
+import { AppShell, Button, Card, MetricCard, Muted, NavBack, Pill, SectionTitle, Title } from "@/components/ui";
 import { jobs } from "@/lib/game-engine";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
@@ -23,6 +23,7 @@ export default function WorkScreen() {
 
   return (
     <AppShell>
+      <NavBack fallback="/(app)/(tabs)/home" />
       <Card accent>
         <Pill>Travail</Pill>
         <Title>Revenus, discipline et statut.</Title>

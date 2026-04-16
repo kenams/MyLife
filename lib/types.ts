@@ -111,7 +111,13 @@ export type LifeActionId =
   | "restaurant-outing"
   | "cinema-date"
   | "rest-home"
-  | "go-out";
+  | "go-out"
+  | "meditate"
+  | "home-cooking"
+  | "read-book"
+  | "shopping"
+  | "team-sport"
+  | "nap";
 
 export type AvatarProfile = {
   displayName: string;
@@ -315,4 +321,128 @@ export type Conversation = {
   locationSlug: string | null;
   unreadCount: number;
   messages: ConversationMessage[];
+};
+
+export type PremiumTier = "monthly" | "yearly";
+
+export type PremiumFeature =
+  | "boost_x2"
+  | "cosmetics"
+  | "unlimited_dates"
+  | "elite_social"
+  | "realtime_sync"
+  | "stats_insights";
+
+export type MoneyTransfer = {
+  id: string;
+  kind: "sent" | "received" | "boost" | "cosmetic";
+  residentId: string | null;
+  residentName: string | null;
+  amount: number;
+  description: string;
+  createdAt: string;
+};
+
+export type CosmeticItem = {
+  id: string;
+  name: string;
+  kind: "badge" | "border" | "aura";
+  color: string;
+  price: number;
+  requiresPremium: boolean;
+};
+
+export type BoostItem = {
+  id: string;
+  name: string;
+  description: string;
+  multiplier: number;
+  durationHours: number;
+  price: number;
+  activeUntil: string | null;
+};
+
+// ─── Monde vivant ─────────────────────────────────────────────────────────────
+
+export type WorldPresenceMember = {
+  userId: string;
+  avatarName: string;
+  locationSlug: string;
+  action: import("@/lib/avatar-visual").AvatarAction;
+  mood: number;
+  onlineAt: string;
+  // position sur la carte 2D (0-100 normalisé)
+  posX: number;
+  posY: number;
+};
+
+export type NpcState = {
+  id: string;
+  name: string;
+  locationSlug: string;
+  action: import("@/lib/avatar-visual").AvatarAction;
+  mood: number;
+  energy: number;
+  lastTickAt: string;
+  posX: number;
+  posY: number;
+};
+
+// ─── Rooms ────────────────────────────────────────────────────────────────────
+
+export type RoomKind = "public" | "private" | "event" | "secret";
+
+// Room éphémère — messages auto-supprimés après 2h, max 4 personnes
+export type SecretRoom = {
+  id: string;
+  name: string;
+  code: string;           // 6 chars
+  ownerId: string;
+  ownerName: string;
+  memberIds: string[];
+  maxMembers: number;     // max 4
+  expiresAt: string;      // ISO — 2h après création
+  createdAt: string;
+  isActive: boolean;
+};
+
+export type SecretMessage = {
+  id: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+  expiresAt: string;      // même TTL que la room
+};
+
+export type Room = {
+  id: string;
+  name: string;
+  kind: RoomKind;
+  code: string;           // 6 chars, pour rejoindre
+  ownerId: string;        // userId du créateur
+  ownerName: string;
+  locationSlug: string;
+  memberCount: number;
+  maxMembers: number;
+  description: string;
+  createdAt: string;
+  isActive: boolean;
+};
+
+export type RoomMessage = {
+  id: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+  kind: "message" | "system" | "emote";
+};
+
+export type RoomMember = {
+  userId: string;
+  avatarName: string;
+  action: import("@/lib/avatar-visual").AvatarAction;
+  joinedAt: string;
+  isOnline: boolean;
 };

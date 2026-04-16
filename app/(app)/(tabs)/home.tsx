@@ -1,237 +1,482 @@
 import { router, useFocusEffect } from "expo-router";
-import { useCallback } from "react";
-import { Pressable, Text, View } from "react-native";
+import { useCallback, useState } from "react";
+import { Modal, Pressable, ScrollView, Text, View } from "react-native";
 
-import { AppShell, AvatarBadge, Button, Card, MetricCard, Muted, Pill, SectionTitle, StatMeter, Title } from "@/components/ui";
-import {
-  getLocationName,
-  getMomentumState,
-  getRecommendedActionMeta,
-  getSocialRankCopy,
-  getSocialRankLabel,
-  getSystemStateSummary,
-  getUrgency,
-  getUrgencyCopy,
-  getWellbeingScore
-} from "@/lib/selectors";
+import { getLocationName, getMomentumState, getRecommendedActionMeta, getWellbeingScore } from "@/lib/selectors";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
-import type { DailyEvent } from "@/lib/types";
 
-const EVENT_KIND_COLOR: Record<DailyEvent["kind"], string> = {
-  opportunity: "#38c793",
-  encounter:   "#8b7cff",
-  setback:     "#f87171",
-  windfall:    "#fbbf24",
-  social:      "#60a5fa"
-};
-
-const EVENT_KIND_LABEL: Record<DailyEvent["kind"], string> = {
-  opportunity: "Opportunite",
-  encounter:   "Rencontre",
-  setback:     "Imprévu",
-  windfall:    "Aubaine",
-  social:      "Social"
-};
-
-function EffectLine({ effects }: { effects: DailyEvent["effects"] }) {
-  const entries = Object.entries(effects).filter(([, v]) => v !== 0 && v !== undefined);
-  if (entries.length === 0) return <Muted>Aucun effet</Muted>;
+// ─── Barre de stat ────────────────────────────────────────────────────────────
+function StatBar({ label, value, color, icon }: { label: string; value: number; color: string; icon: string }) {
+  const pct = Math.max(0, Math.min(100, value));
+  const isLow = pct < 30;
   return (
-    <Text style={{ color: colors.muted, fontSize: 12 }}>
-      {entries.map(([k, v]) => `${k} ${(v as number) > 0 ? "+" : ""}${v}`).join("  ·  ")}
-    </Text>
-  );
-}
-
-function DailyEventCard({ event, onResolve }: { event: DailyEvent; onResolve: (c: "accepted" | "skipped") => void }) {
-  const kindColor = EVENT_KIND_COLOR[event.kind];
-  return (
-    <Card>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 }}>
-        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: kindColor }} />
-        <Text style={{ color: kindColor, fontWeight: "800", fontSize: 12, textTransform: "uppercase" }}>
-          {EVENT_KIND_LABEL[event.kind]} du jour
+    <View style={{ gap: 4 }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+        <Text style={{ color: isLow ? color : colors.muted, fontSize: 11, fontWeight: isLow ? "800" : "500" }}>
+          {icon} {label}{isLow ? " !" : ""}
         </Text>
+        <Text style={{ color, fontSize: 11, fontWeight: "700" }}>{Math.round(pct)}</Text>
       </View>
-      <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16, marginBottom: 6 }}>{event.title}</Text>
-      <Muted>{event.body}</Muted>
-      <View style={{ gap: 10, marginTop: 12 }}>
-        <View style={{ padding: 10, borderRadius: 12, backgroundColor: "rgba(56,199,147,0.08)", borderLeftWidth: 2, borderLeftColor: "#38c793" }}>
-          <Text style={{ color: "#38c793", fontWeight: "700", fontSize: 13, marginBottom: 4 }}>{event.actionLabel}</Text>
-          <EffectLine effects={event.effects} />
-        </View>
-        {Object.keys(event.skipEffects).length > 0 ? (
-          <View style={{ padding: 10, borderRadius: 12, backgroundColor: "rgba(248,113,113,0.06)", borderLeftWidth: 2, borderLeftColor: colors.muted }}>
-            <Text style={{ color: colors.muted, fontWeight: "700", fontSize: 13, marginBottom: 4 }}>{event.skipLabel}</Text>
-            <EffectLine effects={event.skipEffects} />
-          </View>
-        ) : null}
+      <View style={{ height: 7, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.07)" }}>
+        <View style={{ height: 7, borderRadius: 4, width: `${pct}%`, backgroundColor: isLow ? "#ff6b6b" : color }} />
       </View>
-      <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
-        <View style={{ flex: 1 }}>
-          <Button label={event.actionLabel} onPress={() => onResolve("accepted")} />
-        </View>
-        <View style={{ flex: 1 }}>
-          <Button label={event.skipLabel === "N/A" ? "Ok" : event.skipLabel} variant="secondary" onPress={() => onResolve("skipped")} />
-        </View>
-      </View>
-    </Card>
+    </View>
   );
 }
 
-function QuickAction({
-  title,
-  copy,
-  onPress
-}: {
-  title: string;
-  copy: string;
-  onPress: () => void;
+// ─── Action rapide ────────────────────────────────────────────────────────────
+function ActionBtn({ emoji, label, cost, reward, onPress, disabled }: {
+  emoji: string; label: string; cost: string; reward: string; onPress: () => void; disabled?: boolean;
 }) {
   return (
-    <Pressable onPress={onPress} style={{ flexBasis: "48%", backgroundColor: colors.cardAlt, padding: 14, borderRadius: 20, gap: 6 }}>
-      <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>{title}</Text>
-      <Text style={{ color: colors.muted, lineHeight: 18 }}>{copy}</Text>
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      style={{
+        flex: 1, minWidth: "45%", backgroundColor: disabled ? "rgba(255,255,255,0.03)" : "rgba(255,255,255,0.06)",
+        borderRadius: 16, padding: 14, gap: 6,
+        borderWidth: 1, borderColor: disabled ? "rgba(255,255,255,0.04)" : "rgba(255,255,255,0.1)",
+        opacity: disabled ? 0.5 : 1
+      }}
+    >
+      <Text style={{ fontSize: 26 }}>{emoji}</Text>
+      <Text style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>{label}</Text>
+      <View style={{ flexDirection: "row", gap: 6 }}>
+        <Text style={{ color: "#ff8d8d", fontSize: 10 }}>{cost}</Text>
+        <Text style={{ color: "#38c793", fontSize: 10 }}>{reward}</Text>
+      </View>
     </Pressable>
   );
 }
 
-export default function HomeScreen() {
-  const avatar = useGameStore((state) => state.avatar);
-  const stats = useGameStore((state) => state.stats);
-  const currentLocationSlug = useGameStore((state) => state.currentLocationSlug);
-  const performAction = useGameStore((state) => state.performAction);
-  const claimDailyReward = useGameStore((state) => state.claimDailyReward);
-  const dailyGoals = useGameStore((state) => state.dailyGoals);
-  const advice = useGameStore((state) => state.advice);
-  const lifeFeed = useGameStore((state) => state.lifeFeed);
-  const bootstrap = useGameStore((state) => state.bootstrap);
-  const dailyEvent = useGameStore((state) => state.dailyEvent);
-  const resolveDailyEvent = useGameStore((state) => state.resolveDailyEvent);
-
-  useFocusEffect(
-    useCallback(() => {
-      bootstrap();
-    }, [bootstrap])
+// ─── Quête du jour ────────────────────────────────────────────────────────────
+function QuestRow({ label, done }: { label: string; done: boolean }) {
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8,
+      borderBottomWidth: 1, borderColor: "rgba(255,255,255,0.04)" }}>
+      <View style={{
+        width: 22, height: 22, borderRadius: 11,
+        backgroundColor: done ? "#38c793" : "rgba(255,255,255,0.08)",
+        alignItems: "center", justifyContent: "center"
+      }}>
+        {done && <Text style={{ fontSize: 12 }}>✓</Text>}
+      </View>
+      <Text style={{ color: done ? colors.muted : colors.text, fontSize: 13, flex: 1,
+        textDecorationLine: done ? "line-through" : "none" }}>
+        {label}
+      </Text>
+    </View>
   );
+}
 
-  const wellbeing = getWellbeingScore(stats);
-  const socialRank = getSocialRankLabel(stats.socialRankScore);
-  const recommendedAction = getRecommendedActionMeta(stats);
-  const systemSummary = getSystemStateSummary(stats);
-  const momentum = getMomentumState(stats);
+// ─── Daily Event Modal ────────────────────────────────────────────────────────
+function DailyEventModal() {
+  const dailyEvent       = useGameStore((s) => s.dailyEvent);
+  const resolveDailyEvent = useGameStore((s) => s.resolveDailyEvent);
+  const [visible, setVisible] = useState(true);
+
+  if (!dailyEvent || dailyEvent.resolved || !visible) return null;
+
+  const kindColor =
+    dailyEvent.kind === "opportunity" ? "#38c793" :
+    dailyEvent.kind === "windfall"    ? "#f6b94f" :
+    dailyEvent.kind === "encounter"   ? colors.accent :
+    dailyEvent.kind === "social"      ? "#60a5fa" : "#ff8d8d";
+
+  const kindLabel =
+    dailyEvent.kind === "opportunity" ? "Opportunité" :
+    dailyEvent.kind === "windfall"    ? "Coup de chance" :
+    dailyEvent.kind === "encounter"   ? "Rencontre" :
+    dailyEvent.kind === "social"      ? "Événement social" : "Alerte";
+
+  const kindEmoji =
+    dailyEvent.kind === "opportunity" ? "✨" :
+    dailyEvent.kind === "windfall"    ? "🎁" :
+    dailyEvent.kind === "encounter"   ? "👤" :
+    dailyEvent.kind === "social"      ? "🤝" : "⚠️";
+
+  function accept() {
+    resolveDailyEvent("accepted");
+    setVisible(false);
+  }
+  function skip() {
+    resolveDailyEvent("skipped");
+    setVisible(false);
+  }
 
   return (
-    <AppShell>
-      <Card accent>
-        <Pill tone={getUrgency(stats) === "Routine stable" ? "accent" : "warning"}>{getUrgency(stats)}</Pill>
-        <Title>{avatar ? `Bonjour ${avatar.displayName}` : "Bonjour"}</Title>
-        <Muted>{getUrgencyCopy(stats)}</Muted>
-        <AvatarBadge
-          title={avatar?.displayName ?? "Avatar"}
-          subtitle={`${avatar?.photoStyle ?? "Minimal clean"} · ${getLocationName(currentLocationSlug)}`}
-        />
-      </Card>
+    <Modal transparent animationType="fade" visible={visible} onRequestClose={() => setVisible(false)}>
+      <View style={{
+        flex: 1, backgroundColor: "rgba(0,0,0,0.75)",
+        justifyContent: "center", alignItems: "center", padding: 24
+      }}>
+        <View style={{
+          width: "100%", maxWidth: 400,
+          backgroundColor: "#0b1a2d",
+          borderRadius: 24, padding: 24, gap: 16,
+          borderWidth: 1.5, borderColor: kindColor + "40"
+        }}>
+          {/* Header */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{
+              width: 44, height: 44, borderRadius: 22,
+              backgroundColor: kindColor + "20",
+              alignItems: "center", justifyContent: "center"
+            }}>
+              <Text style={{ fontSize: 22 }}>{kindEmoji}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: kindColor, fontSize: 11, fontWeight: "700", letterSpacing: 1 }}>
+                {kindLabel.toUpperCase()}
+              </Text>
+              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 17, marginTop: 2 }}>
+                {dailyEvent.title}
+              </Text>
+            </View>
+          </View>
 
-      {dailyEvent && !dailyEvent.resolved ? (
-        <DailyEventCard event={dailyEvent} onResolve={resolveDailyEvent} />
-      ) : null}
+          {/* Body */}
+          <Text style={{ color: colors.muted, fontSize: 14, lineHeight: 21 }}>{dailyEvent.body}</Text>
 
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12 }}>
-        <MetricCard label="Budget" value={`${stats.money}`} hint="credits disponibles" />
-        <MetricCard label="Bien-etre" value={`${wellbeing}%`} hint="etat global du jour" />
-        <MetricCard label="Rang social" value={socialRank} hint={getSocialRankCopy(socialRank)} />
+          {/* Effects preview */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <View style={{
+              flex: 1, backgroundColor: kindColor + "10", borderRadius: 12, padding: 12,
+              borderWidth: 1, borderColor: kindColor + "30"
+            }}>
+              <Text style={{ color: kindColor, fontWeight: "800", fontSize: 12, marginBottom: 6 }}>
+                ✓ {dailyEvent.actionLabel}
+              </Text>
+              {Object.entries(dailyEvent.effects).filter(([, v]) => v).map(([k, v]) => (
+                <Text key={k} style={{ color: colors.muted, fontSize: 11 }}>
+                  {(v as number) > 0 ? "+" : ""}{v} {k}
+                </Text>
+              ))}
+            </View>
+            {dailyEvent.kind !== "windfall" && (
+              <View style={{
+                flex: 1, backgroundColor: "rgba(255,255,255,0.03)", borderRadius: 12, padding: 12,
+                borderWidth: 1, borderColor: "rgba(255,255,255,0.08)"
+              }}>
+                <Text style={{ color: colors.muted, fontWeight: "700", fontSize: 12, marginBottom: 6 }}>
+                  ✗ {dailyEvent.skipLabel}
+                </Text>
+                {Object.entries(dailyEvent.skipEffects).filter(([, v]) => v).map(([k, v]) => (
+                  <Text key={k} style={{ color: "#ff8d8d", fontSize: 11 }}>
+                    {(v as number) > 0 ? "+" : ""}{v} {k}
+                  </Text>
+                ))}
+              </View>
+            )}
+          </View>
+
+          {/* Actions */}
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable
+              onPress={accept}
+              style={{
+                flex: 2, paddingVertical: 14, borderRadius: 14,
+                backgroundColor: kindColor + "20",
+                borderWidth: 1.5, borderColor: kindColor + "60",
+                alignItems: "center"
+              }}
+            >
+              <Text style={{ color: kindColor, fontWeight: "800", fontSize: 14 }}>
+                {dailyEvent.actionLabel}
+              </Text>
+            </Pressable>
+            {dailyEvent.kind !== "windfall" && (
+              <Pressable
+                onPress={skip}
+                style={{
+                  flex: 1, paddingVertical: 14, borderRadius: 14,
+                  backgroundColor: "rgba(255,255,255,0.04)",
+                  borderWidth: 1, borderColor: "rgba(255,255,255,0.1)",
+                  alignItems: "center"
+                }}
+              >
+                <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 13 }}>
+                  {dailyEvent.skipLabel}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+
+          {/* Dismiss */}
+          <Pressable onPress={() => setVisible(false)} style={{ alignItems: "center", paddingTop: 4 }}>
+            <Text style={{ color: "rgba(255,255,255,0.2)", fontSize: 12 }}>Fermer sans choisir</Text>
+          </Pressable>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+// ─── Screen ───────────────────────────────────────────────────────────────────
+export default function HomeScreen() {
+  const avatar              = useGameStore((s) => s.avatar);
+  const stats               = useGameStore((s) => s.stats);
+  const currentLocationSlug = useGameStore((s) => s.currentLocationSlug);
+  const performAction       = useGameStore((s) => s.performAction);
+  const claimDailyReward    = useGameStore((s) => s.claimDailyReward);
+  const dailyGoals          = useGameStore((s) => s.dailyGoals);
+  const bootstrap           = useGameStore((s) => s.bootstrap);
+  const signOut             = useGameStore((s) => s.signOut);
+  const resetAll            = useGameStore((s) => s.resetAll);
+  const dailyEvent          = useGameStore((s) => s.dailyEvent);
+
+  useFocusEffect(useCallback(() => { bootstrap(); }, [bootstrap]));
+
+  const wellbeing = getWellbeingScore(stats);
+  const momentum  = getMomentumState(stats);
+  const recommended = getRecommendedActionMeta(stats);
+  const doneCount = dailyGoals.filter((g) => g.completed).length;
+  const totalGoals = dailyGoals.length;
+  const questPct = totalGoals > 0 ? (doneCount / totalGoals) * 100 : 0;
+
+  const wbColor = wellbeing > 65 ? "#38c793" : wellbeing > 40 ? "#f6b94f" : "#ff6b6b";
+
+  const hasPendingEvent = dailyEvent && !dailyEvent.resolved;
+
+  return (
+    <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} showsVerticalScrollIndicator={false}>
+      {/* Daily Event Modal */}
+      <DailyEventModal />
+
+      {/* ── TOP HUD ── */}
+      <View style={{ backgroundColor: "#0b1a2d", paddingHorizontal: 20, paddingTop: 56, paddingBottom: 16 }}>
+        {/* Header row */}
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+          <View>
+            <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "600" }}>
+              📍 {getLocationName(currentLocationSlug).toUpperCase()}
+            </Text>
+            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20, marginTop: 2 }}>
+              {avatar?.displayName ?? "Joueur"}
+            </Text>
+          </View>
+          <View style={{ alignItems: "flex-end", gap: 4 }}>
+            <View style={{
+              paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+              backgroundColor: wbColor + "22", borderWidth: 1, borderColor: wbColor + "55"
+            }}>
+              <Text style={{ color: wbColor, fontWeight: "800", fontSize: 13 }}>
+                ♥ {wellbeing}%
+              </Text>
+            </View>
+            <Text style={{ color: "#f6b94f", fontWeight: "700", fontSize: 13 }}>
+              💰 {stats.money} cr
+            </Text>
+          </View>
+        </View>
+
+        {/* Stats vitales 2 colonnes */}
+        <View style={{ gap: 10 }}>
+          <View style={{ flexDirection: "row", gap: 14 }}>
+            <View style={{ flex: 1 }}>
+              <StatBar label="Faim"       value={stats.hunger}     color="#f6b94f" icon="🍽️" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <StatBar label="Énergie"    value={stats.energy}     color="#60a5fa" icon="⚡" />
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 14 }}>
+            <View style={{ flex: 1 }}>
+              <StatBar label="Humeur"     value={stats.mood}       color="#c084fc" icon="😊" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <StatBar label="Social"     value={stats.sociability} color="#38c793" icon="👥" />
+            </View>
+          </View>
+          <View style={{ flexDirection: "row", gap: 14 }}>
+            <View style={{ flex: 1 }}>
+              <StatBar label="Hygiène"    value={stats.hygiene}    color="#34d399" icon="🚿" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <StatBar label="Zen"        value={100 - stats.stress} color="#a78bfa" icon="🧘" />
+            </View>
+          </View>
+        </View>
+
+        {/* Streak + momentum */}
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+          <View style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 10, alignItems: "center" }}>
+            <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 22 }}>{stats.streak}</Text>
+            <Text style={{ color: colors.muted, fontSize: 10 }}>jours de suite</Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 10, alignItems: "center" }}>
+            <Text style={{ color: "#f6b94f", fontWeight: "900", fontSize: 18 }}>x{momentum.multiplier.toFixed(1)}</Text>
+            <Text style={{ color: colors.muted, fontSize: 10 }}>multiplicateur</Text>
+          </View>
+          <View style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 12, padding: 10, alignItems: "center" }}>
+            <Text style={{ color: "#60a5fa", fontWeight: "900", fontSize: 18 }}>{stats.reputation}</Text>
+            <Text style={{ color: colors.muted, fontSize: 10 }}>réputation</Text>
+          </View>
+        </View>
       </View>
 
-      <Card>
-        <SectionTitle>Pilotage du jour</SectionTitle>
-        <Pill tone={systemSummary.tone}>{systemSummary.title}</Pill>
-        <Muted>{systemSummary.body}</Muted>
-        <View style={{ padding: 12, borderRadius: 18, backgroundColor: "rgba(255,255,255,0.04)", gap: 6 }}>
-          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>{recommendedAction.label}</Text>
-          <Muted>{recommendedAction.copy}</Muted>
-        </View>
-        <Button label={`Faire maintenant : ${recommendedAction.label}`} onPress={() => performAction(recommendedAction.action)} />
-      </Card>
+      <View style={{ padding: 20, gap: 24 }}>
 
-      <Card>
-        <SectionTitle>Momentum</SectionTitle>
-        <Pill tone={momentum.tier === "locked-in" || momentum.tier === "active" ? "accent" : momentum.tier === "building" ? "warning" : "muted"}>
-          {momentum.label}
-        </Pill>
-        <Muted>{momentum.hint}</Muted>
-        <Muted>
-          Serie actuelle : {stats.streak} jour(s) · multiplicateur discret : x{momentum.multiplier.toFixed(2)}
-        </Muted>
-        {momentum.nextMilestone ? <Muted>Prochain palier utile : jour {momentum.nextMilestone}</Muted> : null}
-      </Card>
+        {/* ── ÉVÉNEMENT DU JOUR (banner si non résolu) ── */}
+        {hasPendingEvent && (
+          <Pressable
+            onPress={() => {/* le modal s'ouvre automatiquement au montage, forcer re-render */ bootstrap(); }}
+            style={{
+              backgroundColor: "rgba(246,185,79,0.12)", borderRadius: 16, padding: 14,
+              borderWidth: 1.5, borderColor: "rgba(246,185,79,0.4)",
+              flexDirection: "row", alignItems: "center", gap: 12
+            }}
+          >
+            <Text style={{ fontSize: 24 }}>📅</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: "#f6b94f", fontWeight: "800", fontSize: 13 }}>Événement du jour</Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }} numberOfLines={1}>{dailyEvent!.title}</Text>
+            </View>
+            <View style={{
+              width: 8, height: 8, borderRadius: 4, backgroundColor: "#f6b94f"
+            }} />
+          </Pressable>
+        )}
 
-      <Card>
-        <SectionTitle>Etat du corps et du mental</SectionTitle>
-        <StatMeter label="Faim" value={stats.hunger} tone={stats.hunger < 35 ? "danger" : "accent"} />
-        <StatMeter label="Hydratation" value={stats.hydration} tone={stats.hydration < 35 ? "warning" : "accent"} />
-        <StatMeter label="Energie" value={stats.energy} tone={stats.energy < 35 ? "danger" : "accent"} />
-        <StatMeter label="Hygiene" value={stats.hygiene} tone={stats.hygiene < 35 ? "warning" : "accent"} />
-        <StatMeter label="Humeur" value={stats.mood} tone={stats.mood < 35 ? "warning" : "violet"} />
-        <StatMeter label="Sociabilite" value={stats.sociability} tone={stats.sociability < 35 ? "warning" : "accent"} />
-        <StatMeter label="Sante" value={stats.health} />
-        <StatMeter label="Forme" value={stats.fitness} tone="violet" />
-        <StatMeter label="Stress" value={100 - stats.stress} tone={stats.stress > 65 ? "danger" : "accent"} />
-      </Card>
-
-      <Card>
-        <SectionTitle>Actions du moment</SectionTitle>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-          <QuickAction title="Repas sain" copy="+ faim + sante + discipline" onPress={() => performAction("healthy-meal")} />
-          <QuickAction title="Dormir" copy="+ energie + motivation" onPress={() => performAction("sleep")} />
-          <QuickAction title="Douche" copy="+ hygiene + image sociale" onPress={() => performAction("shower")} />
-          <QuickAction title="Shift travail" copy="+ argent + progression" onPress={() => performAction("work-shift")} />
-          <QuickAction title="Marche" copy="- stress + forme" onPress={() => performAction("walk")} />
-          <QuickAction title="Cafe" copy="+ lien + humeur" onPress={() => performAction("cafe-chat")} />
-        </View>
-        <Muted>Prochain move recommande : {recommendedAction.label}</Muted>
-      </Card>
-
-      <Card>
-        <SectionTitle>Cadence quotidienne</SectionTitle>
-        {dailyGoals.map((goal) => (
-          <Text key={goal.id} style={{ color: goal.completed ? "#b9ffd9" : colors.muted }}>
-            {goal.completed ? "✓" : "○"} {goal.label}
+        {/* ── ACTION RECOMMANDÉE ── */}
+        <View>
+          <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700", marginBottom: 10, letterSpacing: 1 }}>
+            PRIORITÉ DU MOMENT
           </Text>
-        ))}
-        <Button label="Recuperer la reward quotidienne" onPress={claimDailyReward} />
-      </Card>
+          <Pressable
+            onPress={() => performAction(recommended.action)}
+            style={{
+              backgroundColor: colors.accent + "18",
+              borderRadius: 18, padding: 18,
+              borderWidth: 1.5, borderColor: colors.accent + "60",
+              flexDirection: "row", alignItems: "center", gap: 14
+            }}
+          >
+            <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: colors.accent + "25",
+              alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 24 }}>⚡</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 16 }}>{recommended.label}</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>{recommended.copy}</Text>
+            </View>
+            <Text style={{ color: colors.accent, fontSize: 20 }}>→</Text>
+          </Pressable>
+        </View>
 
-      <Card>
-        <SectionTitle>Conseils applicables a la vraie vie</SectionTitle>
-        {advice.map((item) => (
-          <View key={item.id} style={{ gap: 4, paddingVertical: 4 }}>
-            <Text style={{ color: colors.text, fontWeight: "800" }}>{item.title}</Text>
-            <Muted>{item.body}</Muted>
+        {/* ── ACTIONS RAPIDES ── */}
+        <View>
+          <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700", marginBottom: 10, letterSpacing: 1 }}>
+            ACTIONS
+          </Text>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+            <ActionBtn emoji="🍽️" label="Repas sain"    cost="-14 cr"   reward="+faim +santé"    onPress={() => performAction("healthy-meal")} />
+            <ActionBtn emoji="🥘" label="Cuisiner"      cost="-8 cr"    reward="+faim ×2"        onPress={() => performAction("home-cooking")} />
+            <ActionBtn emoji="😴" label="Dormir"        cost="-temps"   reward="+44 énergie"     onPress={() => performAction("sleep")} />
+            <ActionBtn emoji="💤" label="Sieste"        cost="-temps"   reward="+22 énergie"     onPress={() => performAction("nap")} />
+            <ActionBtn emoji="🚿" label="Douche"        cost="-3 cr"    reward="+hygiène"        onPress={() => performAction("shower")} />
+            <ActionBtn emoji="💼" label="Travailler"    cost="-énergie" reward="+argent"         onPress={() => performAction("work-shift")} disabled={stats.energy < 20} />
+            <ActionBtn emoji="🏃" label="Marcher"       cost="-énergie" reward="+humeur"         onPress={() => performAction("walk")} />
+            <ActionBtn emoji="🏀" label="Sport collectif" cost="-énergie" reward="+social +forme" onPress={() => performAction("team-sport")} disabled={stats.energy < 25} />
+            <ActionBtn emoji="🧘" label="Méditer"       cost="-énergie" reward="+zen +motivation" onPress={() => performAction("meditate")} />
+            <ActionBtn emoji="📚" label="Lire"          cost="-énergie" reward="+motivation"     onPress={() => performAction("read-book")} />
+            <ActionBtn emoji="☕" label="Café social"   cost="-argent"  reward="+social"         onPress={() => performAction("cafe-chat")} disabled={stats.money < 5} />
+            <ActionBtn emoji="🛍️" label="Shopping"      cost="-35 cr"   reward="+image"          onPress={() => performAction("shopping")} disabled={stats.money < 35} />
           </View>
-        ))}
-        <Button label="Voir les conseils complets" variant="secondary" onPress={() => router.push("/(app)/tips")} />
-      </Card>
+        </View>
 
-      <Card>
-        <SectionTitle>Navigation utile</SectionTitle>
-        <Button label="Corps, habitudes et forme" variant="secondary" onPress={() => router.push("/(app)/health")} />
-        <Button label="Travail et revenus" variant="secondary" onPress={() => router.push("/(app)/work")} />
-        <Button label="Sorties et vie sociale" variant="secondary" onPress={() => router.push("/(app)/outings")} />
-        <Button label="Dates et rendez-vous" variant="secondary" onPress={() => router.push("/(app)/dates")} />
-        <Button label="Mes relations" variant="secondary" onPress={() => router.push("/(app)/relations")} />
-      </Card>
-
-      <Card>
-        <SectionTitle>Fil de vie recente</SectionTitle>
-        {lifeFeed.slice(0, 4).map((item) => (
-          <View key={item.id} style={{ gap: 4, paddingVertical: 4 }}>
-            <Text style={{ color: colors.text, fontWeight: "700" }}>{item.title}</Text>
-            <Muted>{item.body}</Muted>
+        {/* ── RACCOURCIS MONDE ── */}
+        <View>
+          <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700", marginBottom: 10, letterSpacing: 1 }}>
+            EXPLORER
+          </Text>
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Pressable onPress={() => router.push("/(app)/world-live")}
+              style={{ flex: 1, backgroundColor: "rgba(139,124,255,0.12)", borderRadius: 14, padding: 14,
+                borderWidth: 1, borderColor: "rgba(139,124,255,0.3)", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 28 }}>🗺️</Text>
+              <Text style={{ color: "#8b7cff", fontWeight: "800", fontSize: 12 }}>Carte Live</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push("/(app)/rooms")}
+              style={{ flex: 1, backgroundColor: "rgba(56,199,147,0.12)", borderRadius: 14, padding: 14,
+                borderWidth: 1, borderColor: "rgba(56,199,147,0.3)", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 28 }}>🏠</Text>
+              <Text style={{ color: "#38c793", fontWeight: "800", fontSize: 12 }}>Rooms</Text>
+            </Pressable>
+            <Pressable onPress={() => router.push("/(app)/dates")}
+              style={{ flex: 1, backgroundColor: "rgba(255,107,107,0.12)", borderRadius: 14, padding: 14,
+                borderWidth: 1, borderColor: "rgba(255,107,107,0.3)", alignItems: "center", gap: 6 }}>
+              <Text style={{ fontSize: 28 }}>💘</Text>
+              <Text style={{ color: "#ff6b6b", fontWeight: "800", fontSize: 12 }}>Dates</Text>
+            </Pressable>
           </View>
-        ))}
-      </Card>
-    </AppShell>
+        </View>
+
+        {/* ── QUÊTES DU JOUR ── */}
+        <View>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1 }}>QUÊTES DU JOUR</Text>
+            <Text style={{ color: colors.accent, fontWeight: "700", fontSize: 12 }}>{doneCount}/{totalGoals}</Text>
+          </View>
+          <View style={{ height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.07)", marginBottom: 12 }}>
+            <View style={{ height: 6, borderRadius: 3, width: `${questPct}%`, backgroundColor: colors.accent }} />
+          </View>
+          <View style={{ backgroundColor: "rgba(255,255,255,0.03)", borderRadius: 16, paddingHorizontal: 16,
+            borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" }}>
+            {dailyGoals.slice(0, 5).map((g) => (
+              <QuestRow key={g.id} label={g.label} done={g.completed} />
+            ))}
+          </View>
+          {doneCount === totalGoals && totalGoals > 0 && (
+            <Pressable
+              onPress={claimDailyReward}
+              style={{ marginTop: 12, backgroundColor: "#f6b94f22", borderRadius: 14, padding: 14,
+                borderWidth: 1, borderColor: "#f6b94f66", alignItems: "center", flexDirection: "row",
+                justifyContent: "center", gap: 8 }}>
+              <Text style={{ fontSize: 20 }}>🎁</Text>
+              <Text style={{ color: "#f6b94f", fontWeight: "800", fontSize: 14 }}>Réclamer la reward du jour</Text>
+            </Pressable>
+          )}
+        </View>
+
+        {/* ── NAVIGATION SECONDAIRE ── */}
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {[
+            { label: "💪 Sport & Santé", route: "/(app)/health" },
+            { label: "💼 Travailler",    route: "/(app)/work"   },
+            { label: "🍷 Sorties",       route: "/(app)/outings"},
+            { label: "💘 Rendez-vous",   route: "/(app)/dates"  },
+            { label: "👥 Relations",     route: "/(app)/relations"},
+            { label: "🔐 Secret Chat",   route: "/(app)/secret-room"},
+            { label: "🤖 Coach ARIA",    route: "/(app)/coach"  },
+            { label: "📚 Études",        route: "/(app)/studies"},
+            { label: "📊 Stats",         route: "/(app)/tips"   },
+            { label: "⭐ Premium",       route: "/(app)/premium" },
+          ].map((item) => (
+            <Pressable key={item.route} onPress={() => router.push(item.route as never)}
+              style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20,
+                backgroundColor: "rgba(255,255,255,0.05)", borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
+              <Text style={{ color: colors.text, fontWeight: "600", fontSize: 12 }}>{item.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        {/* ── SESSION ── */}
+        <View style={{ flexDirection: "row", gap: 8, paddingTop: 4 }}>
+          <Pressable onPress={() => { signOut(); router.replace("/(auth)/sign-in"); }}
+            style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: "rgba(255,80,80,0.08)",
+              borderWidth: 1, borderColor: "rgba(255,80,80,0.2)", alignItems: "center" }}>
+            <Text style={{ color: "#ff8d8d", fontWeight: "700", fontSize: 12 }}>⏏ Déconnexion</Text>
+          </Pressable>
+          <Pressable onPress={() => { resetAll(); router.replace("/(auth)/welcome"); }}
+            style={{ flex: 1, paddingVertical: 10, borderRadius: 12, backgroundColor: "rgba(255,80,80,0.04)",
+              borderWidth: 1, borderColor: "rgba(255,80,80,0.1)", alignItems: "center" }}>
+            <Text style={{ color: "#ff8d8d77", fontWeight: "700", fontSize: 12 }}>↺ Reset</Text>
+          </Pressable>
+        </View>
+
+      </View>
+    </ScrollView>
   );
 }

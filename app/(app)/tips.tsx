@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 
-import { AppShell, Card, Muted, Pill, SectionTitle, Title } from "@/components/ui";
+import { AppShell, Card, Muted, NavBack, Pill, SectionTitle, Title } from "@/components/ui";
 import { buildGuidanceEngine, getLifePatternLabel } from "@/lib/selectors";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
@@ -45,6 +45,7 @@ export default function TipsScreen() {
 
   return (
     <AppShell>
+      <NavBack fallback="/(app)/(tabs)/home" />
       <Card accent>
         <Pill>Guidance Engine</Pill>
         <Title>Conseils issus de ton etat reel.</Title>

@@ -2,6 +2,10 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { seedNpcs, tickAllNpcs } from "@/lib/npc-brain";
+import { BOOSTS, COSMETICS, getBoostMultiplier } from "@/lib/premium";
+import { pullAvatarFromSupabase, syncAvatarToSupabase, syncStatsToSupabase, logSocialTransferToSupabase } from "@/lib/supabase-sync";
+import type { BoostItem, CosmeticItem, MoneyTransfer, NpcState, PremiumTier, Room, RoomKind, SecretRoom, SecretMessage } from "@/lib/types";
 import {
   activities,
   applyActivityToStats,
@@ -71,6 +75,8 @@ type GameState = {
   lastKnownRank: SocialRank | null;
   lifeFeed: ReturnType<typeof createInitialRuntime>["lifeFeed"];
   signIn: (email: string, password?: string) => Promise<{ ok: boolean; error?: string }>;
+  signUp: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  resetPassword: (email: string) => Promise<{ ok: boolean; error?: string }>;
   loadTestAccount: (preset?: TestAccountPreset) => void;
   signOut: () => void;
   completeAvatar: (avatar: AvatarProfile) => void;
@@ -91,6 +97,38 @@ type GameState = {
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: () => void;
   resetAll: () => void;
+  // Premium
+  isPremium: boolean;
+  premiumTier: PremiumTier | null;
+  premiumExpiresAt: string | null;
+  activeBoosts: BoostItem[];
+  equippedCosmetics: string[];
+  activatePremium: (tier: PremiumTier) => void;
+  deactivatePremium: () => void;
+  buyBoost: (boostId: string) => { ok: boolean; error?: string };
+  buyCosmetic: (cosmeticId: string) => { ok: boolean; error?: string };
+  // Economie sociale
+  moneyTransfers: MoneyTransfer[];
+  sendMoneyToResident: (residentId: string, residentName: string, amount: number) => { ok: boolean; error?: string };
+  // Supabase
+  supabaseAvatarId: string | null;
+  syncToSupabase: () => Promise<void>;
+  // Monde vivant — NPCs
+  npcs: NpcState[];
+  tickNpcs: () => void;
+  // Rooms live
+  rooms: Room[];
+  createRoom: (name: string, description: string, kind: RoomKind) => Room;
+  joinRoom: (code: string) => Room | null;
+  leaveRoom: (roomId: string) => void;
+  // Secret Rooms — éphémères, max 4, messages 2h TTL
+  secretRooms: SecretRoom[];
+  secretMessages: Record<string, SecretMessage[]>; // roomId → messages
+  createSecretRoom: (name: string) => SecretRoom;
+  joinSecretRoom: (code: string) => SecretRoom | null;
+  leaveSecretRoom: (roomId: string) => void;
+  sendSecretMessage: (roomId: string, body: string) => void;
+  purgeExpiredSecretRooms: () => void;
 };
 
 function initialState() {
@@ -98,6 +136,32 @@ function initialState() {
   return {
     hasHydrated: false,
     session: null as UserSession | null,
+    npcs: seedNpcs() as NpcState[],
+    rooms: [
+      {
+        id:          "room-test-live",
+        name:        "Room Live — Ava, Noa & Leila",
+        kind:        "public" as RoomKind,
+        code:        "LIVE",
+        ownerId:     "system",
+        ownerName:   "Système",
+        locationSlug: "cafe",
+        memberCount: 3,
+        maxMembers:  20,
+        description: "Room test avec 3 résidents autonomes. Rejoins et discute en direct.",
+        createdAt:   new Date().toISOString(),
+        isActive:    true
+      } as Room
+    ] as Room[],
+    isPremium: false,
+    premiumTier: null as PremiumTier | null,
+    premiumExpiresAt: null as string | null,
+    activeBoosts: [] as BoostItem[],
+    equippedCosmetics: [] as string[],
+    moneyTransfers: [] as MoneyTransfer[],
+    secretRooms: [] as SecretRoom[],
+    secretMessages: {} as Record<string, SecretMessage[]>,
+    supabaseAvatarId: null as string | null,
     avatar: null as AvatarProfile | null,
     dailyEvent: null as DailyEvent | null,
     lastKnownRank: null as SocialRank | null,
@@ -484,6 +548,7 @@ function createTestAccountState(preset: TestAccountPreset = "balanced") {
 }
 
 function withActionApplied(state: GameState, action: LifeActionId) {
+  const boostMultiplier = getBoostMultiplier(state.activeBoosts ?? []);
   let nextStats = applyDecay(state.stats);
   let nextGoals = state.dailyGoals;
   let notifications = [...state.notifications];
@@ -571,8 +636,8 @@ function withActionApplied(state: GameState, action: LifeActionId) {
 
   if (action === "work-shift") {
     const job = getStarterJob(state.avatar?.starterJob ?? jobs[0].slug);
-    const rewardCoins = applyMomentumGain(job.rewardCoins, nextStats);
-    const disciplineReward = applyMomentumGain(job.disciplineReward, nextStats);
+    const rewardCoins = Math.round(applyMomentumGain(job.rewardCoins, nextStats) * boostMultiplier);
+    const disciplineReward = Math.round(applyMomentumGain(job.disciplineReward, nextStats) * boostMultiplier);
     nextStats = normalizeStats({
       ...nextStats,
       money: nextStats.money + rewardCoins,
@@ -645,6 +710,93 @@ function withActionApplied(state: GameState, action: LifeActionId) {
     });
   }
 
+  if (action === "meditate") {
+    nextStats = normalizeStats({
+      ...nextStats,
+      stress: nextStats.stress - 18,
+      mood: nextStats.mood + 10,
+      energy: nextStats.energy + 6,
+      discipline: nextStats.discipline + applyMomentumGain(5, nextStats),
+      motivation: nextStats.motivation + 8,
+      mentalStability: nextStats.stress > 30 ? "fragile" : "stable",
+      lastDecayAt: nowIso()
+    });
+    nextGoals = updateGoal(nextGoals, ["méditer", "zen", "repos"]);
+  }
+
+  if (action === "home-cooking") {
+    nextStats = normalizeStats({
+      ...nextStats,
+      money: nextStats.money - 8,
+      hunger: nextStats.hunger + 38,
+      hydration: nextStats.hydration + 8,
+      health: nextStats.health + 6,
+      mood: nextStats.mood + 8,
+      discipline: nextStats.discipline + applyMomentumGain(6, nextStats),
+      weight: nextStats.weight + 0.03,
+      lastDecayAt: nowIso(),
+      lastMealAt: nowIso()
+    });
+    nextGoals = updateGoal(nextGoals, ["manger", "cuisiner"]);
+  }
+
+  if (action === "read-book") {
+    nextStats = normalizeStats({
+      ...nextStats,
+      stress: nextStats.stress - 10,
+      mood: nextStats.mood + 7,
+      motivation: nextStats.motivation + applyMomentumGain(10, nextStats),
+      discipline: nextStats.discipline + applyMomentumGain(4, nextStats),
+      energy: nextStats.energy - 4,
+      lastDecayAt: nowIso()
+    });
+    nextGoals = updateGoal(nextGoals, ["lire", "apprendre"]);
+  }
+
+  if (action === "shopping") {
+    nextStats = normalizeStats({
+      ...nextStats,
+      money: nextStats.money - 35,
+      mood: nextStats.mood + 12,
+      hygiene: nextStats.hygiene + 6,
+      reputation: nextStats.reputation + 3,
+      stress: nextStats.stress + 4,
+      energy: nextStats.energy - 6,
+      lastDecayAt: nowIso()
+    });
+    nextGoals = updateGoal(nextGoals, ["shopping", "image"]);
+  }
+
+  if (action === "team-sport") {
+    nextStats = normalizeStats({
+      ...nextStats,
+      energy: nextStats.energy - 20,
+      fitness: nextStats.fitness + applyMomentumGain(10, nextStats),
+      sociability: nextStats.sociability + 12,
+      mood: nextStats.mood + 10,
+      stress: nextStats.stress - 8,
+      health: nextStats.health + 4,
+      hunger: nextStats.hunger - 10,
+      hydration: nextStats.hydration - 8,
+      weight: nextStats.weight - 0.1,
+      reputation: nextStats.reputation + 3,
+      lastDecayAt: nowIso(),
+      lastWorkoutAt: nowIso(),
+      lastSocialAt: nowIso()
+    });
+    nextGoals = updateGoal(nextGoals, ["bouger", "sport", "parler"]);
+  }
+
+  if (action === "nap") {
+    nextStats = normalizeStats({
+      ...nextStats,
+      energy: nextStats.energy + 22,
+      stress: nextStats.stress - 8,
+      mood: nextStats.mood + 4,
+      lastDecayAt: nowIso()
+    });
+  }
+
   nextStats = normalizeStats(nextStats);
   notifications = buildAutomaticNotifications(nextStats, notifications);
   lifeFeed = appendFeed(lifeFeed, createFeedFromAction(action));
@@ -669,20 +821,68 @@ export const useGameStore = create<GameState>()(
         }
 
         if (isSupabaseConfigured && supabase && password) {
-          const { error } = await supabase.auth.signInWithPassword({ email: cleanedEmail, password });
+          const { error, data } = await supabase.auth.signInWithPassword({ email: cleanedEmail, password });
           if (error) {
             return { ok: false, error: error.message };
           }
 
           set({ session: { email: cleanedEmail, provider: "supabase" } });
+
+          // Restaurer l'avatar depuis Supabase si existant
+          const userId = data.user?.id;
+          if (userId) {
+            const pulled = await pullAvatarFromSupabase(userId);
+            if (pulled.ok && pulled.avatar && pulled.avatarId) {
+              const currentStats = get().stats;
+              const mergedStats = pulled.stats ? { ...currentStats, ...pulled.stats } : currentStats;
+              set({
+                avatar: pulled.avatar as AvatarProfile,
+                stats: mergedStats,
+                supabaseAvatarId: pulled.avatarId
+              });
+            }
+          }
           return { ok: true };
         }
 
         set({ session: { email: cleanedEmail, provider: "local" } });
         return { ok: true };
       },
+      signUp: async (email: string, password: string) => {
+        const cleanedEmail = email.trim().toLowerCase();
+        if (!cleanedEmail || !password) {
+          return { ok: false, error: "Email et mot de passe requis." };
+        }
+        if (password.length < 6) {
+          return { ok: false, error: "Mot de passe trop court (6 caractères min)." };
+        }
+        if (!isSupabaseConfigured || !supabase) {
+          // Mode local : créer session locale
+          set({ session: { email: cleanedEmail, provider: "local" } });
+          return { ok: true };
+        }
+        const { error } = await supabase.auth.signUp({ email: cleanedEmail, password });
+        if (error) return { ok: false, error: error.message };
+        set({ session: { email: cleanedEmail, provider: "supabase" } });
+        return { ok: true };
+      },
+      resetPassword: async (email: string) => {
+        const cleanedEmail = email.trim().toLowerCase();
+        if (!cleanedEmail) return { ok: false, error: "Email requis." };
+        if (!isSupabaseConfigured || !supabase) {
+          return { ok: false, error: "Supabase non configuré. Mode local uniquement." };
+        }
+        const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
+          redirectTo: "mylife://reset-password"
+        });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true };
+      },
       loadTestAccount: (preset = "balanced") => set((state) => ({ ...state, ...createTestAccountState(preset) })),
-      signOut: () => set({ ...initialState(), hasHydrated: true }),
+      signOut: () => {
+        void AsyncStorage.removeItem("mylife-storage");
+        set({ ...initialState(), hasHydrated: true });
+      },
       completeAvatar: (avatar) => {
         const stats = createStatsFromAvatar(avatar);
         const createdAt = nowIso();
@@ -1387,7 +1587,351 @@ export const useGameStore = create<GameState>()(
         set((state) => ({
           notifications: state.notifications.map((item) => ({ ...item, read: true }))
         })),
-      resetAll: () => set({ ...initialState(), hasHydrated: true })
+
+      // ── Premium ───────────────────────────────────────────────────────────
+      activatePremium: (tier) => {
+        const durationDays = tier === "yearly" ? 365 : 31;
+        const expiresAt = new Date(Date.now() + durationDays * 24 * 60 * 60 * 1000).toISOString();
+        set((state) => ({
+          isPremium: true,
+          premiumTier: tier,
+          premiumExpiresAt: expiresAt,
+          notifications: appendNotification(state.notifications, {
+            id: `premium-activated-${Date.now()}`,
+            kind: "reward",
+            title: "Premium activé",
+            body: `Abonnement ${tier === "yearly" ? "annuel" : "mensuel"} actif. Toutes les features sont débloquées.`,
+            createdAt: nowIso(),
+            read: false
+          })
+        }));
+      },
+      deactivatePremium: () => set({ isPremium: false, premiumTier: null, premiumExpiresAt: null }),
+
+      buyBoost: (boostId) => {
+        const state = get();
+        const boost = BOOSTS.find((b: BoostItem) => b.id === boostId);
+        if (!boost) return { ok: false, error: "Boost introuvable." };
+        if (state.stats.money < boost.price) return { ok: false, error: "Pas assez de crédits." };
+        const activeUntil = new Date(Date.now() + boost.durationHours * 60 * 60 * 1000).toISOString();
+        set((s) => ({
+          stats: { ...s.stats, money: s.stats.money - boost.price },
+          activeBoosts: [
+            ...s.activeBoosts.filter((b) => b.id !== boostId),
+            { ...boost, activeUntil }
+          ],
+          moneyTransfers: [
+            {
+              id: `boost-${Date.now()}`,
+              kind: "boost" as const,
+              residentId: null,
+              residentName: null,
+              amount: -boost.price,
+              description: `Boost acheté : ${boost.name}`,
+              createdAt: nowIso()
+            },
+            ...s.moneyTransfers
+          ].slice(0, 100),
+          notifications: appendNotification(s.notifications, {
+            id: `boost-bought-${Date.now()}`,
+            kind: "reward",
+            title: `${boost.name} actif`,
+            body: `${boost.description} Expire dans ${boost.durationHours}h.`,
+            createdAt: nowIso(),
+            read: false
+          })
+        }));
+        return { ok: true };
+      },
+
+      buyCosmetic: (cosmeticId) => {
+        const state = get();
+        const cosmetic = COSMETICS.find((c: CosmeticItem) => c.id === cosmeticId);
+        if (!cosmetic) return { ok: false, error: "Cosmétique introuvable." };
+        if (cosmetic.requiresPremium && !state.isPremium) return { ok: false, error: "Réservé aux membres Premium." };
+        if (cosmetic.price > 0 && state.stats.money < cosmetic.price) return { ok: false, error: "Pas assez de crédits." };
+        if (state.equippedCosmetics.includes(cosmeticId)) return { ok: false, error: "Déjà équipé." };
+        set((s) => ({
+          stats: cosmetic.price > 0 ? { ...s.stats, money: s.stats.money - cosmetic.price } : s.stats,
+          equippedCosmetics: [...s.equippedCosmetics, cosmeticId],
+          moneyTransfers: cosmetic.price > 0 ? [
+            {
+              id: `cosmetic-${Date.now()}`,
+              kind: "cosmetic" as const,
+              residentId: null,
+              residentName: null,
+              amount: -cosmetic.price,
+              description: `Cosmétique acheté : ${cosmetic.name}`,
+              createdAt: nowIso()
+            },
+            ...s.moneyTransfers
+          ].slice(0, 100) : s.moneyTransfers
+        }));
+        return { ok: true };
+      },
+
+      // ── Économie sociale ──────────────────────────────────────────────────
+      sendMoneyToResident: (residentId, residentName, amount) => {
+        const state = get();
+        if (amount <= 0) return { ok: false, error: "Montant invalide." };
+        if (amount > state.stats.money) return { ok: false, error: "Solde insuffisant." };
+        if (amount > 200) return { ok: false, error: "Maximum 200 crédits par transfert." };
+        const resident = starterResidents.find((r) => r.id === residentId);
+        if (!resident) return { ok: false, error: "Résident introuvable." };
+        const createdAt = nowIso();
+        set((s) => ({
+          stats: normalizeStats({ ...s.stats, money: s.stats.money - amount, sociability: s.stats.sociability + 4, reputation: s.stats.reputation + 2, lastDecayAt: createdAt }),
+          moneyTransfers: [
+            {
+              id: `transfer-${Date.now()}`,
+              kind: "sent" as const,
+              residentId,
+              residentName,
+              amount: -amount,
+              description: `Envoyé à ${residentName}`,
+              createdAt
+            },
+            ...s.moneyTransfers
+          ].slice(0, 100),
+          relationships: updateRelationshipScore(s.relationships, residentId, 10, s.stats, resident.reputation, "ami"),
+          notifications: appendNotification(s.notifications, {
+            id: `transfer-notif-${Date.now()}`,
+            kind: "social",
+            title: `${amount} crédits envoyés`,
+            body: `${residentName} a reçu ${amount} crédits. Le lien se renforce.`,
+            createdAt,
+            read: false
+          }),
+          lifeFeed: appendFeed(s.lifeFeed, {
+            id: `feed-transfer-${Date.now()}`,
+            title: "Transfert social",
+            body: `Tu as envoyé ${amount} crédits à ${residentName}. Partager est un signal fort.`,
+            createdAt
+          })
+        }));
+        // Log async dans Supabase si configuré
+        const { supabaseAvatarId } = get();
+        if (supabaseAvatarId) {
+          void logSocialTransferToSupabase(supabaseAvatarId, residentId, amount, `Envoyé à ${residentName}`);
+        }
+        return { ok: true };
+      },
+
+      // ── NPCs ──────────────────────────────────────────────────────────────
+      tickNpcs: () => set((s) => ({ npcs: tickAllNpcs(s.npcs) })),
+
+      // ── Rooms live ────────────────────────────────────────────────────────
+      createRoom: (name, description, kind) => {
+        const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+        const state = get();
+        const ownerName = state.avatar?.displayName ?? "Anonyme";
+        const ownerId   = state.session?.email ?? "local";
+        const room: Room = {
+          id:          `room-${Date.now()}`,
+          name,
+          kind,
+          code,
+          ownerId,
+          ownerName,
+          locationSlug: state.currentLocationSlug,
+          memberCount:  1,
+          maxMembers:   20,
+          description,
+          createdAt:   nowIso(),
+          isActive:    true
+        };
+        set((s) => ({ rooms: [room, ...s.rooms].slice(0, 50) }));
+        return room;
+      },
+      joinRoom: (code) => {
+        const state = get();
+        const upperCode = code.toUpperCase();
+        let room = state.rooms.find((r) => r.code === upperCode && r.isActive);
+        // Fallback : re-crée la room test LIVE si elle n'est plus en mémoire
+        if (!room && upperCode === "LIVE") {
+          room = {
+            id:          "room-test-live",
+            name:        "Room Live — Ava, Noa & Leila",
+            kind:        "public" as RoomKind,
+            code:        "LIVE",
+            ownerId:     "system",
+            ownerName:   "Système",
+            locationSlug: "cafe",
+            memberCount: 3,
+            maxMembers:  20,
+            description: "Room test avec 3 résidents autonomes.",
+            createdAt:   new Date().toISOString(),
+            isActive:    true
+          };
+          set((s) => ({ rooms: [room!, ...s.rooms.filter((r) => r.id !== "room-test-live")] }));
+        }
+        if (!room) return null;
+        set((s) => ({
+          rooms: s.rooms.map((r) =>
+            r.id === room.id ? { ...r, memberCount: Math.min(r.memberCount + 1, r.maxMembers) } : r
+          )
+        }));
+        return room;
+      },
+      leaveRoom: (roomId) => {
+        const state = get();
+        const room = state.rooms.find((r) => r.id === roomId);
+        if (!room) return;
+        const isOwner = room.ownerId === (state.session?.email ?? "local");
+        set((s) => ({
+          rooms: s.rooms.map((r) =>
+            r.id === roomId
+              ? { ...r, memberCount: Math.max(0, r.memberCount - 1), isActive: isOwner ? false : r.isActive }
+              : r
+          )
+        }));
+      },
+
+      // ── Secret Rooms éphémères ────────────────────────────────────────────
+      createSecretRoom: (name) => {
+        const state = get();
+        const userId = state.session?.email ?? "local";
+        const ownerName = state.avatar?.displayName ?? "Anonyme";
+        const now = new Date();
+        const expiresAt = new Date(now.getTime() + 2 * 60 * 60 * 1000).toISOString();
+        const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const room: SecretRoom = {
+          id: `secret-${Date.now()}`,
+          name,
+          code,
+          ownerId: userId,
+          ownerName,
+          memberIds: [userId],
+          maxMembers: 4,
+          expiresAt,
+          createdAt: now.toISOString(),
+          isActive: true,
+        };
+        const systemMsg: SecretMessage = {
+          id: `sys-${Date.now()}`,
+          authorId: "system",
+          authorName: "Système",
+          body: `🔐 Room secrète créée. Code : ${code}. Expire dans 2h. Max 4 personnes.`,
+          createdAt: now.toISOString(),
+          expiresAt,
+        };
+        set((s) => ({
+          secretRooms: [room, ...s.secretRooms],
+          secretMessages: { ...s.secretMessages, [room.id]: [systemMsg] },
+        }));
+        return room;
+      },
+
+      joinSecretRoom: (code) => {
+        const state = get();
+        const userId = state.session?.email ?? "local";
+        const now = new Date().toISOString();
+        const room = state.secretRooms.find(
+          (r) => r.code === code.toUpperCase() && r.isActive && r.expiresAt > now
+        );
+        if (!room) return null;
+        if (room.memberIds.length >= room.maxMembers) return null;
+        if (room.memberIds.includes(userId)) return room;
+        const ownerName = state.avatar?.displayName ?? "Anonyme";
+        const updated: SecretRoom = { ...room, memberIds: [...room.memberIds, userId] };
+        const joinMsg: SecretMessage = {
+          id: `sys-${Date.now()}`,
+          authorId: "system",
+          authorName: "Système",
+          body: `👤 ${ownerName} a rejoint la room.`,
+          createdAt: now,
+          expiresAt: room.expiresAt,
+        };
+        set((s) => ({
+          secretRooms: s.secretRooms.map((r) => r.id === room.id ? updated : r),
+          secretMessages: {
+            ...s.secretMessages,
+            [room.id]: [...(s.secretMessages[room.id] ?? []), joinMsg],
+          },
+        }));
+        return updated;
+      },
+
+      leaveSecretRoom: (roomId) => {
+        const state = get();
+        const userId = state.session?.email ?? "local";
+        const room = state.secretRooms.find((r) => r.id === roomId);
+        if (!room) return;
+        const memberIds = room.memberIds.filter((id) => id !== userId);
+        const isOwner = room.ownerId === userId;
+        set((s) => ({
+          secretRooms: s.secretRooms.map((r) =>
+            r.id === roomId
+              ? { ...r, memberIds, isActive: isOwner ? false : r.isActive }
+              : r
+          ),
+        }));
+      },
+
+      sendSecretMessage: (roomId, body) => {
+        const state = get();
+        const userId = state.session?.email ?? "local";
+        const authorName = state.avatar?.displayName ?? "Moi";
+        const room = state.secretRooms.find((r) => r.id === roomId);
+        if (!room || !room.isActive) return;
+        const now = new Date().toISOString();
+        if (now > room.expiresAt) {
+          set((s) => ({
+            secretRooms: s.secretRooms.map((r) => r.id === roomId ? { ...r, isActive: false } : r),
+          }));
+          return;
+        }
+        const msg: SecretMessage = {
+          id: `msg-${Date.now()}-${Math.random()}`,
+          authorId: userId,
+          authorName,
+          body,
+          createdAt: now,
+          expiresAt: room.expiresAt,
+        };
+        set((s) => ({
+          secretMessages: {
+            ...s.secretMessages,
+            [roomId]: [...(s.secretMessages[roomId] ?? []), msg],
+          },
+        }));
+      },
+
+      purgeExpiredSecretRooms: () => {
+        const now = new Date().toISOString();
+        set((s) => {
+          const expiredIds = s.secretRooms
+            .filter((r) => r.expiresAt <= now)
+            .map((r) => r.id);
+          if (expiredIds.length === 0) return s;
+          const newMessages = { ...s.secretMessages };
+          expiredIds.forEach((id) => delete newMessages[id]);
+          return {
+            secretRooms: s.secretRooms.filter((r) => !expiredIds.includes(r.id)),
+            secretMessages: newMessages,
+          };
+        });
+      },
+
+      // ── Sync Supabase ─────────────────────────────────────────────────────
+      syncToSupabase: async () => {
+        const state = get();
+        if (!state.session || state.session.provider !== "supabase" || !state.avatar) return;
+        if (!supabase) return;
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData?.user?.id;
+        if (!userId) return;
+        const { avatarId } = await syncAvatarToSupabase(userId, state.avatar, state.stats);
+        if (avatarId) {
+          set({ supabaseAvatarId: avatarId });
+          await syncStatsToSupabase(avatarId, state.stats);
+        }
+      },
+
+      resetAll: () => {
+        void AsyncStorage.removeItem("mylife-storage");
+        set({ ...initialState(), hasHydrated: true });
+      }
     }),
     {
       name: "mylife-storage",
@@ -1409,7 +1953,18 @@ export const useGameStore = create<GameState>()(
         dailyEvent: state.dailyEvent,
         lastKnownRank: state.lastKnownRank,
         lastDailyGoalResetAt: (state as GameState & { lastDailyGoalResetAt?: string | null }).lastDailyGoalResetAt,
-        lifeFeed: state.lifeFeed
+        lifeFeed: state.lifeFeed,
+        npcs: state.npcs,
+        rooms: state.rooms,
+        secretRooms: state.secretRooms,
+        secretMessages: state.secretMessages,
+        isPremium: state.isPremium,
+        premiumTier: state.premiumTier,
+        premiumExpiresAt: state.premiumExpiresAt,
+        activeBoosts: state.activeBoosts,
+        equippedCosmetics: state.equippedCosmetics,
+        moneyTransfers: state.moneyTransfers,
+        supabaseAvatarId: state.supabaseAvatarId
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) {

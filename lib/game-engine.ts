@@ -616,6 +616,54 @@ export function createFeedFromAction(action: LifeActionId) {
       createdAt
     };
   }
+  if (action === "meditate") {
+    return {
+      id: `feed-${createdAt}`,
+      title: "Ancrage mental",
+      body: "La meditation reduit le cortisol sur le long terme. Stress en baisse, decisions plus claires.",
+      createdAt
+    };
+  }
+  if (action === "home-cooking") {
+    return {
+      id: `feed-${createdAt}`,
+      title: "Cuisine maison",
+      body: "Manger fait maison couts moins cher, nourrit mieux et renforce la discipline au quotidien.",
+      createdAt
+    };
+  }
+  if (action === "read-book") {
+    return {
+      id: `feed-${createdAt}`,
+      title: "Session lecture",
+      body: "Lire regulierement amplifie la motivation sur le long terme et reduit le stress passif.",
+      createdAt
+    };
+  }
+  if (action === "team-sport") {
+    return {
+      id: `feed-${createdAt}`,
+      title: "Sport collectif",
+      body: "Le sport en groupe combine progression physique et lien social — double impact.",
+      createdAt
+    };
+  }
+  if (action === "shopping") {
+    return {
+      id: `feed-${createdAt}`,
+      title: "Investissement image",
+      body: "L'apparence influence la perception sociale. Mais le budget reste une ressource a proteger.",
+      createdAt
+    };
+  }
+  if (action === "nap") {
+    return {
+      id: `feed-${createdAt}`,
+      title: "Sieste strategique",
+      body: "20-30 minutes de sieste restaurent la cognition sans plomber la nuit.",
+      createdAt
+    };
+  }
   return {
     id: `feed-${createdAt}`,
     title: "Nouvelle action enregistree",
@@ -1036,6 +1084,52 @@ const EVENT_TEMPLATES: EventTemplate[] = [
     skipLabel: "Passer",
     effects: { reputation: 10, hygiene: 18, money: -22 },
     skipEffects: {}
+  },
+  // NOUVELLES OPPORTUNITÉS
+  {
+    kind: "opportunity", patterns: ["grind_mode", "momentum", "productive_isolated"],
+    title: "Formation express disponible",
+    body: "Une formation courte mais dense est accessible ce soir. Ca demande du temps mais le ROI est rapide.",
+    actionLabel: "Suivre la formation",
+    skipLabel: "Passer",
+    effects: { motivation: 12, discipline: 8, reputation: 5, energy: -10 },
+    skipEffects: { mood: -2 }
+  },
+  {
+    kind: "encounter", patterns: ["equilibre", "social_drought", "productive_isolated"],
+    title: "Connexion inattendue",
+    body: "Tu croises quelqu'un dont le reseau complementaire au tien. Une conversation simple peut ouvrir des portes.",
+    actionLabel: "Engager l'echange",
+    skipLabel: "Laisser passer",
+    effects: { sociability: 10, reputation: 7, mood: 8, motivation: 6 },
+    skipEffects: { mood: 1 }
+  },
+  {
+    kind: "windfall", patterns: ["grind_mode", "productive_isolated"],
+    title: "Reconnaissance professionnelle",
+    body: "Ton travail regulier est remarque. Une prime spontanee arrive sur ton compte.",
+    actionLabel: "Encaisser",
+    skipLabel: "N/A",
+    effects: { money: 55, motivation: 10, reputation: 6 },
+    skipEffects: {}
+  },
+  {
+    kind: "setback", patterns: ["burnout", "neglect", "recovery_needed"],
+    title: "Coupure d'energie",
+    body: "Ton corps coupe la puissance avant que tu ne le fasses toi-meme. Ce n'est pas un echec — c'est un signal utile.",
+    actionLabel: "Accepter le repos force",
+    skipLabel: "Forcer quand meme",
+    effects: { energy: 25, stress: -20, mood: 5, discipline: 4 },
+    skipEffects: { energy: -15, stress: 15 }
+  },
+  {
+    kind: "social", patterns: ["momentum", "equilibre"],
+    title: "Invitation VIP",
+    body: "Ton profil attire l'attention d'un cercle premium. L'invitation est discrete mais claire.",
+    actionLabel: "Rejoindre",
+    skipLabel: "Decliner",
+    effects: { sociability: 20, reputation: 12, mood: 10, energy: -12, money: -20 },
+    skipEffects: { discipline: 3 }
   },
   // EQUILIBRE / UNIVERSAL
   {

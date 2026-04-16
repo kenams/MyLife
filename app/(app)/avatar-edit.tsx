@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 
 import { AvatarForm } from "@/components/avatar-form";
-import { AppShell, Card, Muted, Pill, Title } from "@/components/ui";
+import { AppShell, Card, Muted, NavBack, Pill, Title } from "@/components/ui";
 import { useGameStore } from "@/stores/game-store";
 
 export default function AvatarEditScreen() {
@@ -14,6 +14,7 @@ export default function AvatarEditScreen() {
 
   return (
     <AppShell>
+      <NavBack fallback="/(app)/(tabs)/profile" />
       <Card accent>
         <Pill>Edition</Pill>
         <Title>Affiner ton profil.</Title>

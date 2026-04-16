@@ -229,6 +229,84 @@ create table if not exists presence (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists rooms (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  kind text not null default 'public',
+  code text unique not null,
+  owner_id uuid not null references auth.users(id) on delete cascade,
+  owner_name text not null,
+  location_slug text references locations(slug),
+  member_count int not null default 1,
+  max_members int not null default 20,
+  description text not null default '',
+  is_active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists room_members (
+  room_id uuid not null references rooms(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  avatar_name text not null,
+  joined_at timestamptz not null default now(),
+  primary key (room_id, user_id)
+);
+
+create table if not exists room_messages (
+  id uuid primary key default gen_random_uuid(),
+  room_id uuid not null references rooms(id) on delete cascade,
+  author_id uuid not null references auth.users(id) on delete cascade,
+  author_name text not null,
+  body text not null,
+  kind text not null default 'message',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists world_presence (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  avatar_name text not null,
+  location_slug text references locations(slug),
+  action text not null default 'idle',
+  mood int not null default 50,
+  pos_x numeric(5,2) not null default 50,
+  pos_y numeric(5,2) not null default 50,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists user_premium (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  tier text not null,
+  expires_at timestamptz not null,
+  stripe_subscription_id text,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists social_transfers (
+  id uuid primary key default gen_random_uuid(),
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  to_resident_id text,
+  amount int not null,
+  description text not null default '',
+  created_at timestamptz not null default now()
+);
+
+create table if not exists active_boosts (
+  id uuid primary key default gen_random_uuid(),
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  boost_id text not null,
+  boost_name text not null,
+  multiplier numeric(4,2) not null default 1,
+  active_until timestamptz not null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists equipped_cosmetics (
+  avatar_id uuid not null references avatars(id) on delete cascade,
+  cosmetic_id text not null,
+  equipped_at timestamptz not null default now(),
+  primary key (avatar_id, cosmetic_id)
+);
+
 alter table profiles enable row level security;
 alter table avatars enable row level security;
 alter table avatar_preferences enable row level security;
@@ -243,6 +321,14 @@ alter table advice_logs enable row level security;
 alter table presence enable row level security;
 alter table invitations enable row level security;
 alter table date_plans enable row level security;
+alter table rooms enable row level security;
+alter table room_members enable row level security;
+alter table room_messages enable row level security;
+alter table world_presence enable row level security;
+alter table user_premium enable row level security;
+alter table social_transfers enable row level security;
+alter table active_boosts enable row level security;
+alter table equipped_cosmetics enable row level security;
 
 create policy "profiles own row" on profiles for all using (auth.uid() = id) with check (auth.uid() = id);
 create policy "avatars own row" on avatars for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
@@ -334,6 +420,41 @@ create policy "date_plans visible to participants" on date_plans
 for all using (
   exists (select 1 from avatars where avatars.id = date_plans.initiator_avatar_id and avatars.user_id = auth.uid())
   or exists (select 1 from avatars where avatars.id = date_plans.target_avatar_id and avatars.user_id = auth.uid())
+);
+
+-- Rooms : publiques visibles par tous, privées par membres
+create policy "rooms public read" on rooms for select using (kind = 'public' or owner_id = auth.uid());
+create policy "rooms owner write" on rooms for all using (owner_id = auth.uid()) with check (owner_id = auth.uid());
+create policy "room_members visible" on room_members for all using (user_id = auth.uid());
+create policy "room_messages visible to members" on room_messages
+  for all using (
+    exists (select 1 from room_members where room_members.room_id = room_messages.room_id and room_members.user_id = auth.uid())
+    or exists (select 1 from rooms where rooms.id = room_messages.room_id and rooms.kind = 'public')
+  );
+create policy "world_presence own row" on world_presence for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "world_presence read all" on world_presence for select using (true);
+
+create policy "user_premium own row" on user_premium for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+
+create policy "social_transfers own row" on social_transfers
+for all using (
+  exists (select 1 from avatars where avatars.id = social_transfers.avatar_id and avatars.user_id = auth.uid())
+) with check (
+  exists (select 1 from avatars where avatars.id = social_transfers.avatar_id and avatars.user_id = auth.uid())
+);
+
+create policy "active_boosts own row" on active_boosts
+for all using (
+  exists (select 1 from avatars where avatars.id = active_boosts.avatar_id and avatars.user_id = auth.uid())
+) with check (
+  exists (select 1 from avatars where avatars.id = active_boosts.avatar_id and avatars.user_id = auth.uid())
+);
+
+create policy "equipped_cosmetics own row" on equipped_cosmetics
+for all using (
+  exists (select 1 from avatars where avatars.id = equipped_cosmetics.avatar_id and avatars.user_id = auth.uid())
+) with check (
+  exists (select 1 from avatars where avatars.id = equipped_cosmetics.avatar_id and avatars.user_id = auth.uid())
 );
 
 insert into neighborhoods (slug, name, vibe, lifestyle, cost_level) values

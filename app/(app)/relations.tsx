@@ -1,6 +1,6 @@
 import { Text, View } from "react-native";
 
-import { AppShell, Button, Card, ListRow, Muted, Pill, SectionTitle, Title } from "@/components/ui";
+import { AppShell, Button, Card, ListRow, Muted, NavBack, Pill, SectionTitle, Title } from "@/components/ui";
 import { starterResidents } from "@/lib/game-engine";
 import { getCompatibilityBadge, getRelationshipLabel, getResidentAccessibility } from "@/lib/selectors";
 import { colors } from "@/lib/theme";
@@ -79,6 +79,7 @@ export default function RelationsScreen() {
 
   return (
     <AppShell>
+      <NavBack fallback="/(app)/(tabs)/chat" />
       <Card accent>
         <Pill>Relations</Pill>
         <Title>Ton cercle social vivant.</Title>

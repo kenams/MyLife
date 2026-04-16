@@ -1,8 +1,35 @@
 import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { colors } from "@/lib/theme";
+
+// ─── NavBack — bouton retour universel ───────────────────────────────────────
+export function NavBack({ fallback }: { fallback: string }) {
+  const goBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace(fallback as never);
+    }
+  };
+  return (
+    <Pressable
+      onPress={goBack}
+      style={{
+        flexDirection: "row", alignItems: "center", gap: 6,
+        paddingHorizontal: 12, paddingVertical: 8,
+        borderRadius: 10, backgroundColor: "rgba(255,255,255,0.06)",
+        alignSelf: "flex-start"
+      }}
+      hitSlop={12}
+    >
+      <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>←</Text>
+      <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Retour</Text>
+    </Pressable>
+  );
+}
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (

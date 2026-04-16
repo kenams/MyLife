@@ -1,4 +1,4 @@
-import { AppShell, Button, Card, Muted, Pill, SectionTitle, StatMeter, Title } from "@/components/ui";
+import { AppShell, Button, Card, Muted, NavBack, Pill, SectionTitle, StatMeter, Title } from "@/components/ui";
 import { useGameStore } from "@/stores/game-store";
 
 export default function HealthScreen() {
@@ -7,6 +7,7 @@ export default function HealthScreen() {
 
   return (
     <AppShell>
+      <NavBack fallback="/(app)/(tabs)/home" />
       <Card accent>
         <Pill>Corps</Pill>
         <Title>Sante, hygiene et forme.</Title>
