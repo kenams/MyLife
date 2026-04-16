@@ -111,6 +111,14 @@ type GameState = {
   deactivatePremium: () => void;
   buyBoost: (boostId: string) => { ok: boolean; error?: string };
   buyCosmetic: (cosmeticId: string) => { ok: boolean; error?: string };
+  // Travail — sessions + progression
+  workSession: import("@/lib/types").WorkSession;
+  jobXp: number;
+  jobLevel: number;
+  shiftHistory: import("@/lib/types").ShiftRecord[];
+  startWorkShift: (jobSlug: string) => void;
+  completeWorkShift: () => void;
+  cancelWorkShift: () => void;
   // Economie sociale
   moneyTransfers: MoneyTransfer[];
   sendMoneyToResident: (residentId: string, residentName: string, amount: number) => { ok: boolean; error?: string };
@@ -162,6 +170,19 @@ function initialState() {
     premiumExpiresAt: null as string | null,
     activeBoosts: [] as BoostItem[],
     equippedCosmetics: [] as string[],
+    workSession: {
+      phase: "idle" as import("@/lib/types").WorkSessionPhase,
+      startedAt: null,
+      durationSec: 5,
+      jobSlug: "office-assistant",
+      earnedCoins: 0,
+      earnedXp: 0,
+      earnedDiscipline: 0,
+      earnedReputation: 0,
+    } as import("@/lib/types").WorkSession,
+    jobXp: 0,
+    jobLevel: 1,
+    shiftHistory: [] as import("@/lib/types").ShiftRecord[],
     moneyTransfers: [] as MoneyTransfer[],
     secretRooms: [] as SecretRoom[],
     secretMessages: {} as Record<string, SecretMessage[]>,
@@ -1740,6 +1761,105 @@ export const useGameStore = create<GameState>()(
           void logSocialTransferToSupabase(supabaseAvatarId, residentId, amount, `Envoyé à ${residentName}`);
         }
         return { ok: true };
+      },
+
+      // ── Work — sessions + XP ──────────────────────────────────────────────
+      startWorkShift: (jobSlug) => {
+        const job = getStarterJob(jobSlug);
+        const durationSec = 5 + (job.energyCost / 5);
+        const state = get();
+        const boostMultiplier = getBoostMultiplier(state.activeBoosts);
+        const level = state.jobLevel;
+        const levelBonus = 1 + (level - 1) * 0.05;
+        const earnedCoins = Math.round(applyMomentumGain(job.rewardCoins, state.stats) * boostMultiplier * levelBonus);
+        const earnedXp = Math.round(15 + job.disciplineReward * 0.5);
+        const earnedDiscipline = Math.round(applyMomentumGain(job.disciplineReward, state.stats) * boostMultiplier);
+        const earnedReputation = job.reputationReward;
+        set({
+          workSession: {
+            phase: "active",
+            startedAt: nowIso(),
+            durationSec: Math.max(4, Math.round(durationSec)),
+            jobSlug,
+            earnedCoins,
+            earnedXp,
+            earnedDiscipline,
+            earnedReputation,
+          }
+        });
+      },
+
+      completeWorkShift: () => {
+        const state = get();
+        const { workSession, stats, jobXp, jobLevel, avatar, shiftHistory } = state;
+        if (workSession.phase !== "active") return;
+        const job = getStarterJob(workSession.jobSlug);
+        const newRawXp = jobXp + workSession.earnedXp;
+        const newLevel = Math.min(10, Math.floor(newRawXp / 100) + 1);
+        const newXp = newRawXp % 100;
+        const createdAt = nowIso();
+        const newRecord: import("@/lib/types").ShiftRecord = {
+          id: `shift-${Date.now()}`,
+          jobSlug: workSession.jobSlug,
+          jobName: job.name,
+          earnedCoins: workSession.earnedCoins,
+          earnedXp: workSession.earnedXp,
+          completedAt: createdAt,
+        };
+        const nextStats = normalizeStats({
+          ...stats,
+          money: stats.money + workSession.earnedCoins,
+          energy: stats.energy - job.energyCost,
+          hunger: stats.hunger - job.hungerCost,
+          stress: stats.stress + job.stressCost,
+          discipline: stats.discipline + workSession.earnedDiscipline,
+          reputation: stats.reputation + workSession.earnedReputation,
+          motivation: stats.motivation + 3,
+          lastDecayAt: createdAt,
+        });
+        const leveledUp = newLevel > jobLevel;
+        set((s) => ({
+          workSession: { ...workSession, phase: "completed" },
+          jobXp: newXp,
+          jobLevel: newLevel,
+          shiftHistory: [newRecord, ...s.shiftHistory].slice(0, 10),
+          stats: nextStats,
+          dailyGoals: updateGoal(s.dailyGoals, ["travailler", "produire"]),
+          notifications: appendNotification(s.notifications, {
+            id: `work-done-${Date.now()}`,
+            kind: "work",
+            title: leveledUp ? `Niveau ${newLevel} atteint !` : "Shift terminé",
+            body: leveledUp
+              ? `Tu passes au niveau ${newLevel} — +5% revenus par shift.`
+              : `+${workSession.earnedCoins} crédits · +${workSession.earnedXp} XP · ${job.name}`,
+            createdAt,
+            read: false,
+          }),
+          lifeFeed: appendFeed(s.lifeFeed, {
+            id: `feed-work-${Date.now()}`,
+            title: "Session de travail terminée",
+            body: `${job.name} — ${workSession.earnedCoins} crédits gagnés. Discipline renforcée.`,
+            createdAt,
+          }),
+          moneyTransfers: [
+            {
+              id: `work-pay-${Date.now()}`,
+              kind: "received" as const,
+              residentId: null,
+              residentName: null,
+              amount: workSession.earnedCoins,
+              description: `Shift — ${job.name}`,
+              createdAt,
+            },
+            ...s.moneyTransfers,
+          ].slice(0, 100),
+        }));
+      },
+
+      cancelWorkShift: () => {
+        set((s) => ({
+          workSession: { ...s.workSession, phase: "idle", startedAt: null },
+        }));
       },
 
       // ── NPCs ──────────────────────────────────────────────────────────────

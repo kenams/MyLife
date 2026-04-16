@@ -388,6 +388,30 @@ export type NpcState = {
   posY: number;
 };
 
+// ─── Work ─────────────────────────────────────────────────────────────────────
+
+export type WorkSessionPhase = "idle" | "active" | "completed";
+
+export type WorkSession = {
+  phase: WorkSessionPhase;
+  startedAt: string | null;
+  durationSec: number;
+  jobSlug: string;
+  earnedCoins: number;
+  earnedXp: number;
+  earnedDiscipline: number;
+  earnedReputation: number;
+};
+
+export type ShiftRecord = {
+  id: string;
+  jobSlug: string;
+  jobName: string;
+  earnedCoins: number;
+  earnedXp: number;
+  completedAt: string;
+};
+
 // ─── Rooms ────────────────────────────────────────────────────────────────────
 
 export type RoomKind = "public" | "private" | "event" | "secret";
