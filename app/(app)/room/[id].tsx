@@ -2,6 +2,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
+  Animated,
+  Easing,
   FlatList,
   KeyboardAvoidingView,
   Platform,
@@ -164,6 +166,25 @@ export default function RoomScreen() {
   const [viewMode, setViewMode]     = useState<ViewMode>("chat");
   const flatRef = useRef<FlatList>(null);
 
+  // Entry animation
+  const scaleAnim   = useRef(new Animated.Value(0.92)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(scaleAnim, {
+        toValue: 1, duration: 320,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1, duration: 260,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   // NPC messages
   const [localNpcMsgs, setLocalNpcMsgs] = useState<RoomMessage[]>([]);
 
@@ -238,6 +259,7 @@ export default function RoomScreen() {
     : members;
 
   return (
+    <Animated.View style={{ flex: 1, transform: [{ scale: scaleAnim }], opacity: opacityAnim }}>
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.bg }}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -426,5 +448,6 @@ export default function RoomScreen() {
         </>
       )}
     </KeyboardAvoidingView>
+    </Animated.View>
   );
 }

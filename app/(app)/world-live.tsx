@@ -26,6 +26,7 @@ import {
 
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { Button } from "@/components/ui";
+import { VillageMap } from "@/components/village-map";
 import { ACTION_LABELS, getAvatarVisual, getNpcVisual } from "@/lib/avatar-visual";
 import {
   getNpcActivityResponse,
@@ -636,11 +637,13 @@ function TileListView({ npcs, onSelectNpc }: { npcs: NpcState[]; onSelectNpc: (n
 
 // ─── Screen principal ──────────────────────────────────────────────────────────
 export default function WorldLiveScreen() {
-  const avatar        = useGameStore((s) => s.avatar);
-  const stats         = useGameStore((s) => s.stats);
-  const npcs          = useGameStore((s) => s.npcs);
-  const tickNpcs      = useGameStore((s) => s.tickNpcs);
-  const relationships = useGameStore((s) => s.relationships);
+  const avatar               = useGameStore((s) => s.avatar);
+  const stats                = useGameStore((s) => s.stats);
+  const npcs                 = useGameStore((s) => s.npcs);
+  const tickNpcs             = useGameStore((s) => s.tickNpcs);
+  const relationships        = useGameStore((s) => s.relationships);
+  const travelTo             = useGameStore((s) => s.travelTo);
+  const currentLocationSlug  = useGameStore((s) => s.currentLocationSlug);
 
   const [playerPos, setPlayerPos]   = useState({ x: 48, y: 50 });
   const [bubbles, setBubbles]       = useState<Record<string, { text: string; key: number }>>({});
@@ -755,99 +758,23 @@ export default function WorldLiveScreen() {
       {/* Vue Carte */}
       {viewMode === "map" && (
         <>
-          <Pressable onPress={handleMapPress} style={{ overflow: "hidden" }}>
-            <View style={{ width: MAP_W, height: MAP_H, backgroundColor: "#09141f", position: "relative" }}>
+          {/* ── CARTE VILLAGE SVG ── */}
+          <VillageMap
+            currentSlug={currentLocationSlug}
+            onLocationPress={(slug, label) => {
+              travelTo(slug);
+              setPlayerPos({ x: 50, y: 50 });
+            }}
+          />
 
-              {/* District Nord (zone claire) */}
-              <View style={{
-                position: "absolute", left: 0, top: 0, right: 0, height: MAP_H * 0.44,
-                backgroundColor: "#0c1e2e",
-              }} />
-              {/* District Sud */}
-              <View style={{
-                position: "absolute", left: 0, top: MAP_H * 0.44, right: 0, bottom: 0,
-                backgroundColor: "#0a1728",
-              }} />
-
-              {/* Labels districts */}
-              <Text style={{
-                position: "absolute", top: 4, left: 8,
-                color: "rgba(255,255,255,0.15)", fontSize: 9, fontWeight: "800", letterSpacing: 2,
-              }}>DISTRICT NORD</Text>
-              <Text style={{
-                position: "absolute", top: MAP_H * 0.44 + 4, left: 8,
-                color: "rgba(255,255,255,0.15)", fontSize: 9, fontWeight: "800", letterSpacing: 2,
-              }}>DISTRICT SUD</Text>
-
-              {/* Routes */}
-              {ROADS.map((road, i) => (
-                <View
-                  key={i}
-                  style={{
-                    position: "absolute",
-                    left: road.vertical ? road.x1 : 0,
-                    top: road.vertical ? 0 : road.y1,
-                    width: road.vertical ? 8 : MAP_W,
-                    height: road.vertical ? MAP_H : 8,
-                    backgroundColor: "#162336",
-                  }}
-                />
-              ))}
-
-              {/* Tiles de lieux */}
-              {TILES.map((tile) => (
-                <LocationTile
-                  key={tile.slug}
-                  tile={tile}
-                  npcCount={npcCountPerTile[tile.slug] ?? 0}
-                  onPress={() => {
-                    // Déplacer le joueur vers ce lieu
-                    setPlayerPos({
-                      x: Math.max(2, Math.min(98, ((tile.x + tile.w / 2) / MAP_W) * 100)),
-                      y: Math.max(2, Math.min(98, ((tile.y + tile.h / 2) / MAP_H) * 100)),
-                    });
-                  }}
-                />
-              ))}
-
-              {/* NPCs */}
-              {npcs.map((npc) => (
-                <LiveNpc
-                  key={npc.id}
-                  npc={npc}
-                  onPress={() => {
-                    showBubble(npc.id, getNpcDialogue(npc.id, npc.action, npc.mood, "greeting"));
-                    setSelectedNpc(npc);
-                  }}
-                />
-              ))}
-
-              {/* Bulles de dialogue */}
-              {Object.entries(bubbles).map(([npcId, { text, key }]) => {
-                const npc = npcs.find((n) => n.id === npcId);
-                if (!npc) return null;
-                const { x, y } = pct(npc.posX, npc.posY);
-                return <Bubble key={`${npcId}-${key}`} text={text} x={x} y={y} />;
-              })}
-
-              {/* Avatar joueur */}
-              <PlayerDot posX={playerPos.x} posY={playerPos.y} visual={visual} />
-
-              {/* Toast live amis */}
-              <LiveToastBanner toasts={liveToasts} />
-            </View>
-          </Pressable>
-
-          {/* Légende */}
-          <MapLegend npcs={npcs} />
-
-          {/* Tip */}
+          {/* Tip sous la carte */}
           <View style={{
             flexDirection: "row", justifyContent: "space-between",
-            paddingHorizontal: 16, paddingBottom: 6,
+            paddingHorizontal: 16, paddingVertical: 8,
+            backgroundColor: "rgba(255,255,255,0.02)",
           }}>
-            <Text style={{ color: colors.muted, fontSize: 10 }}>Tap carte → se déplacer</Text>
-            <Text style={{ color: colors.muted, fontSize: 10 }}>Tap NPC → interagir</Text>
+            <Text style={{ color: colors.muted, fontSize: 10 }}>Tap bâtiment → voyager</Text>
+            <Text style={{ color: colors.muted, fontSize: 10 }}>Liste → interagir NPCs</Text>
           </View>
 
           {/* Liste NPCs présents (si pas de panneau) */}
