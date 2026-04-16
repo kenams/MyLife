@@ -15,6 +15,7 @@ import {
 } from "react-native";
 
 import { AvatarSprite } from "@/components/avatar-sprite";
+import { RoomInterior } from "@/components/room-interior";
 import { RoomTopView } from "@/components/room-top-view";
 import { getAvatarVisual, getNpcVisual } from "@/lib/avatar-visual";
 import { useRoom } from "@/hooks/use-room";
@@ -135,7 +136,7 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
           }}
         >
           <Ionicons
-            name={m === "chat" ? "chatbubbles-outline" : "map-outline"}
+            name={m === "chat" ? "chatbubbles-outline" : "home-outline"}
             size={13}
             color={mode === m ? colors.accent : colors.muted}
           />
@@ -143,7 +144,7 @@ function ViewToggle({ mode, onChange }: { mode: ViewMode; onChange: (m: ViewMode
             color: mode === m ? colors.accent : colors.muted,
             fontWeight: "700", fontSize: 12
           }}>
-            {m === "chat" ? "Chat" : "Vue"}
+            {m === "chat" ? "Chat" : "Lieu"}
           </Text>
         </Pressable>
       ))}
@@ -320,51 +321,45 @@ export default function RoomScreen() {
       {/* ── VUE DU DESSUS ── */}
       {viewMode === "map" ? (
         <ScrollView
-          contentContainerStyle={{ padding: 16, paddingBottom: 40, alignItems: "center", gap: 16 }}
+          contentContainerStyle={{ paddingBottom: 40, gap: 0 }}
           showsVerticalScrollIndicator={false}
         >
-          <RoomTopView
-            room={room}
-            members={displayMembers.map((m) => ({
-              userId:     m.userId,
-              avatarName: m.avatarName,
-              action:     m.action ?? "idle",
-              isOnline:   m.isOnline
-            }))}
-            myUserId={session?.email ?? ""}
-          />
+          {/* Scène intérieure du lieu */}
+          <RoomInterior roomId={id ?? "home"} />
 
-          {/* Info membres en bas */}
-          <View style={{
-            width: "100%", backgroundColor: "rgba(255,255,255,0.03)",
-            borderRadius: 16, padding: 14, gap: 10,
-            borderWidth: 1, borderColor: "rgba(255,255,255,0.06)"
-          }}>
-            <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1 }}>
-              MEMBRES PRÉSENTS
-            </Text>
-            {displayMembers.map((m) => {
-              const npcId  = m.userId.startsWith("npc-") ? m.userId.replace("npc-", "") : null;
-              const visual = npcId ? getNpcVisual(npcId)
-                           : (useGameStore.getState().avatar ? getAvatarVisual(useGameStore.getState().avatar!) : getNpcVisual("ava"));
-              return (
-                <View key={m.userId} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <AvatarSprite visual={visual} action={m.action ?? "idle"} size="xs" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={{
-                      color: m.userId === session?.email ? colors.accent : colors.text,
-                      fontWeight: "700", fontSize: 13
-                    }}>
-                      {m.avatarName}{m.userId === session?.email ? " (toi)" : ""}
-                    </Text>
-                    <Text style={{ color: colors.muted, fontSize: 11 }}>
-                      {(m.action ?? "idle").replace(/([A-Z])/g, " $1").toLowerCase()}
-                    </Text>
+          <View style={{ padding: 16, gap: 16 }}>
+            {/* Info membres en bas */}
+            <View style={{
+              backgroundColor: "rgba(255,255,255,0.03)",
+              borderRadius: 16, padding: 14, gap: 10,
+              borderWidth: 1, borderColor: "rgba(255,255,255,0.06)"
+            }}>
+              <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1 }}>
+                MEMBRES PRÉSENTS
+              </Text>
+              {displayMembers.map((m) => {
+                const npcId  = m.userId.startsWith("npc-") ? m.userId.replace("npc-", "") : null;
+                const visual = npcId ? getNpcVisual(npcId)
+                             : (useGameStore.getState().avatar ? getAvatarVisual(useGameStore.getState().avatar!) : getNpcVisual("ava"));
+                return (
+                  <View key={m.userId} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <AvatarSprite visual={visual} action={m.action ?? "idle"} size="xs" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{
+                        color: m.userId === session?.email ? colors.accent : colors.text,
+                        fontWeight: "700", fontSize: 13
+                      }}>
+                        {m.avatarName}{m.userId === session?.email ? " (toi)" : ""}
+                      </Text>
+                      <Text style={{ color: colors.muted, fontSize: 11 }}>
+                        {(m.action ?? "idle").replace(/([A-Z])/g, " $1").toLowerCase()}
+                      </Text>
+                    </View>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#38c793" }} />
                   </View>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: "#38c793" }} />
-                </View>
-              );
-            })}
+                );
+              })}
+            </View>
           </View>
         </ScrollView>
       ) : (
