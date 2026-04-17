@@ -381,9 +381,19 @@ export type NpcState = {
   name: string;
   locationSlug: string;
   action: import("@/lib/avatar-visual").AvatarAction;
-  mood: number;
-  energy: number;
+  mood: number;        // 0-100
+  energy: number;      // 0-100
+  hunger: number;      // 0-100 (baisse avec le temps)
+  stress: number;      // 0-100
+  hygiene: number;     // 0-100
+  money: number;       // crédits
+  xp: number;         // XP total cumulé
+  level: number;      // floor(xp/100)+1
+  reputation: number; // 0-100
+  streak: number;     // jours consécutifs actifs
   lastTickAt: string;
+  lastMessageAt: string | null;  // cooldown messages proactifs
+  lastInviteAt: string | null;   // cooldown invitations
   posX: number;
   posY: number;
 };

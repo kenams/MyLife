@@ -4,6 +4,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 
 import { applyActionToMissions, claimMissionReward } from "@/lib/missions";
 import { seedNpcs, tickAllNpcs } from "@/lib/npc-brain";
+import { generateNpcEvents } from "@/lib/npc-ai";
 import { BOOSTS, COSMETICS, getBoostMultiplier } from "@/lib/premium";
 import { getActionTimeScore, getTimeContext } from "@/lib/time-context";
 import {
@@ -2204,7 +2205,119 @@ export const useGameStore = create<GameState>()(
         return progress;
       },
 
-      tickNpcs: () => set((s) => ({ npcs: tickAllNpcs(s.npcs) })),
+      tickNpcs: () => set((s) => {
+        const prevNpcs = s.npcs;
+        const tickedNpcs = tickAllNpcs(s.npcs);
+        const playerName = s.avatar?.displayName ?? "ami";
+
+        const { events, updatedNpcs } = generateNpcEvents(
+          tickedNpcs, prevNpcs, s.relationships, playerName
+        );
+
+        let conversations = [...s.conversations];
+        let invitations   = [...s.invitations];
+        let notifications = [...s.notifications];
+        let lifeFeed      = [...s.lifeFeed];
+
+        for (const event of events) {
+          if (event.kind === "message" && event.message) {
+            // Injecter le message dans la conversation DM existante
+            const convIdx = conversations.findIndex(
+              (c) => c.peerId === event.npcId && c.kind === "direct"
+            );
+            if (convIdx >= 0) {
+              conversations = conversations.map((c, i) => {
+                if (i !== convIdx) return c;
+                return {
+                  ...c,
+                  unreadCount: c.unreadCount + 1,
+                  messages: [
+                    ...c.messages,
+                    {
+                      id:        `npc-msg-${Date.now()}-${event.npcId}`,
+                      authorId:  event.npcId,
+                      body:      event.message!,
+                      createdAt: nowIso(),
+                      read:      false,
+                      kind:      "message" as const,
+                    },
+                  ],
+                };
+              });
+            }
+            notifications = appendNotification(notifications, {
+              id:        `npc-notif-${Date.now()}-${event.npcId}`,
+              kind:      "social",
+              title:     `💬 ${event.npcName} t'a écrit`,
+              body:      (event.message ?? "").slice(0, 80),
+              createdAt: nowIso(),
+              read:      false,
+            });
+          }
+
+          if (event.kind === "invitation" && event.activitySlug) {
+            // Éviter doublons : ne pas ré-inviter si déjà en pending
+            const alreadyPending = invitations.some(
+              (inv) => inv.residentId === event.npcId && inv.status === "pending"
+            );
+            if (!alreadyPending) {
+              invitations = [
+                ...invitations,
+                {
+                  id:           `npc-invite-${Date.now()}-${event.npcId}`,
+                  residentId:   event.npcId,
+                  residentName: event.npcName,
+                  activitySlug: event.activitySlug!,
+                  status:       "pending" as const,
+                  createdAt:    nowIso(),
+                },
+              ];
+              notifications = appendNotification(notifications, {
+                id:        `npc-invite-notif-${Date.now()}-${event.npcId}`,
+                kind:      "social",
+                title:     `🎯 ${event.npcName} t'invite`,
+                body:      `${event.npcName} propose : ${event.activityLabel ?? event.activitySlug}`,
+                createdAt: nowIso(),
+                read:      false,
+              });
+            }
+          }
+
+          if (event.kind === "level_up") {
+            notifications = appendNotification(notifications, {
+              id:        `npc-lvl-${Date.now()}-${event.npcId}`,
+              kind:      "reward",
+              title:     `⬆️ ${event.npcName} — Niveau ${event.newLevel} !`,
+              body:      `${event.npcName} évolue et gagne en influence dans la ville.`,
+              createdAt: nowIso(),
+              read:      false,
+            });
+            lifeFeed = appendFeed(lifeFeed, {
+              id:        `feed-npc-lvl-${Date.now()}`,
+              title:     `${event.npcName} a passé niveau ${event.newLevel}`,
+              body:      `+${event.xpGained ?? 0} XP — ${event.npcName} continue de progresser.`,
+              createdAt: nowIso(),
+            });
+          }
+
+          if (event.kind === "activity_done" && (event.xpGained ?? 0) >= 5) {
+            lifeFeed = appendFeed(lifeFeed, {
+              id:        `feed-npc-act-${Date.now()}-${event.npcId}`,
+              title:     `${event.npcName} a ${event.activityLabel}`,
+              body:      `+${event.xpGained} XP${event.moneyGained ? ` · +${event.moneyGained} cr` : ""}`,
+              createdAt: nowIso(),
+            });
+          }
+        }
+
+        return {
+          npcs:          updatedNpcs,
+          conversations,
+          invitations,
+          notifications,
+          lifeFeed,
+        };
+      }),
 
       // ── Rooms live ────────────────────────────────────────────────────────
       createRoom: (name, description, kind) => {

@@ -9,6 +9,7 @@ import type { AvatarAction } from "@/lib/avatar-visual";
 import { ACTION_COLORS, ACTION_LABELS, getAvatarVisual, getNpcVisual } from "@/lib/avatar-visual";
 import { cityName } from "@/lib/game-data";
 import { LOCATION_COORDS, tickAllNpcs } from "@/lib/npc-brain";
+import { getNpcStatusLine, getNpcMoodEmoji } from "@/lib/npc-ai";
 import { colors } from "@/lib/theme";
 import type { NpcState } from "@/lib/types";
 import { useGameStore, worldLocations } from "@/stores/game-store";
@@ -50,10 +51,12 @@ function scaleTile(tile: (typeof LOCATION_TILES)[string]) {
 
 // ─── NPC animé sur la carte ───────────────────────────────────────────────────
 function LiveNpc({ npc, onPress }: { npc: NpcState; onPress: () => void }) {
-  const visual = getNpcVisual(npc.id);
-  const pos    = pctToMap(npc.posX, npc.posY);
-  const anim   = useRef(new Animated.ValueXY({ x: pos.x, y: pos.y })).current;
-  const prev   = useRef({ x: pos.x, y: pos.y });
+  const visual    = getNpcVisual(npc.id);
+  const pos       = pctToMap(npc.posX, npc.posY);
+  const anim      = useRef(new Animated.ValueXY({ x: pos.x, y: pos.y })).current;
+  const levelAnim = useRef(new Animated.Value(1)).current;
+  const prev      = useRef({ x: pos.x, y: pos.y });
+  const prevLevel = useRef(npc.level);
 
   useEffect(() => {
     if (Math.abs(prev.current.x - pos.x) > 1 || Math.abs(prev.current.y - pos.y) > 1) {
@@ -67,11 +70,40 @@ function LiveNpc({ npc, onPress }: { npc: NpcState; onPress: () => void }) {
     }
   }, [pos.x, pos.y]);
 
+  // Pulse badge niveau au level-up
+  useEffect(() => {
+    if (npc.level > prevLevel.current) {
+      prevLevel.current = npc.level;
+      Animated.sequence([
+        Animated.spring(levelAnim, { toValue: 1.6, useNativeDriver: true, bounciness: 18 }),
+        Animated.spring(levelAnim, { toValue: 1,   useNativeDriver: true }),
+      ]).start();
+    }
+  }, [npc.level]);
+
+  const ACTION_ICON: Record<string, string> = {
+    sleeping: "😴", eating: "🍽️", chatting: "💬", exercising: "💪",
+    walking: "🚶", working: "💼", idle: "💭"
+  };
+  const actionIcon = ACTION_ICON[npc.action] ?? "•";
+
   return (
     <Animated.View style={{ position: "absolute", left: anim.x, top: anim.y, alignItems: "center" }}>
       <Pressable onPress={onPress}>
         <AvatarSprite visual={visual} action={npc.action} size="xs" />
-        <View style={{ backgroundColor: "rgba(0,0,0,0.65)", borderRadius: 5, paddingHorizontal: 3 }}>
+        {/* Badge niveau */}
+        <Animated.View style={{
+          position: "absolute", top: -4, right: -4,
+          backgroundColor: npc.level >= 3 ? "#f6b94f" : "#38c793",
+          borderRadius: 6, paddingHorizontal: 3, paddingVertical: 1,
+          transform: [{ scale: levelAnim }],
+          borderWidth: 1, borderColor: "rgba(0,0,0,0.4)"
+        }}>
+          <Text style={{ color: "#07111f", fontSize: 6, fontWeight: "900" }}>Nv{npc.level}</Text>
+        </Animated.View>
+        {/* Nom + action */}
+        <View style={{ backgroundColor: "rgba(0,0,0,0.72)", borderRadius: 5, paddingHorizontal: 3, flexDirection: "row", alignItems: "center", gap: 1 }}>
+          <Text style={{ fontSize: 6 }}>{actionIcon}</Text>
           <Text style={{ color: "#fff", fontSize: 7, fontWeight: "700" }}>{npc.name.split(" ")[0]}</Text>
         </View>
       </Pressable>
@@ -445,21 +477,65 @@ export default function WorldScreen() {
         {/* Panel NPC */}
         {selectedNpc && (
           <Card>
+            {/* Header NPC */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <AvatarSprite visual={getNpcVisual(selectedNpc.id)} action={selectedNpc.action} size="sm" />
-              <View style={{ flex: 1, gap: 4 }}>
-                <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>{selectedNpc.name}</Text>
+              <View style={{ position: "relative" }}>
+                <AvatarSprite visual={getNpcVisual(selectedNpc.id)} action={selectedNpc.action} size="sm" />
+                <View style={{
+                  position: "absolute", top: -4, right: -4,
+                  backgroundColor: selectedNpc.level >= 3 ? "#f6b94f" : "#38c793",
+                  borderRadius: 8, paddingHorizontal: 5, paddingVertical: 2
+                }}>
+                  <Text style={{ color: "#07111f", fontSize: 9, fontWeight: "900" }}>Nv{selectedNpc.level}</Text>
+                </View>
+              </View>
+              <View style={{ flex: 1, gap: 3 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ACTION_COLORS[selectedNpc.action] }} />
-                  <Muted>{ACTION_LABELS[selectedNpc.action]} · humeur {Math.round(selectedNpc.mood)}%</Muted>
+                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>{selectedNpc.name}</Text>
+                  <Text style={{ fontSize: 14 }}>{getNpcMoodEmoji(selectedNpc.mood)}</Text>
+                </View>
+                <Text style={{ color: colors.muted, fontSize: 11 }}>{getNpcStatusLine(selectedNpc)}</Text>
+                {/* XP bar */}
+                <View style={{ height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.08)", marginTop: 2 }}>
+                  <View style={{
+                    height: 3, borderRadius: 2,
+                    width: `${(selectedNpc.xp % 100)}%`,
+                    backgroundColor: "#f6b94f"
+                  }} />
                 </View>
               </View>
               <Pressable onPress={() => setSelectedNpc(null)}>
                 <Ionicons name="close-circle" size={22} color={colors.muted} />
               </Pressable>
             </View>
-            <View style={{ marginTop: 10 }}>
-              <Button label="Envoyer un message" variant="secondary" onPress={() => { setSelectedNpc(null); router.push("/(app)/(tabs)/chat"); }} />
+            {/* Stats NPC */}
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+              {[
+                { label: "💰", value: `${selectedNpc.money}cr` },
+                { label: "⚡", value: `${selectedNpc.energy}%` },
+                { label: "😊", value: `${selectedNpc.mood}%` },
+                { label: "🔥", value: `${selectedNpc.streak}j` },
+              ].map((s) => (
+                <View key={s.label} style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 10, padding: 6, alignItems: "center" }}>
+                  <Text style={{ fontSize: 12 }}>{s.label}</Text>
+                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 11 }}>{s.value}</Text>
+                </View>
+              ))}
+            </View>
+            {/* Actions */}
+            <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+              <Pressable
+                onPress={() => { setSelectedNpc(null); router.push("/(app)/(tabs)/chat"); }}
+                style={{ flex: 1, backgroundColor: colors.accent + "22", borderRadius: 12, padding: 10,
+                  borderWidth: 1, borderColor: colors.accent + "44", alignItems: "center" }}>
+                <Text style={{ color: colors.accent, fontWeight: "800", fontSize: 13 }}>💬 Message</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { setSelectedNpc(null); router.push("/(app)/outings"); }}
+                style={{ flex: 1, backgroundColor: "#f6b94f22", borderRadius: 12, padding: 10,
+                  borderWidth: 1, borderColor: "#f6b94f44", alignItems: "center" }}>
+                <Text style={{ color: "#f6b94f", fontWeight: "800", fontSize: 13 }}>🎯 Inviter</Text>
+              </Pressable>
             </View>
           </Card>
         )}
@@ -495,9 +571,19 @@ export default function WorldScreen() {
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingVertical: 8 }}>
               {(npcsByLoc[currentLocationSlug] ?? []).map((npc) => (
-                <Pressable key={npc.id} onPress={() => { setSelectedNpc(npc); setActiveRoomNpcId(npc.id); }} style={{ alignItems: "center", gap: 4 }}>
-                  <AvatarSprite visual={getNpcVisual(npc.id)} action={npc.action} size="sm" />
+                <Pressable key={npc.id} onPress={() => { setSelectedNpc(npc); setActiveRoomNpcId(npc.id); }} style={{ alignItems: "center", gap: 3 }}>
+                  <View style={{ position: "relative" }}>
+                    <AvatarSprite visual={getNpcVisual(npc.id)} action={npc.action} size="sm" />
+                    <View style={{
+                      position: "absolute", top: -3, right: -3,
+                      backgroundColor: npc.level >= 3 ? "#f6b94f" : "#38c793",
+                      borderRadius: 6, paddingHorizontal: 3, paddingVertical: 1
+                    }}>
+                      <Text style={{ color: "#07111f", fontSize: 7, fontWeight: "900" }}>Nv{npc.level}</Text>
+                    </View>
+                  </View>
                   <Text style={{ color: colors.text, fontSize: 11, fontWeight: "700" }}>{npc.name.split(" ")[0]}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 9 }}>{getNpcMoodEmoji(npc.mood)} {npc.mood}%</Text>
                 </Pressable>
               ))}
               {livePlayers.filter((p) => p.locationSlug === currentLocationSlug).map((p) => (
@@ -511,6 +597,50 @@ export default function WorldScreen() {
             </ScrollView>
           )}
         </Card>
+
+        {/* Feed IA — Activités NPC en temps réel */}
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
+            ⚡ ACTIVITÉ EN COURS
+          </Text>
+          {npcs.slice(0, 4).map((npc) => {
+            const ACTION_ICON: Record<string, string> = {
+              sleeping: "😴", eating: "🍽️", chatting: "💬", exercising: "💪",
+              walking: "🚶", working: "💼", idle: "💭"
+            };
+            const icon = ACTION_ICON[npc.action] ?? "•";
+            const xpPct = (npc.xp % 100);
+            const lvlColor = npc.level >= 4 ? "#c084fc" : npc.level >= 2 ? "#f6b94f" : "#38c793";
+            return (
+              <Pressable
+                key={npc.id}
+                onPress={() => setSelectedNpc(npc)}
+                style={{ flexDirection: "row", alignItems: "center", gap: 10,
+                  backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 12, padding: 10,
+                  borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" }}>
+                <AvatarSprite visual={getNpcVisual(npc.id)} action={npc.action} size="xs" />
+                <View style={{ flex: 1, gap: 3 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>{npc.name}</Text>
+                    <View style={{ backgroundColor: lvlColor + "22", borderRadius: 6, paddingHorizontal: 5 }}>
+                      <Text style={{ color: lvlColor, fontSize: 9, fontWeight: "900" }}>Nv{npc.level}</Text>
+                    </View>
+                    <Text style={{ fontSize: 11 }}>{icon}</Text>
+                  </View>
+                  <Text style={{ color: colors.muted, fontSize: 10 }}>{getNpcStatusLine(npc)}</Text>
+                  {/* XP bar */}
+                  <View style={{ height: 2, borderRadius: 1, backgroundColor: "rgba(255,255,255,0.07)" }}>
+                    <View style={{ height: 2, borderRadius: 1, width: `${xpPct}%`, backgroundColor: lvlColor }} />
+                  </View>
+                </View>
+                <View style={{ alignItems: "flex-end", gap: 2 }}>
+                  <Text style={{ color: "#f6b94f", fontSize: 10, fontWeight: "700" }}>{npc.money}cr</Text>
+                  <Text style={{ color: colors.muted, fontSize: 9 }}>🔥{npc.streak}j</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
 
         {/* Mode Live — Carte interactive */}
         <Pressable
