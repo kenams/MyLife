@@ -5,6 +5,7 @@ import { createJSONStorage, persist } from "zustand/middleware";
 import { applyActionToMissions, claimMissionReward } from "@/lib/missions";
 import { seedNpcs, tickAllNpcs } from "@/lib/npc-brain";
 import { generateNpcEvents } from "@/lib/npc-ai";
+import { sendLocalNotification } from "@/lib/notifications";
 import { BOOSTS, COSMETICS, getBoostMultiplier } from "@/lib/premium";
 import { getActionTimeScore, getTimeContext } from "@/lib/time-context";
 import {
@@ -2253,6 +2254,11 @@ export const useGameStore = create<GameState>()(
               createdAt: nowIso(),
               read:      false,
             });
+            // Push notification système (si app en arrière-plan)
+            void sendLocalNotification(
+              `💬 ${event.npcName} t'a écrit`,
+              (event.message ?? "").slice(0, 80)
+            ).catch(() => {});
           }
 
           if (event.kind === "invitation" && event.activitySlug) {
@@ -2280,6 +2286,10 @@ export const useGameStore = create<GameState>()(
                 createdAt: nowIso(),
                 read:      false,
               });
+              void sendLocalNotification(
+                `🎯 ${event.npcName} t'invite`,
+                `Proposition : ${event.activityLabel ?? event.activitySlug}`
+              ).catch(() => {});
             }
           }
 
