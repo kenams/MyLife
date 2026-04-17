@@ -11,8 +11,9 @@ import { cityName } from "@/lib/game-data";
 import { LOCATION_COORDS, tickAllNpcs } from "@/lib/npc-brain";
 import { getNpcStatusLine, getNpcMoodEmoji } from "@/lib/npc-ai";
 import { colors } from "@/lib/theme";
-import type { NpcState } from "@/lib/types";
+import type { LifeActionId, NpcState, WorldPresenceMember } from "@/lib/types";
 import { useGameStore, worldLocations } from "@/stores/game-store";
+import { useLocationChat } from "@/hooks/use-location-chat";
 import { useWorldPresence } from "@/hooks/use-world-presence";
 
 // ─── Dimensions de la carte 2D ────────────────────────────────────────────────
@@ -220,6 +221,143 @@ function FerrisWheel({ x, y, size = 42 }: { x: number; y: number; size?: number 
   );
 }
 
+const INTERIORS: Record<string, { title: string; tone: string; actions: string[] }> = {
+  home: {
+    title: "Intérieur maison",
+    tone: "Repos, cuisine, dressing et reset des besoins.",
+    actions: ["Dormir", "Cuisiner", "Changer de style"]
+  },
+  market: {
+    title: "Galerie commerciale",
+    tone: "Courses, budget, nourriture et achats utiles.",
+    actions: ["Acheter repas", "Comparer prix", "Voir offres"]
+  },
+  cafe: {
+    title: "Café social",
+    tone: "Rencontres, conversations et invitations légères.",
+    actions: ["Lancer discussion", "Inviter quelqu'un", "Café solo"]
+  },
+  office: {
+    title: "Bureau",
+    tone: "Travail, crédibilité, argent et discipline.",
+    actions: ["Démarrer shift", "Voir carrière", "Réseauter"]
+  },
+  park: {
+    title: "Parc",
+    tone: "Marche, détente, humeur et rencontres calmes.",
+    actions: ["Marcher", "Respirer", "Rencontrer"]
+  },
+  gym: {
+    title: "Salle de sport",
+    tone: "Forme, énergie, discipline et image sociale.",
+    actions: ["Séance rapide", "Programme", "Coach"]
+  },
+  restaurant: {
+    title: "Restaurant",
+    tone: "Dates, relation, humeur et réputation.",
+    actions: ["Dîner", "Proposer date", "Sortie premium"]
+  },
+  cinema: {
+    title: "Cinéma",
+    tone: "Sorties, dates calmes, détente et culture.",
+    actions: ["Voir film", "Inviter", "Soirée calme"]
+  }
+};
+
+const LOCATION_ACTIONS: Record<string, { label: string; action: LifeActionId; icon: string }[]> = {
+  home: [
+    { label: "Dormir", action: "sleep", icon: "moon" },
+    { label: "Cuisiner", action: "home-cooking", icon: "restaurant" },
+    { label: "Douche", action: "shower", icon: "water" }
+  ],
+  market: [
+    { label: "Repas sain", action: "healthy-meal", icon: "nutrition" },
+    { label: "Shopping", action: "shopping", icon: "bag" },
+    { label: "Hydrater", action: "hydrate", icon: "water" }
+  ],
+  cafe: [
+    { label: "Discuter", action: "cafe-chat", icon: "chatbubbles" },
+    { label: "Lire", action: "read-book", icon: "book" },
+    { label: "Sortir", action: "go-out", icon: "walk" }
+  ],
+  office: [
+    { label: "Shift", action: "work-shift", icon: "briefcase" },
+    { label: "Focus", action: "focus-task", icon: "laptop" },
+    { label: "Réseauter", action: "cafe-chat", icon: "people" }
+  ],
+  park: [
+    { label: "Marcher", action: "walk", icon: "walk" },
+    { label: "Méditer", action: "meditate", icon: "leaf" },
+    { label: "Sport co", action: "team-sport", icon: "football" }
+  ],
+  gym: [
+    { label: "Gym", action: "gym", icon: "fitness" },
+    { label: "Sport co", action: "team-sport", icon: "football" },
+    { label: "Hydrater", action: "hydrate", icon: "water" }
+  ],
+  restaurant: [
+    { label: "Restaurant", action: "restaurant-outing", icon: "restaurant" },
+    { label: "Repas plaisir", action: "comfort-meal", icon: "fast-food" },
+    { label: "Discuter", action: "cafe-chat", icon: "chatbubble" }
+  ],
+  cinema: [
+    { label: "Cinéma", action: "cinema-date", icon: "film" },
+    { label: "Sortir", action: "go-out", icon: "sparkles" },
+    { label: "Discuter", action: "cafe-chat", icon: "chatbubbles" }
+  ]
+};
+
+const FAKE_PLAYER_PERSONAS: Record<string, { displayName: string; style: string }> = {
+  "test-live-ava": {
+    displayName: "Ava Test",
+    style: "accueillante"
+  },
+  "test-live-noa": {
+    displayName: "Noa Test",
+    style: "créatif"
+  },
+  "test-live-kim": {
+    displayName: "Kim Test",
+    style: "direct"
+  }
+};
+
+function buildFakePlayerReply(player: WorldPresenceMember, body: string, playerName: string, locationName: string) {
+  const clean = body.toLowerCase();
+  const firstName = player.avatarName.split(" ")[0];
+  const persona = FAKE_PLAYER_PERSONAS[player.userId]?.style ?? "social";
+
+  if (/\b(bonjour|salut|coucou|hello|yo|bjr)\b/.test(clean)) {
+    return `Bonjour ${playerName}, je te reconnais. Moi c'est ${firstName}, je suis dans ${locationName}.`;
+  }
+
+  if (/(ça va|ca va|comment tu vas|tu vas bien)/.test(clean)) {
+    return persona === "créatif"
+      ? `Ça va bien ${playerName}. Je regarde l'ambiance de ${locationName}, il y a quelque chose à faire ici.`
+      : `Oui ${playerName}, ça va. Je reste dispo ici si tu veux tester une interaction.`;
+  }
+
+  if (/(qui es|tu es qui|c'est qui|t'es qui)/.test(clean)) {
+    return `Je suis ${firstName}, un joueur test simulé. Je peux répondre aux messages simples dans le lieu actuel.`;
+  }
+
+  if (/(aide|quoi faire|que faire|objectif)/.test(clean)) {
+    return `Tu peux cliquer sur les lieux, tester le chat live, ou utiliser le panneau Test live. Là, on est à ${locationName}.`;
+  }
+
+  if (/(cinema|ciné|film|café|cafe|gym|restaurant|parc|marché|bureau|maison)/.test(clean)) {
+    return `Bonne idée ${playerName}. Si tu changes de lieu, je peux te suivre avec le test live et répondre dans la nouvelle room.`;
+  }
+
+  if (/(merci|ok|d'accord|super|cool)/.test(clean)) {
+    return `Avec plaisir ${playerName}. Je reste en ligne pour continuer le test.`;
+  }
+
+  return persona === "direct"
+    ? `${playerName}, j'ai compris. Dis-moi si tu veux tester une invitation, un lieu ou un message live.`
+    : `${playerName}, je note. Ici à ${locationName}, on peut discuter ou tester les interactions de la room.`;
+}
+
 // ─── NPC animé sur la carte ───────────────────────────────────────────────────
 function LiveNpc({ npc, onPress }: { npc: NpcState; onPress: () => void }) {
   const visual    = getNpcVisual(npc.id);
@@ -376,6 +514,7 @@ function LocationTile({
 
 // ─── Écran monde ──────────────────────────────────────────────────────────────
 export default function WorldScreen() {
+  const session             = useGameStore((s) => s.session);
   const avatar              = useGameStore((s) => s.avatar);
   const stats               = useGameStore((s) => s.stats);
   const currentLocationSlug = useGameStore((s) => s.currentLocationSlug);
@@ -385,8 +524,13 @@ export default function WorldScreen() {
   const conversations       = useGameStore((s) => s.conversations);
   const startDirectConversation = useGameStore((s) => s.startDirectConversation);
   const sendMessageStore    = useGameStore((s) => s.sendMessage);
+  const performAction       = useGameStore((s) => s.performAction);
+  const dailyGoals          = useGameStore((s) => s.dailyGoals);
 
-  const { members: livePlayers } = useWorldPresence();
+  const { members: realLivePlayers } = useWorldPresence();
+  const [simulatedPlayers, setSimulatedPlayers] = useState<WorldPresenceMember[]>([]);
+  const livePlayers = [...realLivePlayers, ...simulatedPlayers];
+  const locationChat = useLocationChat(currentLocationSlug, livePlayers);
   const [selectedNpc, setSelectedNpc] = useState<NpcState | null>(null);
   const [activeRoomNpcId, setActiveRoomNpcId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState("");
@@ -419,10 +563,13 @@ export default function WorldScreen() {
   }, {});
 
   const currentRoomNpcs = npcsByLoc[currentLocationSlug] ?? [];
+  const currentLivePlayers = livePlayers.filter((player) => player.locationSlug === currentLocationSlug);
+  const hasLiveLocationChat = currentLivePlayers.length > 0 || locationChat.messages.length > 0;
   const activeRoomNpc = currentRoomNpcs.find((npc) => npc.id === activeRoomNpcId) ?? currentRoomNpcs[0] ?? null;
   const activeConversation = activeRoomNpc
     ? conversations.find((conversation) => conversation.kind === "direct" && conversation.peerId === activeRoomNpc.id) ?? null
     : null;
+  const visibleRoomMessages = hasLiveLocationChat ? locationChat.messages : activeConversation?.messages ?? [];
 
   useEffect(() => {
     if (currentRoomNpcs.length === 0) {
@@ -449,10 +596,74 @@ export default function WorldScreen() {
   }, [npcsByLoc, travelTo]);
 
   const sendRoomMessage = useCallback(() => {
-    if (!activeConversation || !chatDraft.trim()) return;
-    sendMessageStore(activeConversation.id, chatDraft);
+    const cleanDraft = chatDraft.trim();
+    if (!cleanDraft) return;
+    if (hasLiveLocationChat) {
+      void locationChat.sendMessage(cleanDraft);
+      const simulatedHere = simulatedPlayers.filter((player) => player.locationSlug === currentLocationSlug);
+      if (simulatedHere.length > 0) {
+        const locationName = worldLocations.find((location) => location.slug === currentLocationSlug)?.name ?? "ce lieu";
+        const playerName = avatar?.displayName ?? session?.email?.split("@")[0] ?? "toi";
+        simulatedHere.slice(0, 2).forEach((player, index) => {
+          setTimeout(() => {
+            locationChat.addLocalMessage({
+              id: `fake-${player.userId}-${Date.now()}-${index}`,
+              authorId: player.userId,
+              authorName: player.avatarName,
+              body: buildFakePlayerReply(player, cleanDraft, playerName, locationName),
+              createdAt: new Date().toISOString(),
+              kind: "message"
+            });
+          }, 650 + index * 850);
+        });
+      }
+      setChatDraft("");
+      return;
+    }
+    if (!activeConversation) return;
+    sendMessageStore(activeConversation.id, cleanDraft);
     setChatDraft("");
-  }, [activeConversation?.id, chatDraft, sendMessageStore]);
+  }, [activeConversation?.id, avatar?.displayName, chatDraft, currentLocationSlug, hasLiveLocationChat, locationChat.addLocalMessage, locationChat.sendMessage, sendMessageStore, session?.email, simulatedPlayers]);
+
+  const seedLiveTestPlayers = useCallback(() => {
+    const now = new Date().toISOString();
+    setSimulatedPlayers([
+      {
+        userId: "test-live-ava",
+        avatarName: "Ava Test",
+        locationSlug: currentLocationSlug,
+        action: "chatting",
+        mood: 82,
+        onlineAt: now,
+        posX: 50,
+        posY: 50
+      },
+      {
+        userId: "test-live-noa",
+        avatarName: "Noa Test",
+        locationSlug: currentLocationSlug,
+        action: "idle",
+        mood: 74,
+        onlineAt: now,
+        posX: 56,
+        posY: 54
+      }
+    ]);
+  }, [currentLocationSlug]);
+
+  const pushTestNpcIntoRoom = useCallback(() => {
+    const firstNpc = currentRoomNpcs[0] ?? npcs[0] ?? null;
+    if (!firstNpc) return;
+    setActiveRoomNpcId(firstNpc.id);
+    setSelectedNpc(firstNpc);
+  }, [currentRoomNpcs, npcs]);
+
+  const handleLocationAction = useCallback((action: LifeActionId) => {
+    performAction(action);
+    if (action === "cafe-chat" && activeRoomNpc) {
+      startDirectConversation(activeRoomNpc.id, activeRoomNpc.name);
+    }
+  }, [activeRoomNpc, performAction, startDirectConversation]);
 
   const travelMenu = (
     <View style={{
@@ -535,6 +746,112 @@ export default function WorldScreen() {
           ))}
         </ScrollView>
       )}
+    </View>
+  );
+
+  const interior = INTERIORS[currentLocationSlug] ?? INTERIORS.cafe;
+  const locationInterior = (
+    <View style={{
+      backgroundColor: "rgba(255,255,255,0.055)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.08)",
+      borderRadius: 16,
+      padding: 12,
+      gap: 10
+    }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>{interior.title}</Text>
+        <Ionicons name="business" size={18} color={colors.accent} />
+      </View>
+      <Muted>{interior.tone}</Muted>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {(LOCATION_ACTIONS[currentLocationSlug] ?? LOCATION_ACTIONS.cafe).map((item) => (
+          <Pressable
+            key={item.action}
+            onPress={() => handleLocationAction(item.action)}
+            style={{
+              minWidth: IS_WIDE ? "30%" : "45%",
+              paddingHorizontal: 10,
+              paddingVertical: 7,
+              borderRadius: 10,
+              backgroundColor: "rgba(139,124,255,0.12)",
+              borderWidth: 1,
+              borderColor: "rgba(139,124,255,0.28)"
+            }}
+          >
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+              <Ionicons name={item.icon as never} size={13} color={colors.accent} />
+              <Text style={{ color: colors.accent, fontSize: 11, fontWeight: "800" }}>{item.label}</Text>
+            </View>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+
+  const dailyMissionPanel = (
+    <View style={{
+      backgroundColor: "rgba(255,255,255,0.055)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.08)",
+      borderRadius: 16,
+      padding: 12,
+      gap: 10
+    }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>Missions du jour</Text>
+        <Text style={{ color: colors.accent, fontSize: 11, fontWeight: "900" }}>
+          {dailyGoals.filter((goal) => goal.completed).length}/{dailyGoals.length}
+        </Text>
+      </View>
+      <View style={{ gap: 7 }}>
+        {dailyGoals.slice(0, 4).map((goal) => (
+          <View key={goal.id} style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{
+              width: 18,
+              height: 18,
+              borderRadius: 9,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: goal.completed ? "#38c793" : "rgba(255,255,255,0.08)",
+              borderWidth: 1,
+              borderColor: goal.completed ? "#38c793" : "rgba(255,255,255,0.12)"
+            }}>
+              <Ionicons name={goal.completed ? "checkmark" : "ellipse-outline"} size={12} color={goal.completed ? "#07111f" : colors.muted} />
+            </View>
+            <Text style={{ color: goal.completed ? "#8ee0bd" : colors.text, fontSize: 12, fontWeight: goal.completed ? "800" : "600", flex: 1 }}>
+              {goal.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+
+  const liveTestPanel = (
+    <View style={{
+      backgroundColor: "rgba(246,185,79,0.075)",
+      borderWidth: 1,
+      borderColor: "rgba(246,185,79,0.25)",
+      borderRadius: 16,
+      padding: 12,
+      gap: 10
+    }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text style={{ color: "#f6b94f", fontSize: 14, fontWeight: "900" }}>Test live</Text>
+        <Ionicons name="flask" size={18} color="#f6b94f" />
+      </View>
+      <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+        <Pressable onPress={seedLiveTestPlayers} style={{ paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: "#f6b94f" }}>
+          <Text style={{ color: "#07111f", fontSize: 11, fontWeight: "900" }}>Simuler joueurs</Text>
+        </Pressable>
+        <Pressable onPress={() => setSimulatedPlayers([])} style={{ paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.08)" }}>
+          <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800" }}>Vider</Text>
+        </Pressable>
+        <Pressable onPress={pushTestNpcIntoRoom} style={{ paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: "rgba(56,199,147,0.18)" }}>
+          <Text style={{ color: "#8ee0bd", fontSize: 11, fontWeight: "800" }}>Tester NPC</Text>
+        </Pressable>
+      </View>
     </View>
   );
 
@@ -780,7 +1097,7 @@ export default function WorldScreen() {
             minHeight: IS_WIDE ? MAP_H : 210,
             backgroundColor: "rgba(255,255,255,0.055)",
             borderWidth: 1,
-            borderColor: activeRoomNpc ? "rgba(56,199,147,0.35)" : "rgba(255,255,255,0.08)",
+            borderColor: hasLiveLocationChat || activeRoomNpc ? "rgba(56,199,147,0.35)" : "rgba(255,255,255,0.08)",
             borderRadius: 16,
             padding: 12,
             gap: 10
@@ -788,14 +1105,38 @@ export default function WorldScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>Chat de lieu</Text>
-                <Muted>{worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "room"}</Muted>
+                <Muted>
+                  {worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "room"}
+                  {hasLiveLocationChat ? ` · live ${locationChat.connected ? "connecté" : "connexion"}` : ""}
+                </Muted>
               </View>
-              <Ionicons name="chatbubbles" size={22} color={activeRoomNpc ? "#38c793" : colors.muted} />
+              <Ionicons name="chatbubbles" size={22} color={hasLiveLocationChat || activeRoomNpc ? "#38c793" : colors.muted} />
             </View>
 
-            {activeRoomNpc ? (
+            {hasLiveLocationChat || activeRoomNpc ? (
               <>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  {currentLivePlayers.map((player) => (
+                    <View
+                      key={player.userId}
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
+                        paddingHorizontal: 8,
+                        paddingVertical: 6,
+                        borderRadius: 12,
+                        backgroundColor: "rgba(56,199,147,0.14)",
+                        borderWidth: 1,
+                        borderColor: "#38c793"
+                      }}
+                    >
+                      <Ionicons name="person" size={14} color="#38c793" />
+                      <Text style={{ color: "#8ee0bd", fontSize: 11, fontWeight: "800" }}>
+                        {player.avatarName.split(" ")[0]}
+                      </Text>
+                    </View>
+                  ))}
                   {currentRoomNpcs.map((npc) => (
                     <Pressable
                       key={npc.id}
@@ -821,8 +1162,8 @@ export default function WorldScreen() {
                 </ScrollView>
 
                 <ScrollView style={{ maxHeight: IS_WIDE ? MAP_H - 190 : 120 }} contentContainerStyle={{ gap: 8 }}>
-                  {(activeConversation?.messages ?? []).slice(-6).map((message) => {
-                    const mine = message.authorId === "self";
+                  {visibleRoomMessages.slice(-6).map((message) => {
+                    const mine = message.authorId === "self" || message.authorId === session?.email;
                     return (
                       <View
                         key={message.id}
@@ -835,6 +1176,11 @@ export default function WorldScreen() {
                           paddingVertical: 7
                         }}
                       >
+                        {!mine && (
+                          <Text style={{ color: "#8ee0bd", fontSize: 9, fontWeight: "900", marginBottom: 2 }}>
+                            {"authorName" in message ? message.authorName : activeRoomNpc?.name ?? "Résident"}
+                          </Text>
+                        )}
                         <Text style={{ color: mine ? "#07111f" : colors.text, fontSize: 12, fontWeight: mine ? "800" : "600" }}>
                           {message.body}
                         </Text>
@@ -847,7 +1193,7 @@ export default function WorldScreen() {
                   <TextInput
                     value={chatDraft}
                     onChangeText={setChatDraft}
-                    placeholder={`Parler a ${activeRoomNpc.name.split(" ")[0]}`}
+                    placeholder={hasLiveLocationChat ? "Message live dans ce lieu" : `Parler a ${activeRoomNpc?.name.split(" ")[0] ?? "un résident"}`}
                     placeholderTextColor={colors.muted}
                     onSubmitEditing={sendRoomMessage}
                     style={{
@@ -881,7 +1227,10 @@ export default function WorldScreen() {
           {IS_WIDE && (
             <View style={{ flex: 1, minWidth: 300, maxWidth: 520, gap: 12 }}>
               {travelMenu}
+              {dailyMissionPanel}
+              {locationInterior}
               {residentsHere}
+              {liveTestPanel}
             </View>
           )}
         </View>
@@ -973,6 +1322,8 @@ export default function WorldScreen() {
           </Card>
         )}
 
+        {!IS_WIDE && (
+        <>
         {/* Résidents ici */}
         <Card>
           <SectionTitle>
@@ -1009,6 +1360,8 @@ export default function WorldScreen() {
             </ScrollView>
           )}
         </Card>
+        </>
+        )}
 
         {/* Feed IA — Activités NPC en temps réel */}
         <View style={{ gap: 8 }}>
@@ -1054,6 +1407,8 @@ export default function WorldScreen() {
           })}
         </View>
 
+        {!IS_WIDE && (
+        <>
         {/* Se déplacer */}
         <SectionTitle>Se déplacer</SectionTitle>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
@@ -1089,6 +1444,8 @@ export default function WorldScreen() {
             );
           })}
         </View>
+        </>
+        )}
 
       </View>
     </ScrollView>
