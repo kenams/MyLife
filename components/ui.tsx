@@ -179,7 +179,7 @@ export function StatMeter({
   tone?: "accent" | "warning" | "danger" | "violet";
 }) {
   const background =
-    tone === "danger" ? colors.danger : tone === "warning" ? colors.warning : tone === "violet" ? colors.accentSecondary : colors.accentStrong;
+    tone === "danger" ? colors.danger : tone === "warning" ? colors.gold : tone === "violet" ? colors.accentSecondary : colors.accentStrong;
 
   return (
     <View style={{ gap: 8 }}>
