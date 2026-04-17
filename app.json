@@ -47,6 +47,15 @@
     },
     "web": {
       "bundler": "metro"
-    }
+    },
+    "extra": {
+      "router": {
+        "origin": false
+      },
+      "eas": {
+        "projectId": "7852aaa5-c51b-49ea-ab85-2c98b3c16d47"
+      }
+    },
+    "owner": "kenams"
   }
 }
