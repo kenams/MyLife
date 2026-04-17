@@ -332,7 +332,7 @@ export const starterResidents: ResidentSeed[] = [
     name: "Noa",
     ageRange: "22-26",
     role: "Creator",
-    locationSlug: "studio-heights",
+    locationSlug: "cinema",
     vibe: "fluide, sociable, aime les gens visibles et coherents",
     bio: "Parle style de vie, image, ambition creative et projets legers.",
     interests: ["design", "cinema", "social"],

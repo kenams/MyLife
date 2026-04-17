@@ -17,23 +17,24 @@ import { useWorldPresence } from "@/hooks/use-world-presence";
 
 // ─── Dimensions de la carte 2D ────────────────────────────────────────────────
 const SCREEN_W = Dimensions.get("window").width;
-const MAP_W = Math.min(SCREEN_W - 24, 560);
-const MAP_H = Math.round(MAP_W * 0.72);
+const SCREEN_H = Dimensions.get("window").height;
+const IS_WIDE = SCREEN_W >= 720;
+const MAP_W = Math.min(SCREEN_W - 24, IS_WIDE ? 540 : 560);
+const MAP_H = IS_WIDE ? Math.min(Math.round(MAP_W * 1.02), Math.max(420, SCREEN_H - 250)) : Math.round(MAP_W * 1.18);
 const MAP_BASE_W = 380;
-const MAP_BASE_H = 270;
+const MAP_BASE_H = 460;
 const MAP_SX = MAP_W / MAP_BASE_W;
 const MAP_SY = MAP_H / MAP_BASE_H;
-const IS_WIDE = SCREEN_W >= 720;
 
 const LOCATION_TILES: Record<string, { x: number; y: number; w: number; h: number; color: string; icon: string }> = {
-  "home":       { x: 16,  y: 22,  w: 78, h: 64, color: "#1a3a5c", icon: "home"       },
-  "market":     { x: 108, y: 18,  w: 76, h: 60, color: "#238b5a", icon: "cart"       },
-  "cafe":       { x: 198, y: 24,  w: 78, h: 64, color: "#c96a1d", icon: "cafe"       },
-  "office":     { x: 290, y: 18,  w: 76, h: 66, color: "#226da6", icon: "briefcase"  },
-  "park":       { x: 18,  y: 172, w: 82, h: 72, color: "#11866f", icon: "leaf"       },
-  "gym":        { x: 112, y: 178, w: 76, h: 66, color: "#a92f25", icon: "fitness"    },
-  "restaurant": { x: 202, y: 172, w: 86, h: 72, color: "#75339a", icon: "restaurant" },
-  "cinema":     { x: 304, y: 172, w: 64, h: 72, color: "#27394d", icon: "film"       }
+  "home":       { x: 30,  y: 58,  w: 76, h: 68, color: "#1a3a5c", icon: "home"       },
+  "market":     { x: 26,  y: 286, w: 86, h: 76, color: "#238b5a", icon: "cart"       },
+  "cafe":       { x: 234, y: 84,  w: 78, h: 66, color: "#c96a1d", icon: "cafe"       },
+  "office":     { x: 146, y: 170, w: 86, h: 92, color: "#226da6", icon: "briefcase"  },
+  "park":       { x: 24,  y: 162, w: 86, h: 78, color: "#11866f", icon: "leaf"       },
+  "gym":        { x: 286, y: 300, w: 78, h: 84, color: "#a92f25", icon: "fitness"    },
+  "restaurant": { x: 196, y: 330, w: 84, h: 76, color: "#75339a", icon: "restaurant" },
+  "cinema":     { x: 300, y: 206, w: 64, h: 76, color: "#27394d", icon: "film"       }
 };
 
 function pctToMap(posX: number, posY: number) {
@@ -47,6 +48,176 @@ function scaleTile(tile: (typeof LOCATION_TILES)[string]) {
     w: tile.w * MAP_SX,
     h: tile.h * MAP_SY
   };
+}
+
+function RoadLine({ x, y, w, h }: { x: number; y: number; w: number; h: number }) {
+  return (
+    <View
+      style={{
+        position: "absolute",
+        left: x * MAP_SX,
+        top: y * MAP_SY,
+        width: w * MAP_SX,
+        height: h * MAP_SY,
+        borderRadius: Math.max(1, h * MAP_SY) / 2,
+        backgroundColor: "rgba(255,255,255,0.45)"
+      }}
+    />
+  );
+}
+
+function CityTree({ x, y, size = 12 }: { x: number; y: number; size?: number }) {
+  const s = size * MAP_SX;
+  return (
+    <View style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, width: s, height: s, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ position: "absolute", width: s * 0.28, height: s * 0.58, bottom: 0, borderRadius: 2, backgroundColor: "#6b3f21" }} />
+      <View style={{ width: s, height: s, borderRadius: s / 2, backgroundColor: "#1d7c42", borderWidth: 1, borderColor: "rgba(255,255,255,0.14)" }} />
+      <View style={{ position: "absolute", top: s * 0.12, width: s * 0.58, height: s * 0.58, borderRadius: s * 0.29, backgroundColor: "#31a35d" }} />
+    </View>
+  );
+}
+
+function MovingCar({ y, color, dir = 1, delay = 0, speed = 9000 }: { y: number; color: string; dir?: 1 | -1; delay?: number; speed?: number }) {
+  const carX = useRef(new Animated.Value(dir === 1 ? -44 : MAP_W + 44)).current;
+
+  useEffect(() => {
+    let active = true;
+    function drive() {
+      if (!active) return;
+      carX.setValue(dir === 1 ? -44 : MAP_W + 44);
+      Animated.timing(carX, {
+        toValue: dir === 1 ? MAP_W + 44 : -44,
+        duration: speed,
+        easing: Easing.linear,
+        useNativeDriver: false
+      }).start(() => {
+        if (active) setTimeout(drive, 900 + Math.random() * 2600);
+      });
+    }
+    const t = setTimeout(drive, delay);
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
+  }, [dir, speed, delay]);
+
+  return (
+    <Animated.View
+      style={{
+        position: "absolute",
+        left: carX,
+        top: y * MAP_SY,
+        width: 28,
+        height: 15,
+        borderRadius: 5,
+        backgroundColor: color,
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.34)",
+        shadowColor: color,
+        shadowOpacity: 0.45,
+        shadowRadius: 5,
+        elevation: 5,
+        transform: [{ scaleX: dir }]
+      }}
+    >
+      <View style={{ position: "absolute", right: 4, top: 3, width: 9, height: 8, borderRadius: 2, backgroundColor: "rgba(214,240,255,0.72)" }} />
+      <View style={{ position: "absolute", left: 2, top: 3, width: 3, height: 3, borderRadius: 2, backgroundColor: "#fff7b0" }} />
+      <View style={{ position: "absolute", left: 2, bottom: 3, width: 3, height: 3, borderRadius: 2, backgroundColor: "#fff7b0" }} />
+    </Animated.View>
+  );
+}
+
+function Cloud({ x, y, scale = 1 }: { x: number; y: number; scale?: number }) {
+  const w = 42 * MAP_SX * scale;
+  const h = 18 * MAP_SY * scale;
+  return (
+    <View style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, width: w, height: h, opacity: 0.18 }}>
+      <View style={{ position: "absolute", left: 0, top: h * 0.34, width: w * 0.48, height: h * 0.58, borderRadius: h, backgroundColor: "#ffffff" }} />
+      <View style={{ position: "absolute", left: w * 0.22, top: 0, width: w * 0.44, height: h, borderRadius: h, backgroundColor: "#ffffff" }} />
+      <View style={{ position: "absolute", right: 0, top: h * 0.22, width: w * 0.48, height: h * 0.7, borderRadius: h, backgroundColor: "#ffffff" }} />
+    </View>
+  );
+}
+
+function Birds({ x, y }: { x: number; y: number }) {
+  return (
+    <View style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, flexDirection: "row", gap: 6, opacity: 0.48 }}>
+      {[0, 1, 2].map((item) => (
+        <Text key={item} style={{ color: "#d8edf8", fontSize: 11, fontWeight: "900" }}>⌁</Text>
+      ))}
+    </View>
+  );
+}
+
+function DecoBuilding({
+  x, y, w, h, color, label, windows = true
+}: {
+  x: number; y: number; w: number; h: number; color: string; label?: string; windows?: boolean;
+}) {
+  return (
+    <View
+      style={{
+        position: "absolute",
+        left: x * MAP_SX,
+        top: y * MAP_SY,
+        width: w * MAP_SX,
+        height: h * MAP_SY,
+        borderRadius: 7,
+        backgroundColor: color,
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.16)",
+        shadowColor: "#000",
+        shadowOpacity: 0.24,
+        shadowRadius: 4,
+        elevation: 2,
+        overflow: "hidden"
+      }}
+    >
+      <View style={{ position: "absolute", left: 4, right: 4, top: 4, height: 5, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.20)" }} />
+      {windows && [0, 1, 2].map((row) => (
+        <View key={row} style={{ position: "absolute", left: 8, right: 8, top: 18 + row * 14, flexDirection: "row", justifyContent: "space-between" }}>
+          {[0, 1, 2].map((col) => (
+            <View key={col} style={{ width: 5, height: 5, borderRadius: 1, backgroundColor: (row + col) % 2 ? "rgba(214,240,255,0.36)" : "rgba(255,226,135,0.62)" }} />
+          ))}
+        </View>
+      ))}
+      {label && (
+        <Text numberOfLines={1} adjustsFontSizeToFit style={{ position: "absolute", left: 4, right: 4, bottom: 5, color: "#fff", fontSize: 9, fontWeight: "900", textAlign: "center" }}>
+          {label}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+function Crosswalk({ x, y, horizontal = true }: { x: number; y: number; horizontal?: boolean }) {
+  return (
+    <View style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, flexDirection: horizontal ? "row" : "column", gap: 2 }}>
+      {[0, 1, 2, 3, 4].map((item) => (
+        <View
+          key={item}
+          style={{
+            width: (horizontal ? 4 : 22) * MAP_SX,
+            height: (horizontal ? 22 : 4) * MAP_SY,
+            backgroundColor: "rgba(255,255,255,0.75)"
+          }}
+        />
+      ))}
+    </View>
+  );
+}
+
+function FerrisWheel({ x, y, size = 42 }: { x: number; y: number; size?: number }) {
+  const s = size * MAP_SX;
+  return (
+    <View style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, width: s, height: s, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ width: s, height: s, borderRadius: s / 2, borderWidth: 4, borderColor: "#d94b3d", backgroundColor: "rgba(255,255,255,0.08)" }} />
+      <View style={{ position: "absolute", width: 4, height: s, backgroundColor: "rgba(217,75,61,0.65)" }} />
+      <View style={{ position: "absolute", width: s, height: 4, backgroundColor: "rgba(217,75,61,0.65)" }} />
+      <View style={{ position: "absolute", width: s * 0.7, height: 3, backgroundColor: "rgba(217,75,61,0.65)", transform: [{ rotate: "45deg" }] }} />
+      <View style={{ position: "absolute", width: s * 0.7, height: 3, backgroundColor: "rgba(217,75,61,0.65)", transform: [{ rotate: "-45deg" }] }} />
+    </View>
+  );
 }
 
 // ─── NPC animé sur la carte ───────────────────────────────────────────────────
@@ -143,7 +314,7 @@ function LocationTile({
     <Pressable onPress={onPress} style={{ position: "absolute", left: box.x, top: box.y, width: box.w, height: box.h }}>
       <Animated.View style={{
         width: "100%", height: "100%",
-        borderRadius: 14,
+        borderRadius: 10,
         borderWidth: isHere ? 2.5 : 1,
         borderColor: isHere ? colors.accent : "rgba(255,255,255,0.14)",
         opacity: glow,
@@ -154,11 +325,26 @@ function LocationTile({
         elevation: isHere ? 6 : 2,
       }}>
         {/* fond dégradé */}
-        <View style={{ position:"absolute", top:0, left:0, right:0, bottom:0, backgroundColor: tile.color + "dd" }} />
+        <View style={{ position:"absolute", top:0, left:0, right:0, bottom:0, backgroundColor: tile.color }} />
         {/* bande toit foncée */}
-        <View style={{ position:"absolute", top:0, left:0, right:0, height:"32%", backgroundColor:"rgba(0,0,0,0.35)" }} />
+        <View style={{ position:"absolute", top:3, left:3, right:3, bottom:3, borderRadius:8, backgroundColor:"rgba(0,0,0,0.16)", borderWidth:1, borderColor:"rgba(255,255,255,0.10)" }} />
         {/* reflet bas */}
-        <View style={{ position:"absolute", bottom:0, left:0, right:0, height:"18%", backgroundColor:"rgba(255,255,255,0.07)" }} />
+        <View style={{ position:"absolute", top:8, left:8, right:8, height:5, borderRadius:3, backgroundColor:"rgba(255,255,255,0.22)" }} />
+        <View style={{ position:"absolute", bottom:7, left:8, right:8, height:5, borderRadius:3, backgroundColor:"rgba(0,0,0,0.24)" }} />
+        {[0, 1, 2].map((row) => (
+          <View key={row} style={{ position:"absolute", left:10, right:10, top:22 + row * 13, flexDirection:"row", justifyContent:"space-between" }}>
+            {[0, 1, 2].map((col) => (
+              <View key={col} style={{ width:5, height:5, borderRadius:1.5, backgroundColor: (row + col) % 2 === 0 ? "rgba(255,235,157,0.68)" : "rgba(210,238,255,0.32)" }} />
+            ))}
+          </View>
+        ))}
+        {slug === "park" && (
+          <>
+            <View style={{ position:"absolute", left:8, top:12, width:16, height:16, borderRadius:8, backgroundColor:"#2ca65a" }} />
+            <View style={{ position:"absolute", right:8, bottom:14, width:18, height:18, borderRadius:9, backgroundColor:"#38c793" }} />
+            <View style={{ position:"absolute", left:"38%", top:"34%", width:22, height:22, borderRadius:11, backgroundColor:"rgba(88,178,255,0.50)", borderWidth:1, borderColor:"rgba(255,255,255,0.35)" }} />
+          </>
+        )}
 
         {/* contenu */}
         <View style={{ flex:1, padding: 7, justifyContent:"space-between" }}>
@@ -268,6 +454,90 @@ export default function WorldScreen() {
     setChatDraft("");
   }, [activeConversation?.id, chatDraft, sendMessageStore]);
 
+  const travelMenu = (
+    <View style={{
+      backgroundColor: "rgba(255,255,255,0.055)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.08)",
+      borderRadius: 16,
+      padding: 12,
+      gap: 10
+    }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>Se déplacer</Text>
+        <Ionicons name="navigate" size={18} color={colors.accent} />
+      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+        {worldLocations.map((loc) => {
+          const isHere = loc.slug === currentLocationSlug;
+          const npcHere = npcsByLoc[loc.slug]?.length ?? 0;
+          const onlineHere = onlineCounts[loc.slug] ?? 0;
+          const tile = LOCATION_TILES[loc.slug];
+          return (
+            <Pressable
+              key={loc.slug}
+              onPress={() => !isHere && enterLocation(loc.slug)}
+              style={{
+                width: IS_WIDE ? "48%" : "47%",
+                minHeight: 64,
+                padding: 10,
+                borderRadius: 12,
+                backgroundColor: isHere ? "rgba(139,124,255,0.16)" : "rgba(255,255,255,0.045)",
+                borderWidth: 1,
+                borderColor: isHere ? colors.accent : "rgba(255,255,255,0.08)",
+                gap: 5
+              }}
+            >
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                <Ionicons name={(tile?.icon ?? "location") as never} size={14} color={isHere ? colors.accent : colors.muted} />
+                <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "700" }}>
+                  {onlineHere > 0 ? `${onlineHere} live` : npcHere > 0 ? `${npcHere} ici` : ""}
+                </Text>
+              </View>
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: isHere ? colors.accent : colors.text, fontWeight: "800", fontSize: 12 }}>{loc.name}</Text>
+              {isHere && <Text style={{ color: colors.accent, fontSize: 9, fontWeight: "700" }}>Tu es ici</Text>}
+            </Pressable>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  const residentsHere = (
+    <View style={{
+      backgroundColor: "rgba(255,255,255,0.055)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.08)",
+      borderRadius: 16,
+      padding: 12,
+      gap: 10
+    }}>
+      <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>
+        Ici — {worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "lieu courant"}
+      </Text>
+      {currentRoomNpcs.length === 0 && livePlayers.filter((p) => p.locationSlug === currentLocationSlug).length === 0 ? (
+        <Muted>Personne ici pour le moment.</Muted>
+      ) : (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
+          {currentRoomNpcs.map((npc) => (
+            <Pressable key={npc.id} onPress={() => { setSelectedNpc(npc); setActiveRoomNpcId(npc.id); }} style={{ alignItems: "center", gap: 3 }}>
+              <AvatarSprite visual={getNpcVisual(npc.id)} action={npc.action} size="xs" />
+              <Text style={{ color: colors.text, fontSize: 10, fontWeight: "800" }}>{npc.name.split(" ")[0]}</Text>
+            </Pressable>
+          ))}
+          {livePlayers.filter((p) => p.locationSlug === currentLocationSlug).map((p) => (
+            <View key={p.userId} style={{ alignItems: "center", gap: 3 }}>
+              <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(56,199,147,0.14)", borderWidth: 1, borderColor: "#38c793", alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="person" size={17} color="#38c793" />
+              </View>
+              <Text style={{ color: "#38c793", fontSize: 10, fontWeight: "800" }}>{p.avatarName.split(" ")[0]}</Text>
+            </View>
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: "#07111f" }} showsVerticalScrollIndicator={false}>
       <View style={{ padding: 16, gap: 20, paddingBottom: 40 }}>
@@ -302,7 +572,7 @@ export default function WorldScreen() {
           }}
         >
           {/* Fond ville miniature */}
-          <View style={{ height: 130, backgroundColor: "#0a1628", position: "relative", overflow: "hidden" }}>
+          <View style={{ height: IS_WIDE ? 86 : 130, backgroundColor: "#0a1628", position: "relative", overflow: "hidden" }}>
             {/* Ciel gradient */}
             <View style={{ position: "absolute", inset: 0, backgroundColor: "#0d1e3a" }} />
             <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 60, backgroundColor: "#1a2d4a", opacity: 0.7 }} />
@@ -356,8 +626,8 @@ export default function WorldScreen() {
           </View>
 
           {/* CTA bas */}
-          <View style={{ backgroundColor: "#0f1d30", padding: 14, flexDirection:"row", alignItems:"center", gap:12 }}>
-            <View style={{ width:42, height:42, borderRadius:21, backgroundColor:"rgba(139,124,255,0.18)", borderWidth:1, borderColor:"rgba(139,124,255,0.4)", alignItems:"center", justifyContent:"center" }}>
+          <View style={{ backgroundColor: "#0f1d30", padding: IS_WIDE ? 10 : 14, flexDirection:"row", alignItems:"center", gap:12 }}>
+            <View style={{ width: IS_WIDE ? 34 : 42, height: IS_WIDE ? 34 : 42, borderRadius:21, backgroundColor:"rgba(139,124,255,0.18)", borderWidth:1, borderColor:"rgba(139,124,255,0.4)", alignItems:"center", justifyContent:"center" }}>
               <Text style={{ fontSize: 20 }}>🗺️</Text>
             </View>
             <View style={{ flex: 1 }}>
@@ -371,7 +641,7 @@ export default function WorldScreen() {
         </Pressable>
 
         {/* Carte 2D + chat de lieu */}
-        <View style={{ flexDirection: IS_WIDE ? "row" : "column", gap: 12, alignItems: IS_WIDE ? "stretch" : "center" }}>
+        <View style={{ width: "100%", flexDirection: IS_WIDE ? "row" : "column", gap: 12, alignItems: IS_WIDE ? "stretch" : "center" }}>
         <View style={{
           width: MAP_W, height: MAP_H,
           backgroundColor: "#0d1f32",
@@ -403,6 +673,58 @@ export default function WorldScreen() {
           <View style={{ position:"absolute", left:MAP_W*0.12, right:MAP_W*0.12, top:MAP_H*0.47, height:50, borderRadius:25, backgroundColor:"rgba(56,199,147,0.10)", borderWidth:1, borderColor:"rgba(56,199,147,0.2)" }}>
             <Text style={{ position:"absolute", left:0, right:0, top:16, textAlign:"center", color:"#8ee0bd", fontSize:11, fontWeight:"900" }}>⛲ Place centrale</Text>
           </View>
+          <View style={{ position:"absolute", inset:0, backgroundColor:"#9bb98f" }} />
+          <View style={{ position:"absolute", left:210 * MAP_SX, right:0, top:0, height:92 * MAP_SY, backgroundColor:"#1784a2" }} />
+          <View style={{ position:"absolute", left:250 * MAP_SX, right:0, bottom:0, height:96 * MAP_SY, backgroundColor:"#0f7892" }} />
+          <View style={{ position:"absolute", left:226 * MAP_SX, top:76 * MAP_SY, width:164 * MAP_SX, height:18 * MAP_SY, backgroundColor:"#d6c7a4", transform:[{ rotate:"-8deg" }] }} />
+          <View style={{ position:"absolute", left:270 * MAP_SX, bottom:82 * MAP_SY, width:128 * MAP_SX, height:18 * MAP_SY, backgroundColor:"#d6c7a4", transform:[{ rotate:"6deg" }] }} />
+          <Cloud x={18} y={16} scale={0.9} />
+          <Cloud x={300} y={116} scale={0.72} />
+          <Birds x={244} y={26} />
+
+          <View style={{ position:"absolute", left:0, right:0, top:130 * MAP_SY, height:34 * MAP_SY, backgroundColor:"#2d3238" }} />
+          <View style={{ position:"absolute", left:0, right:0, top:270 * MAP_SY, height:34 * MAP_SY, backgroundColor:"#2d3238" }} />
+          <View style={{ position:"absolute", left:120 * MAP_SX, top:0, bottom:0, width:24 * MAP_SX, backgroundColor:"#2d3238" }} />
+          <View style={{ position:"absolute", left:240 * MAP_SX, top:0, bottom:0, width:24 * MAP_SX, backgroundColor:"#2d3238" }} />
+          <View style={{ position:"absolute", left:0, top:390 * MAP_SY, width:300 * MAP_SX, height:34 * MAP_SY, backgroundColor:"#2d3238", transform:[{ rotate:"-10deg" }] }} />
+
+          {[0, 44, 88, 154, 198, 286, 330].map((x) => <RoadLine key={`r1-${x}`} x={x} y={146} w={22} h={3} />)}
+          {[12, 56, 100, 164, 208, 284, 328].map((x) => <RoadLine key={`r2-${x}`} x={x} y={286} w={22} h={3} />)}
+          {[8, 56, 184, 330, 392].map((y) => <RoadLine key={`v1-${y}`} x={131} y={y} w={3} h={22} />)}
+          {[10, 58, 184, 330, 392].map((y) => <RoadLine key={`v2-${y}`} x={251} y={y} w={3} h={22} />)}
+          <Crosswalk x={112} y={126} horizontal />
+          <Crosswalk x={232} y={268} horizontal />
+          <Crosswalk x={122} y={300} horizontal={false} />
+          <Crosswalk x={242} y={164} horizontal={false} />
+
+          <View style={{ position:"absolute", left:152 * MAP_SX, top:270 * MAP_SY, width:82 * MAP_SX, height:82 * MAP_SY, borderRadius:42 * MAP_SX, backgroundColor:"#2b3338", alignItems:"center", justifyContent:"center" }}>
+            <View style={{ width:60 * MAP_SX, height:60 * MAP_SX, borderRadius:30 * MAP_SX, backgroundColor:"#7fa455", alignItems:"center", justifyContent:"center" }}>
+              <View style={{ width:30 * MAP_SX, height:30 * MAP_SX, borderRadius:15 * MAP_SX, backgroundColor:"#75c9ed", borderWidth:2, borderColor:"rgba(255,255,255,0.62)" }} />
+            </View>
+            <Text style={{ position:"absolute", bottom:8, color:"#f2ffe9", fontSize:9, fontWeight:"900" }}>Fontaine</Text>
+          </View>
+
+          <FerrisWheel x={282} y={28} size={46} />
+          <DecoBuilding x={8} y={20} w={72} h={44} color="#7b604e" label="INDUS" />
+          <DecoBuilding x={86} y={14} w={42} h={40} color="#9a7558" />
+          <DecoBuilding x={152} y={34} w={44} h={46} color="#d6b27c" />
+          <DecoBuilding x={12} y={370} w={76} h={50} color="#c74d3a" label="MALL" windows={false} />
+          <DecoBuilding x={96} y={348} w={44} h={58} color="#34495e" />
+          <DecoBuilding x={142} y={342} w={42} h={64} color="#2f6d85" />
+          <DecoBuilding x={274} y={388} w={72} h={48} color="#44606a" label="PORT" />
+          <View style={{ position:"absolute", left:292 * MAP_SX, top:332 * MAP_SY, width:78 * MAP_SX, height:46 * MAP_SY, borderRadius:38, backgroundColor:"#36424c", borderWidth:6, borderColor:"#6f7d86", alignItems:"center", justifyContent:"center" }}>
+            <View style={{ width:50 * MAP_SX, height:24 * MAP_SY, borderRadius:24, backgroundColor:"#67b56b", borderWidth:2, borderColor:"rgba(255,255,255,0.35)" }} />
+          </View>
+
+          {[18, 44, 88, 332, 354, 18, 54, 214, 280, 352, 148, 236, 258, 92, 182].map((x, i) => (
+            <CityTree key={`tree-${i}`} x={x} y={[172, 158, 176, 112, 126, 250, 248, 108, 160, 186, 314, 246, 250, 430, 420][i]} size={i % 3 === 0 ? 14 : 11} />
+          ))}
+          <MovingCar y={140} color="#3498db" dir={1} speed={8400} delay={250} />
+          <MovingCar y={153} color="#e74c3c" dir={-1} speed={10200} delay={1400} />
+          <MovingCar y={280} color="#f6b94f" dir={1} speed={9100} delay={900} />
+          <MovingCar y={293} color="#38c793" dir={-1} speed={7800} delay={2200} />
+          <MovingCar y={400} color="#f97316" dir={1} speed={10800} delay={1800} />
+
           {/* Tuiles */}
           {Object.entries(LOCATION_TILES).map(([slug, tile]) => (
             <LocationTile
@@ -555,6 +877,13 @@ export default function WorldScreen() {
               </View>
             )}
           </View>
+
+          {IS_WIDE && (
+            <View style={{ flex: 1, minWidth: 300, maxWidth: 520, gap: 12 }}>
+              {travelMenu}
+              {residentsHere}
+            </View>
+          )}
         </View>
 
         {/* Panel NPC */}

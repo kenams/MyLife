@@ -14,15 +14,15 @@ import type { NpcState } from "@/lib/types";
 // Ces valeurs correspondent aux centres des blocs de la carte world-live
 // Grille : V1=30.8%, V2=66.7% | H1=29.7%, H2=50.8%, H3=72.9%
 export const LOCATION_COORDS: Record<string, { posX: number; posY: number }> = {
-  "home":       { posX: 15, posY: 15 },  // bloc NW
-  "market":     { posX: 51, posY: 15 },  // bloc NM
-  "office":     { posX: 86, posY: 15 },  // bloc NE
-  "cafe":       { posX: 15, posY: 42 },  // bloc CW
-  "restaurant": { posX: 86, posY: 42 },  // bloc CE
-  "park":       { posX: 15, posY: 64 },  // bloc SW (grande zone verte)
-  "gym":        { posX: 51, posY: 64 },  // bloc SM
-  "cinema":     { posX: 86, posY: 64 },  // bloc SE
-  "club":       { posX: 51, posY: 88 },  // bloc BM (nouveau)
+  "home":       { posX: 18, posY: 20 },
+  "market":     { posX: 18, posY: 70 },
+  "office":     { posX: 50, posY: 47 },
+  "cafe":       { posX: 72, posY: 25 },
+  "restaurant": { posX: 63, posY: 80 },
+  "park":       { posX: 18, posY: 44 },
+  "gym":        { posX: 86, posY: 74 },
+  "cinema":     { posX: 87, posY: 53 },
+  "club":       { posX: 63, posY: 80 },
 };
 
 const LOCATIONS = Object.keys(LOCATION_COORDS);

@@ -730,7 +730,7 @@ function createTestAccountState(preset: TestAccountPreset = "balanced") {
     session: { email: preset === "live" ? "test-live@mylife.app" : "test@mylife.app", provider: "local" as const },
     avatar,
     stats,
-    currentLocationSlug: preset === "live" ? "studio-heights" : "cafe",
+    currentLocationSlug: preset === "live" ? "cinema" : "cafe",
     currentNeighborhoodSlug: preset === "live" ? "studio-heights" : "central-district",
     conversations,
     dailyGoals,
