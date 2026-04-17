@@ -113,6 +113,7 @@ type GameState = {
   claimDailyReward: () => void;
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: () => void;
+  markConversationRead: (conversationId: string) => void;
   resetAll: () => void;
   // Premium
   isPremium: boolean;
@@ -1922,6 +1923,14 @@ export const useGameStore = create<GameState>()(
       markAllNotificationsRead: () =>
         set((state) => ({
           notifications: state.notifications.map((item) => ({ ...item, read: true }))
+        })),
+      markConversationRead: (conversationId) =>
+        set((state) => ({
+          conversations: state.conversations.map((c) =>
+            c.id === conversationId
+              ? { ...c, unreadCount: 0, messages: c.messages.map((m) => ({ ...m, read: true })) }
+              : c
+          )
         })),
 
       // ── Premium ───────────────────────────────────────────────────────────

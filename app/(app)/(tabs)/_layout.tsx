@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { View } from "react-native";
+import { Text, View } from "react-native";
 
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
@@ -19,6 +19,26 @@ function MissionsBadge({ color }: { color: string }) {
       }}>
         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" }} />
       </View>
+    </View>
+  );
+}
+
+function ChatBadge({ color, focused }: { color: string; focused: boolean }) {
+  const conversations = useGameStore((s) => s.conversations);
+  const unread = conversations.reduce((s, c) => s + c.unreadCount, 0);
+  return (
+    <View style={{ position: "relative" }}>
+      <Ionicons name={focused ? "people" : "people-outline"} color={color} size={24} />
+      {unread > 0 && (
+        <View style={{
+          position: "absolute", top: -4, right: -8,
+          minWidth: 16, height: 16, borderRadius: 8,
+          backgroundColor: "#e74c3c", alignItems: "center", justifyContent: "center",
+          paddingHorizontal: 3
+        }}>
+          <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>{unread > 9 ? "9+" : unread}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -62,9 +82,7 @@ export default function TabsLayout() {
         name="chat"
         options={{
           title: "Social",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "people" : "people-outline"} color={color} size={24} />
-          )
+          tabBarIcon: ({ color, focused }) => <ChatBadge color={color} focused={focused} />
         }}
       />
       <Tabs.Screen
