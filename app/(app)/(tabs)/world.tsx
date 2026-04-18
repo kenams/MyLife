@@ -19,23 +19,23 @@ import { useWorldPresence } from "@/hooks/use-world-presence";
 // ─── Dimensions de la carte 2D ────────────────────────────────────────────────
 const SCREEN_W = Dimensions.get("window").width;
 const SCREEN_H = Dimensions.get("window").height;
-const IS_WIDE = SCREEN_W >= 1180;
-const MAP_W = Math.min(SCREEN_W - 24, IS_WIDE ? Math.min(Math.max(560, SCREEN_W * 0.42), 700) : 560);
-const MAP_H = IS_WIDE ? Math.min(Math.round(MAP_W * 0.9), Math.max(460, SCREEN_H - 230)) : Math.round(MAP_W * 1.08);
+const IS_WIDE = SCREEN_W >= 1360;
+const MAP_W = Math.min(SCREEN_W - 24, IS_WIDE ? Math.min(Math.max(660, SCREEN_W * 0.5), 860) : 620);
+const MAP_H = IS_WIDE ? Math.min(Math.round(MAP_W * 0.82), Math.max(540, SCREEN_H - 190)) : Math.round(MAP_W * 1.04);
 const MAP_BASE_W = 380;
 const MAP_BASE_H = 460;
 const MAP_SX = MAP_W / MAP_BASE_W;
 const MAP_SY = MAP_H / MAP_BASE_H;
 
 const LOCATION_TILES: Record<string, { x: number; y: number; w: number; h: number; color: string; icon: string }> = {
-  "home":       { x: 30,  y: 58,  w: 76, h: 68, color: "#1a3a5c", icon: "home"       },
-  "market":     { x: 26,  y: 286, w: 86, h: 76, color: "#238b5a", icon: "cart"       },
-  "cafe":       { x: 234, y: 84,  w: 78, h: 66, color: "#c96a1d", icon: "cafe"       },
-  "office":     { x: 146, y: 170, w: 86, h: 92, color: "#226da6", icon: "briefcase"  },
-  "park":       { x: 24,  y: 162, w: 86, h: 78, color: "#11866f", icon: "leaf"       },
-  "gym":        { x: 286, y: 300, w: 78, h: 84, color: "#a92f25", icon: "fitness"    },
-  "restaurant": { x: 196, y: 330, w: 84, h: 76, color: "#75339a", icon: "restaurant" },
-  "cinema":     { x: 300, y: 206, w: 64, h: 76, color: "#27394d", icon: "film"       }
+  "home":       { x: 22,  y: 50,  w: 92,  h: 80, color: "#245c8f", icon: "home"       },
+  "market":     { x: 18,  y: 286, w: 104, h: 82, color: "#2f9e62", icon: "cart"       },
+  "cafe":       { x: 262, y: 66,  w: 86,  h: 78, color: "#d97328", icon: "cafe"       },
+  "office":     { x: 146, y: 166, w: 94,  h: 104, color: "#2d7ec2", icon: "briefcase"  },
+  "park":       { x: 18,  y: 164, w: 96,  h: 88, color: "#15936e", icon: "leaf"       },
+  "gym":        { x: 282, y: 300, w: 88,  h: 90, color: "#c23c32", icon: "fitness"    },
+  "restaurant": { x: 188, y: 328, w: 92,  h: 86, color: "#8140aa", icon: "restaurant" },
+  "cinema":     { x: 294, y: 202, w: 76,  h: 84, color: "#33465e", icon: "film"       }
 };
 
 function pctToMap(posX: number, posY: number) {
@@ -289,6 +289,28 @@ function ParkingLot({ x, y, w, h }: { x: number; y: number; w: number; h: number
   );
 }
 
+function MapBadge({ icon, label, value, color }: { icon: string; label: string; value: string; color: string }) {
+  return (
+    <View style={{
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      backgroundColor: "rgba(7,17,31,0.86)",
+      borderRadius: 12,
+      paddingHorizontal: 9,
+      paddingVertical: 7,
+      borderWidth: 1,
+      borderColor: color + "55"
+    }}>
+      <Text style={{ fontSize: 14 }}>{icon}</Text>
+      <View>
+        <Text style={{ color, fontSize: 10, fontWeight: "900" }}>{value}</Text>
+        <Text style={{ color: "rgba(226,232,240,0.72)", fontSize: 8, fontWeight: "700" }}>{label}</Text>
+      </View>
+    </View>
+  );
+}
+
 const INTERIORS: Record<string, { title: string; tone: string; actions: string[] }> = {
   home: {
     title: "Intérieur maison",
@@ -516,12 +538,24 @@ function LocationTile({
     }
   }, [isHere]);
 
+  const buildingHeight = Math.max(9, box.h * 0.12);
+
   return (
-    <Pressable onPress={onPress} style={{ position: "absolute", left: box.x, top: box.y, width: box.w, height: box.h }}>
+    <Pressable onPress={onPress} style={{ position: "absolute", left: box.x, top: box.y, width: box.w, height: box.h + buildingHeight + 8 }}>
+      <View style={{
+        position: "absolute",
+        left: 4,
+        right: -5,
+        bottom: 0,
+        height: box.h,
+        borderRadius: 14,
+        backgroundColor: "rgba(37,48,56,0.42)",
+        transform: [{ translateY: buildingHeight }]
+      }} />
       <Animated.View style={{
-        width: "100%", height: "100%",
-        borderRadius: 12,
-        borderWidth: isHere ? 2.5 : 1,
+        width: "100%", height: box.h,
+        borderRadius: 14,
+        borderWidth: isHere ? 3 : 1.5,
         borderColor: isHere ? colors.accent : "rgba(255,255,255,0.24)",
         opacity: glow,
         overflow: "hidden",
@@ -530,17 +564,15 @@ function LocationTile({
         shadowRadius: isHere ? 14 : 6,
         elevation: isHere ? 6 : 2,
       }}>
-        {/* fond dégradé */}
         <View style={{ position:"absolute", top:0, left:0, right:0, bottom:0, backgroundColor: tile.color }} />
-        {/* bande toit foncée */}
-        <View style={{ position:"absolute", top:3, left:3, right:3, bottom:3, borderRadius:9, backgroundColor:"rgba(0,0,0,0.12)", borderWidth:1, borderColor:"rgba(255,255,255,0.18)" }} />
-        {/* reflet bas */}
-        <View style={{ position:"absolute", top:8, left:8, right:8, height:5, borderRadius:3, backgroundColor:"rgba(255,255,255,0.22)" }} />
-        <View style={{ position:"absolute", bottom:7, left:8, right:8, height:5, borderRadius:3, backgroundColor:"rgba(0,0,0,0.24)" }} />
-        {[0, 1, 2].map((row) => (
-          <View key={row} style={{ position:"absolute", left:10, right:10, top:22 + row * 13, flexDirection:"row", justifyContent:"space-between" }}>
+        <View style={{ position:"absolute", top:0, left:0, right:0, height: Math.max(16, box.h * 0.22), backgroundColor:"rgba(255,255,255,0.18)" }} />
+        <View style={{ position:"absolute", top:4, left:5, right:5, height:Math.max(8, box.h * 0.10), borderRadius:5, backgroundColor:"rgba(255,255,255,0.24)" }} />
+        <View style={{ position:"absolute", right:0, top:0, bottom:0, width:Math.max(9, box.w * 0.12), backgroundColor:"rgba(0,0,0,0.20)" }} />
+        <View style={{ position:"absolute", bottom:0, left:0, right:0, height:buildingHeight, backgroundColor:"rgba(0,0,0,0.28)" }} />
+        {[0, 1, 2, 3].map((row) => (
+          <View key={row} style={{ position:"absolute", left:12, right:Math.max(14, box.w * 0.16), top:24 + row * 13, flexDirection:"row", justifyContent:"space-between" }}>
             {[0, 1, 2].map((col) => (
-              <View key={col} style={{ width:5, height:5, borderRadius:1.5, backgroundColor: (row + col) % 2 === 0 ? "rgba(255,235,157,0.68)" : "rgba(210,238,255,0.32)" }} />
+              <View key={col} style={{ width:6, height:6, borderRadius:1.5, backgroundColor: (row + col) % 2 === 0 ? "rgba(255,235,157,0.84)" : "rgba(210,238,255,0.48)" }} />
             ))}
           </View>
         ))}
@@ -552,22 +584,21 @@ function LocationTile({
           </>
         )}
 
-        {/* contenu */}
-        <View style={{ flex:1, padding: 7, justifyContent:"space-between" }}>
+        <View style={{ flex:1, padding: 8, justifyContent:"space-between" }}>
           <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center" }}>
-            <View style={{ backgroundColor:"rgba(0,0,0,0.42)", borderRadius:9, padding:4, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" }}>
-              <Ionicons name={tile.icon as never} size={17} color="#fff" />
+            <View style={{ backgroundColor:"rgba(0,0,0,0.46)", borderRadius:11, padding:5, borderWidth: 1, borderColor: "rgba(255,255,255,0.22)" }}>
+              <Ionicons name={tile.icon as never} size={19} color="#fff" />
             </View>
             {(npcCount > 0 || onlineCount > 0) && (
-              <View style={{ backgroundColor: onlineCount>0 ? "#38c793" : "rgba(255,255,255,0.25)", borderRadius: 9, paddingHorizontal: 5, paddingVertical: 1 }}>
-                <Text style={{ color: onlineCount>0?"#07111f":"#fff", fontSize: 9, fontWeight: "900" }}>
+              <View style={{ backgroundColor: onlineCount>0 ? "#38c793" : "rgba(255,255,255,0.28)", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" }}>
+                <Text style={{ color: onlineCount>0?"#07111f":"#fff", fontSize: 10, fontWeight: "900" }}>
                   {onlineCount > 0 ? `${onlineCount}🟢` : `${npcCount}`}
                 </Text>
               </View>
             )}
           </View>
-          <View style={{ backgroundColor: "rgba(5,10,18,0.70)", borderRadius: 8, paddingHorizontal: 5, paddingVertical: 3, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" }}>
-            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color:"#fff", fontSize:12, fontWeight:"900", textShadowColor:"rgba(0,0,0,0.7)", textShadowOffset:{width:0,height:1}, textShadowRadius:2 }}>
+          <View style={{ backgroundColor: "rgba(5,10,18,0.82)", borderRadius: 10, paddingHorizontal: 7, paddingVertical: 4, borderWidth: 1, borderColor: isHere ? colors.accent : "rgba(255,255,255,0.22)" }}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color:"#fff", fontSize:13, fontWeight:"900", textShadowColor:"rgba(0,0,0,0.75)", textShadowOffset:{width:0,height:1}, textShadowRadius:2 }}>
               {label}
             </Text>
             {isHere && (
@@ -928,102 +959,28 @@ export default function WorldScreen() {
       <View style={{ padding: 16, gap: 20, paddingBottom: 40 }}>
 
         {/* Header */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <View>
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>{cityName}</Text>
-            <Muted>{npcs.length} résidents actifs{livePlayers.length > 0 ? ` · ${livePlayers.length} en ligne` : ""}</Muted>
+            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 21 }}>World Map</Text>
+            <Muted>{cityName} · clique un bâtiment pour entrer</Muted>
           </View>
-          <Pressable
-            onPress={() => router.push("/(app)/rooms")}
-            style={{ backgroundColor: colors.accent, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 6 }}
-          >
-            <Ionicons name="people" size={14} color="#07111f" />
-            <Text style={{ color: "#07111f", fontWeight: "800", fontSize: 13 }}>Rooms live</Text>
-          </Pressable>
+          <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
+            <Pressable
+              onPress={() => router.push("/(app)/rooms")}
+              style={{ backgroundColor: colors.accent, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6 }}
+            >
+              <Ionicons name="people" size={14} color="#07111f" />
+              <Text style={{ color: "#07111f", fontWeight: "900", fontSize: 12 }}>Rooms</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => router.push("/(app)/world-live")}
+              style={{ backgroundColor: "rgba(139,124,255,0.18)", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: "rgba(139,124,255,0.35)" }}
+            >
+              <Ionicons name="radio" size={14} color="#d0c8ff" />
+              <Text style={{ color: "#d0c8ff", fontWeight: "900", fontSize: 12 }}>Live</Text>
+            </Pressable>
+          </View>
         </View>
-
-        {/* Hero — World Live */}
-        <Pressable
-          onPress={() => router.push("/(app)/world-live")}
-          style={{
-            borderRadius: 20,
-            overflow: "hidden",
-            borderWidth: 1.5,
-            borderColor: "rgba(139,124,255,0.5)",
-            shadowColor: "#8b7cff",
-            shadowOpacity: 0.4,
-            shadowRadius: 18,
-            elevation: 8,
-          }}
-        >
-          {/* Fond ville miniature */}
-          <View style={{ height: IS_WIDE ? 86 : 130, backgroundColor: "#0a1628", position: "relative", overflow: "hidden" }}>
-            {/* Ciel gradient */}
-            <View style={{ position: "absolute", inset: 0, backgroundColor: "#0d1e3a" }} />
-            <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 60, backgroundColor: "#1a2d4a", opacity: 0.7 }} />
-            {/* Étoiles */}
-            {[10,22,38,55,70,83,95,18,42,65,78,90].map((x, i) => (
-              <View key={i} style={{ position:"absolute", left:`${x}%`, top: (i % 3) * 14 + 5, width: i%5===0?3:2, height:i%5===0?3:2, borderRadius:2, backgroundColor: "rgba(255,255,255,0.7)" }} />
-            ))}
-            {/* Immeubles silhouette */}
-            {[
-              {l:2,  w:22, h:70,  c:"#112240"},
-              {l:26, w:18, h:90,  c:"#0e1e36"},
-              {l:46, w:28, h:55,  c:"#1a2d4a"},
-              {l:50, w:14, h:105, c:"#0c1928"},
-              {l:66, w:22, h:75,  c:"#112240"},
-              {l:75, w:16, h:60,  c:"#0e1e36"},
-              {l:90, w:20, h:85,  c:"#0c1928"},
-            ].map((b, i) => (
-              <View key={i} style={{ position:"absolute", left:`${b.l}%`, bottom:0, width:b.w, height:b.h, backgroundColor:b.c, borderTopLeftRadius:3, borderTopRightRadius:3 }}>
-                {/* Fenêtres allumées */}
-                {[0,1,2,3].map(row => (
-                  <View key={row} style={{ flexDirection:"row", gap:3, padding:3, marginTop: row * 14 + 6 }}>
-                    {[0,1].map(col => (
-                      <View key={col} style={{ width:5, height:5, borderRadius:1, backgroundColor:(i+row+col)%3===0?"rgba(255,190,60,0.8)":"rgba(200,230,255,0.15)" }} />
-                    ))}
-                  </View>
-                ))}
-              </View>
-            ))}
-            {/* Route */}
-            <View style={{ position:"absolute", bottom:0, left:0, right:0, height:22, backgroundColor:"#1a2030" }}>
-              {[0,0.12,0.24,0.36,0.48,0.60,0.72,0.84].map((x,i) => (
-                <View key={i} style={{ position:"absolute", left:`${x*100+4}%`, top:9, width:"8%", height:3, backgroundColor:"rgba(251,191,36,0.35)" }} />
-              ))}
-            </View>
-            {/* NPCs dots animés */}
-            {([{x:"18%",y:55,c:"#38c793"},{x:"38%",y:62,c:"#f6b94f"},{x:"60%",y:50,c:"#c084fc"},{x:"80%",y:58,c:"#fb7185"}] as {x:`${number}%`,y:number,c:string}[]).map((d,i) => (
-              <View key={i} style={{ position:"absolute", left:d.x, top:d.y, width:8, height:8, borderRadius:4, backgroundColor:d.c, borderWidth:1.5, borderColor:"#fff" }} />
-            ))}
-            {/* Lampadaires */}
-            {[15,35,55,75,92].map((x,i) => (
-              <View key={i} style={{ position:"absolute", left:`${x}%`, bottom:22 }}>
-                <View style={{ width:2, height:20, backgroundColor:"#4a5568", marginLeft:3 }} />
-                <View style={{ width:8, height:8, borderRadius:4, backgroundColor:"rgba(255,220,80,0.8)", marginLeft:0 }} />
-              </View>
-            ))}
-            {/* Badge LIVE */}
-            <View style={{ position:"absolute", top:10, right:12, backgroundColor:"#ef4444", borderRadius:8, paddingHorizontal:8, paddingVertical:3, flexDirection:"row", alignItems:"center", gap:4 }}>
-              <View style={{ width:6, height:6, borderRadius:3, backgroundColor:"#fff" }} />
-              <Text style={{ color:"#fff", fontSize:10, fontWeight:"900" }}>LIVE</Text>
-            </View>
-          </View>
-
-          {/* CTA bas */}
-          <View style={{ backgroundColor: "#0f1d30", padding: IS_WIDE ? 10 : 14, flexDirection:"row", alignItems:"center", gap:12 }}>
-            <View style={{ width: IS_WIDE ? 34 : 42, height: IS_WIDE ? 34 : 42, borderRadius:21, backgroundColor:"rgba(139,124,255,0.18)", borderWidth:1, borderColor:"rgba(139,124,255,0.4)", alignItems:"center", justifyContent:"center" }}>
-              <Text style={{ fontSize: 20 }}>🗺️</Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: "#d0c8ff", fontWeight: "900", fontSize: 15 }}>Ville Interactive</Text>
-              <Text style={{ color: colors.muted, fontSize: 12 }}>Explore, déplace-toi, interagis avec les résidents</Text>
-            </View>
-            <View style={{ backgroundColor: colors.accent, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}>
-              <Text style={{ color: "#07111f", fontWeight: "900", fontSize: 13 }}>Ouvrir →</Text>
-            </View>
-          </View>
-        </Pressable>
 
         {/* Carte 2D + chat de lieu */}
         <View style={{ width: "100%", flexDirection: IS_WIDE ? "row" : "column", gap: 12, alignItems: IS_WIDE ? "stretch" : "center" }}>
@@ -1166,6 +1123,52 @@ export default function WorldScreen() {
               </View>
             );
           })()}
+
+          {/* HUD lisible façon town map */}
+          <View pointerEvents="none" style={{ position: "absolute", left: 12, right: 12, top: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+            <View style={{
+              maxWidth: MAP_W * 0.48,
+              backgroundColor: "rgba(7,17,31,0.88)",
+              borderRadius: 14,
+              paddingHorizontal: 12,
+              paddingVertical: 9,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.18)"
+            }}>
+              <Text style={{ color: "#ffffff", fontSize: 14, fontWeight: "900" }}>Ville interactive</Text>
+              <Text style={{ color: "rgba(226,232,240,0.78)", fontSize: 10, marginTop: 2 }}>
+                Clique un immeuble pour entrer
+              </Text>
+            </View>
+            <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <MapBadge icon="📍" label="lieu actuel" value={worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "Ville"} color={colors.accent} />
+              <MapBadge icon="👥" label="résidents" value={`${npcs.length}`} color="#f6b94f" />
+              <MapBadge icon="🟢" label="en ligne" value={`${livePlayers.length}`} color="#38c793" />
+            </View>
+          </View>
+
+          <View pointerEvents="none" style={{
+            position: "absolute",
+            left: 12,
+            bottom: 12,
+            backgroundColor: "rgba(7,17,31,0.86)",
+            borderRadius: 14,
+            padding: 10,
+            gap: 6,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.16)"
+          }}>
+            {[
+              { dot: colors.accent, label: "Tu es ici" },
+              { dot: "#38c793", label: "Joueur live" },
+              { dot: "#f6b94f", label: "Résident" }
+            ].map((item) => (
+              <View key={item.label} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: item.dot }} />
+                <Text style={{ color: "#e5edf7", fontSize: 10, fontWeight: "800" }}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
 
           <View style={{
