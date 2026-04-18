@@ -1,153 +1,214 @@
-import { useState } from "react";
-import { Text, TouchableOpacity, View } from "react-native";
+import { router } from "expo-router";
+import { useEffect, useRef, useState } from "react";
+import { Animated, Pressable, ScrollView, Text, TouchableOpacity, View } from "react-native";
 
-import { AppShell, Button, Card, Muted, NavBack, Pill, SectionTitle, Title } from "@/components/ui";
-import { activities } from "@/lib/game-engine";
-import { resolveOutingResult } from "@/lib/game-engine";
+import { activities, resolveOutingResult } from "@/lib/game-engine";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 import type { OutingContext, OutingIntensity } from "@/lib/types";
 
 const OUTINGABLE_SLUGS = [
-  "coffee-meetup",
-  "restaurant-date",
-  "cinema-night",
-  "group-outing",
-  "party-night",
-  "evening-walk",
-  "solo-cafe"
+  "coffee-meetup", "restaurant-date", "cinema-night",
+  "group-outing", "party-night", "evening-walk", "solo-cafe",
 ];
 
-const INTENSITIES: { value: OutingIntensity; label: string; hint: string }[] = [
-  { value: "chill",    label: "Chill",    hint: "Moins de depense, moins de fatigue, qualite preservee" },
-  { value: "normale",  label: "Normale",  hint: "Sortie equilibree, effets standards" },
-  { value: "festive",  label: "Festive",  hint: "Humeur et sociabilite max, mais fatigue et budget elevees" }
+const INTENSITIES: { value: OutingIntensity; label: string; hint: string; emoji: string }[] = [
+  { value: "chill",   label: "Chill",   emoji: "😌", hint: "Moins de dépense, moins de fatigue" },
+  { value: "normale", label: "Normale", emoji: "😊", hint: "Sortie équilibrée, effets standards" },
+  { value: "festive", label: "Festive", emoji: "🎉", hint: "Humeur max mais fatigue et budget élevés" },
 ];
 
-const CONTEXTS: { value: OutingContext; label: string; hint: string }[] = [
-  { value: "solo",       label: "Solo",       hint: "Calme interieur, discipline +, sociabilite -" },
-  { value: "amis",       label: "Amis",       hint: "Liens consolides, humeur +, stress -" },
-  { value: "romantique", label: "Romantique", hint: "Humeur max, stress -, qualite sociale +" },
-  { value: "groupe",     label: "Groupe",     hint: "Sociabilite forte, stress +, discipline -" }
+const CONTEXTS: { value: OutingContext; label: string; hint: string; emoji: string }[] = [
+  { value: "solo",       label: "Solo",       emoji: "🧍", hint: "Calme, discipline +, sociabilité -" },
+  { value: "amis",       label: "Amis",       emoji: "👥", hint: "Liens consolidés, humeur +, stress -" },
+  { value: "romantique", label: "Romantique", emoji: "💕", hint: "Humeur max, stress -, qualité sociale +" },
+  { value: "groupe",     label: "Groupe",     emoji: "🎭", hint: "Sociabilité forte, stress +, discipline -" },
 ];
 
-function ChoiceRow<T extends string>({
-  options,
-  selected,
-  onSelect
-}: {
-  options: { value: T; label: string; hint: string }[];
+function ChoiceChip<T extends string>({ options, selected, onSelect }: {
+  options: { value: T; label: string; emoji: string; hint: string }[];
   selected: T;
   onSelect: (v: T) => void;
 }) {
   return (
-    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 8 }}>
-      {options.map((opt) => (
-        <TouchableOpacity
-          key={opt.value}
-          onPress={() => onSelect(opt.value)}
-          style={{
-            paddingVertical: 8,
-            paddingHorizontal: 14,
-            borderRadius: 20,
-            borderWidth: 1.5,
-            borderColor: selected === opt.value ? colors.accent : colors.border,
-            backgroundColor: selected === opt.value ? "rgba(215,184,122,0.12)" : "rgba(255,255,255,0.04)"
-          }}
-        >
-          <Text style={{ color: selected === opt.value ? colors.accent : colors.muted, fontWeight: "700", fontSize: 13 }}>
-            {opt.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
+    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+      {options.map((opt) => {
+        const active = selected === opt.value;
+        return (
+          <TouchableOpacity key={opt.value} onPress={() => onSelect(opt.value)}
+            style={{ paddingVertical: 9, paddingHorizontal: 14, borderRadius: 20,
+              backgroundColor: active ? colors.accent + "20" : "rgba(255,255,255,0.05)",
+              borderWidth: active ? 1.5 : 1,
+              borderColor: active ? colors.accent + "70" : "rgba(255,255,255,0.1)" }}>
+            <Text style={{ color: active ? colors.accent : colors.muted, fontWeight: "700", fontSize: 13 }}>
+              {opt.emoji} {opt.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
     </View>
   );
 }
 
 export default function OutingsScreen() {
-  const stats = useGameStore((state) => state.stats);
-  const performOuting = useGameStore((state) => state.performOuting);
+  const stats         = useGameStore((s) => s.stats);
+  const performOuting = useGameStore((s) => s.performOuting);
+  const [selectedSlug, setSelectedSlug] = useState("coffee-meetup");
+  const [intensity, setIntensity]       = useState<OutingIntensity>("normale");
+  const [context, setContext]           = useState<OutingContext>("amis");
+  const [done, setDone]                 = useState(false);
 
-  const [selectedSlug, setSelectedSlug] = useState<string>("coffee-meetup");
-  const [intensity, setIntensity] = useState<OutingIntensity>("normale");
-  const [context, setContext] = useState<OutingContext>("amis");
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+  }, []);
 
   const outingActivities = activities.filter((a) => OUTINGABLE_SLUGS.includes(a.slug));
-  const preview = resolveOutingResult({ activitySlug: selectedSlug, intensity, context }, stats);
+  const preview          = resolveOutingResult({ activitySlug: selectedSlug, intensity, context }, stats);
 
-  const qualityColor =
-    preview.socialQualityHint === "haute" ? "#38c793" :
-    preview.socialQualityHint === "basse" ? "#f87171" : "#fbbf24";
+  const qualityColor = preview.socialQualityHint === "haute" ? "#38c793"
+    : preview.socialQualityHint === "basse" ? "#f87171" : "#fbbf24";
+
+  function goOuting() {
+    performOuting({ activitySlug: selectedSlug, intensity, context });
+    setDone(true);
+    setTimeout(() => setDone(false), 3000);
+  }
 
   return (
-    <AppShell>
-      <NavBack fallback="/(app)/(tabs)/home" />
-      <Card accent>
-        <Pill>Sorties</Pill>
-        <Title>Choisir sa sortie intelligemment.</Title>
-        <Muted>
-          Ni trop, ni trop peu. L'intensite et le contexte changent tout. Une soiree festive en groupe avec un mode de vie instable attire de mauvais liens.
-        </Muted>
-      </Card>
+    <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} showsVerticalScrollIndicator={false}>
 
-      <Card>
-        <SectionTitle>Type de sortie</SectionTitle>
-        <View style={{ gap: 8 }}>
-          {outingActivities.map((a) => (
-            <TouchableOpacity
-              key={a.slug}
-              onPress={() => setSelectedSlug(a.slug)}
-              style={{
-                padding: 12,
-                borderRadius: 14,
-                borderWidth: 1.5,
-                borderColor: selectedSlug === a.slug ? colors.accent : colors.border,
-                backgroundColor: selectedSlug === a.slug ? "rgba(215,184,122,0.08)" : "transparent"
-              }}
-            >
-              <Text style={{ color: colors.text, fontWeight: "700", fontSize: 14 }}>{a.name}</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>{a.summary}</Text>
-            </TouchableOpacity>
-          ))}
+        {/* Header */}
+        <View style={{ backgroundColor: "#060d18", paddingHorizontal: 20, paddingTop: 56, paddingBottom: 20,
+          borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+          <View style={{ position: "absolute", top: -20, right: -20, width: 120, height: 120, borderRadius: 60,
+            backgroundColor: "#f6b94f08" }} />
+          <Pressable onPress={() => router.back()} style={{ marginBottom: 12 }}>
+            <Text style={{ color: colors.muted, fontSize: 13 }}>← Retour</Text>
+          </Pressable>
+          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 26 }}>🌃 Sorties</Text>
+          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 3 }}>
+            Choisis ta sortie intelligemment
+          </Text>
         </View>
-      </Card>
 
-      <Card>
-        <SectionTitle>Intensite</SectionTitle>
-        <ChoiceRow options={INTENSITIES} selected={intensity} onSelect={setIntensity} />
-        <Muted>{INTENSITIES.find((i) => i.value === intensity)?.hint}</Muted>
-      </Card>
+        <View style={{ padding: 20, gap: 18 }}>
 
-      <Card>
-        <SectionTitle>Contexte</SectionTitle>
-        <ChoiceRow options={CONTEXTS} selected={context} onSelect={setContext} />
-        <Muted>{CONTEXTS.find((c) => c.value === context)?.hint}</Muted>
-      </Card>
+          {/* Done toast */}
+          {done && (
+            <View style={{ backgroundColor: "#38c79318", borderRadius: 14, padding: 14,
+              borderWidth: 1.5, borderColor: "#38c79340", flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Text style={{ fontSize: 24 }}>✅</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: "#38c793", fontWeight: "800", fontSize: 15 }}>Sortie effectuée !</Text>
+                <Text style={{ color: colors.muted, fontSize: 12 }}>{preview.label}</Text>
+              </View>
+            </View>
+          )}
 
-      <Card>
-        <SectionTitle>Apercu de la sortie</SectionTitle>
-        <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700", marginBottom: 8 }}>{preview.label}</Text>
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 10 }}>
-          <Pill tone={preview.moodGain >= 10 ? "accent" : "muted"}>Humeur +{preview.moodGain}</Pill>
-          <Pill tone={preview.sociabilityGain >= 12 ? "accent" : "muted"}>Social +{preview.sociabilityGain}</Pill>
-          <Pill tone={preview.energyCost > 14 ? "warning" : "muted"}>Energie -{preview.energyCost}</Pill>
-          <Pill tone={preview.budgetCost > 20 ? "warning" : "muted"}>Budget -{preview.budgetCost}</Pill>
-          <Pill tone={preview.stressDelta > 5 ? "warning" : "muted"}>
-            Stress {preview.stressDelta >= 0 ? "+" : ""}{preview.stressDelta}
-          </Pill>
-          <Pill tone={preview.disciplineDelta < -2 ? "warning" : "muted"}>
-            Discipline {preview.disciplineDelta >= 0 ? "+" : ""}{preview.disciplineDelta}
-          </Pill>
+          {/* Type de sortie */}
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
+              TYPE DE SORTIE
+            </Text>
+            {outingActivities.map((a) => {
+              const active = selectedSlug === a.slug;
+              return (
+                <TouchableOpacity key={a.slug} onPress={() => setSelectedSlug(a.slug)}
+                  style={{ padding: 13, borderRadius: 14, borderWidth: active ? 1.5 : 1,
+                    borderColor: active ? colors.accent + "70" : "rgba(255,255,255,0.09)",
+                    backgroundColor: active ? colors.accent + "0f" : "rgba(255,255,255,0.03)" }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <View style={{ width: 36, height: 36, borderRadius: 18,
+                      backgroundColor: active ? colors.accent + "25" : "rgba(255,255,255,0.07)",
+                      alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontSize: 18 }}>🎯</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: active ? colors.accent : colors.text, fontWeight: "700", fontSize: 14 }}>
+                        {a.name}
+                      </Text>
+                      <Text style={{ color: colors.muted, fontSize: 11, marginTop: 1 }}>{a.summary}</Text>
+                    </View>
+                    {active && (
+                      <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: colors.accent,
+                        alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ color: "#000", fontSize: 10, fontWeight: "900" }}>✓</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* Intensité */}
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>INTENSITÉ</Text>
+            <ChoiceChip options={INTENSITIES} selected={intensity} onSelect={setIntensity} />
+            <Text style={{ color: colors.muted, fontSize: 12 }}>
+              {INTENSITIES.find((i) => i.value === intensity)?.hint}
+            </Text>
+          </View>
+
+          {/* Contexte */}
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>CONTEXTE</Text>
+            <ChoiceChip options={CONTEXTS} selected={context} onSelect={setContext} />
+            <Text style={{ color: colors.muted, fontSize: 12 }}>
+              {CONTEXTS.find((c) => c.value === context)?.hint}
+            </Text>
+          </View>
+
+          {/* Aperçu */}
+          <View style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 18, padding: 16, gap: 12,
+            borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
+            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
+              APERÇU DE LA SORTIE
+            </Text>
+            <Text style={{ color: colors.text, fontWeight: "700", fontSize: 15 }}>{preview.label}</Text>
+
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {[
+                { label: `+${preview.moodGain} humeur`, positive: preview.moodGain >= 0 },
+                { label: `+${preview.sociabilityGain} social`, positive: preview.sociabilityGain >= 0 },
+                { label: `-${preview.energyCost} énergie`, positive: preview.energyCost <= 10 },
+                { label: `-${preview.budgetCost} cr`, positive: preview.budgetCost <= 15 },
+                { label: `${preview.stressDelta >= 0 ? "+" : ""}${preview.stressDelta} stress`, positive: preview.stressDelta <= 0 },
+                { label: `${preview.disciplineDelta >= 0 ? "+" : ""}${preview.disciplineDelta} disc`, positive: preview.disciplineDelta >= 0 },
+              ].map((badge) => {
+                const col = badge.positive ? "#38c793" : "#f6b94f";
+                return (
+                  <View key={badge.label} style={{ backgroundColor: col + "15", borderRadius: 8,
+                    paddingHorizontal: 10, paddingVertical: 5, borderWidth: 1, borderColor: col + "35" }}>
+                    <Text style={{ color: col, fontSize: 11, fontWeight: "700" }}>{badge.label}</Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>Qualité des rencontres :</Text>
+              <Text style={{ color: qualityColor, fontWeight: "800", fontSize: 12 }}>
+                {preview.socialQualityHint.toUpperCase()}
+              </Text>
+            </View>
+
+            <Pressable onPress={goOuting}
+              style={{ backgroundColor: colors.accent + "20", borderRadius: 14, padding: 14,
+                alignItems: "center", borderWidth: 1.5, borderColor: colors.accent + "55" }}>
+              <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 15 }}>
+                🌃 Partir — {outingActivities.find((a) => a.slug === selectedSlug)?.name}
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 11, marginTop: 3 }}>
+                Coût : {preview.budgetCost} cr · -{preview.energyCost} énergie
+              </Text>
+            </Pressable>
+          </View>
+
         </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 14 }}>
-          <Text style={{ color: colors.muted, fontSize: 13 }}>Qualite des rencontres probables :</Text>
-          <Text style={{ color: qualityColor, fontWeight: "800", fontSize: 13 }}>{preview.socialQualityHint.toUpperCase()}</Text>
-        </View>
-        <Button
-          label={`Partir : ${preview.label.split("—")[0].trim()}`}
-          onPress={() => performOuting({ activitySlug: selectedSlug, intensity, context })}
-        />
-      </Card>
-    </AppShell>
+      </ScrollView>
+    </Animated.View>
   );
 }

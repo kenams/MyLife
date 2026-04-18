@@ -1,7 +1,7 @@
+import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
-import { NavBack } from "@/components/ui";
 import { getDateReadiness, getDateVenueOptions, starterResidents } from "@/lib/game-engine";
 import { getDateVenueLabel, getRelationshipLabel } from "@/lib/selectors";
 import { colors } from "@/lib/theme";
@@ -107,7 +107,12 @@ export default function DatesScreen() {
       {/* Header */}
       <View style={{ backgroundColor: "#0b1a2d", paddingHorizontal: 20, paddingTop: 56, paddingBottom: 20 }}>
         <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-          <NavBack fallback="/(app)/(tabs)/chat" />
+          <Pressable onPress={() => router.back()} style={{ flexDirection: "row", alignItems: "center", gap: 6,
+            paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10,
+            backgroundColor: "rgba(255,255,255,0.06)" }}>
+            <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>←</Text>
+            <Text style={{ color: colors.muted, fontSize: 13 }}>Retour</Text>
+          </Pressable>
           <View style={{ paddingHorizontal: 12, paddingVertical: 5, borderRadius: 20,
             backgroundColor: "rgba(255,107,107,0.15)", borderWidth: 1, borderColor: "rgba(255,107,107,0.3)" }}>
             <Text style={{ color: "#ff6b6b", fontWeight: "700", fontSize: 12 }}>💘 Rendez-vous</Text>
