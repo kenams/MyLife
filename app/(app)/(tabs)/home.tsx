@@ -2,6 +2,7 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Pressable, ScrollView, Text, View } from "react-native";
 
+import { getGameDirectorPlan } from "@/lib/game-director";
 import { getHousingTier } from "@/lib/housing";
 import { getLocationName, getMomentumState, getRecommendedActionMeta, getWellbeingScore } from "@/lib/selectors";
 import { getActionTimeScore, getTimeModeDescription, getSuggestedActions, useTimeContext } from "@/lib/time-context";
@@ -385,6 +386,7 @@ export default function HomeScreen() {
   const wellbeing    = getWellbeingScore(stats);
   const momentum     = getMomentumState(stats);
   const recommended  = getRecommendedActionMeta(stats);
+  const directorPlan = getGameDirectorPlan(stats, dailyGoals);
   const doneCount    = dailyGoals.filter((g) => g.completed).length;
   const totalGoals   = dailyGoals.length;
   const questPct     = totalGoals > 0 ? (doneCount / totalGoals) * 100 : 0;
@@ -709,6 +711,39 @@ export default function HomeScreen() {
 
           {/* ── ACTION RECOMMANDÉE ── */}
           <View>
+            <SectionTitle text="DIRECTEUR IA" />
+            <View style={{
+              backgroundColor: directorPlan.tone === "danger" ? colors.dangerGlow : directorPlan.tone === "social" ? colors.accentGlow : directorPlan.tone === "focus" ? colors.goldGlow : colors.purpleGlow,
+              borderRadius: 20,
+              padding: 16,
+              gap: 12,
+              borderWidth: 1.5,
+              borderColor: directorPlan.tone === "danger" ? colors.danger + "55" : directorPlan.tone === "social" ? colors.accent + "55" : directorPlan.tone === "focus" ? colors.gold + "55" : colors.purple + "55",
+              marginBottom: 18
+            }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={{ width: 50, height: 50, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.10)", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: "rgba(255,255,255,0.14)" }}>
+                  <Text style={{ color: colors.text, fontSize: 18, fontWeight: "900" }}>IA</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text, fontSize: 16, fontWeight: "900" }}>{directorPlan.title}</Text>
+                  <Text style={{ color: colors.textSoft, fontSize: 12, lineHeight: 17, marginTop: 3 }}>{directorPlan.body}</Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                {directorPlan.steps.map((step, index) => (
+                  <View key={step} style={{ flexGrow: 1, flexBasis: "30%", borderRadius: 12, padding: 10, backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.10)" }}>
+                    <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "900" }}>0{index + 1}</Text>
+                    <Text style={{ color: colors.text, fontSize: 11, fontWeight: "800", marginTop: 3 }}>{step}</Text>
+                  </View>
+                ))}
+              </View>
+              <Pressable onPress={() => performAction(directorPlan.action)}
+                style={{ borderRadius: 14, padding: 13, alignItems: "center", backgroundColor: colors.accent, flexDirection: "row", justifyContent: "center", gap: 8 }}>
+                <Text style={{ color: "#05211a", fontSize: 13, fontWeight: "900" }}>Executer: {directorPlan.actionLabel}</Text>
+                <Text style={{ color: "#05211a", fontSize: 16 }}>→</Text>
+              </Pressable>
+            </View>
             <SectionTitle text="PRIORITÉ DU MOMENT" />
             <Pressable onPress={() => performAction(recommended.action)}
               style={{ backgroundColor: colors.accentGlow, borderRadius: 18, padding: 18,

@@ -25,7 +25,8 @@ Objectif: garder le jeu local-first, rapide sur mobile, mais separer clairement 
    - world/map: `lib/world-*`
    - economy: `lib/economy-*`
    - needs/routine: `lib/selectors.ts` puis extraction progressive
-   - NPC intelligence: `lib/npc-*`
+- NPC intelligence: `lib/npc-*`
+   - game direction: `lib/game-director.ts`
 
 4. Les features live doivent etre local-first.
    Si Supabase Realtime tombe, l'app doit encore fonctionner en simulation locale.
@@ -59,6 +60,13 @@ L'ecran `app/(app)/(tabs)/chat.tsx` se concentre donc davantage sur l'interface 
 - personnalites distinctes pour Ava, Malik, Noa, Leila, Yan et Sana
 
 Cette couche reste local-first: elle fonctionne sans API externe et peut ensuite etre remplacee ou enrichie par un vrai service IA sans changer l'UI.
+
+`lib/game-director.ts` ajoute un directeur de jeu local:
+
+- lit les besoins vitaux, stress, budget, sociabilite et quetes
+- choisit la prochaine action prioritaire
+- affiche un plan en 3 etapes sur l'accueil
+- garde le jeu plus lisible pour un joueur qui ne sait pas quoi faire
 
 ## Prochaines extractions recommandees
 
