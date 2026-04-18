@@ -19,9 +19,9 @@ import { useWorldPresence } from "@/hooks/use-world-presence";
 // ─── Dimensions de la carte 2D ────────────────────────────────────────────────
 const SCREEN_W = Dimensions.get("window").width;
 const SCREEN_H = Dimensions.get("window").height;
-const IS_WIDE = SCREEN_W >= 720;
-const MAP_W = Math.min(SCREEN_W - 24, IS_WIDE ? 540 : 560);
-const MAP_H = IS_WIDE ? Math.min(Math.round(MAP_W * 1.02), Math.max(420, SCREEN_H - 250)) : Math.round(MAP_W * 1.18);
+const IS_WIDE = SCREEN_W >= 1180;
+const MAP_W = Math.min(SCREEN_W - 24, IS_WIDE ? Math.min(Math.max(560, SCREEN_W * 0.42), 700) : 560);
+const MAP_H = IS_WIDE ? Math.min(Math.round(MAP_W * 0.9), Math.max(460, SCREEN_H - 230)) : Math.round(MAP_W * 1.08);
 const MAP_BASE_W = 380;
 const MAP_BASE_H = 460;
 const MAP_SX = MAP_W / MAP_BASE_W;
@@ -61,7 +61,7 @@ function RoadLine({ x, y, w, h }: { x: number; y: number; w: number; h: number }
         width: w * MAP_SX,
         height: h * MAP_SY,
         borderRadius: Math.max(1, h * MAP_SY) / 2,
-        backgroundColor: "rgba(255,255,255,0.45)"
+        backgroundColor: "rgba(255,255,255,0.78)"
       }}
     />
   );
@@ -71,6 +71,7 @@ function CityTree({ x, y, size = 12 }: { x: number; y: number; size?: number }) 
   const s = size * MAP_SX;
   return (
     <View style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, width: s, height: s, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ position: "absolute", width: s * 0.9, height: s * 0.34, bottom: -1, borderRadius: s * 0.2, backgroundColor: "rgba(0,0,0,0.16)" }} />
       <View style={{ position: "absolute", width: s * 0.28, height: s * 0.58, bottom: 0, borderRadius: 2, backgroundColor: "#6b3f21" }} />
       <View style={{ width: s, height: s, borderRadius: s / 2, backgroundColor: "#1d7c42", borderWidth: 1, borderColor: "rgba(255,255,255,0.14)" }} />
       <View style={{ position: "absolute", top: s * 0.12, width: s * 0.58, height: s * 0.58, borderRadius: s * 0.29, backgroundColor: "#31a35d" }} />
@@ -217,6 +218,73 @@ function FerrisWheel({ x, y, size = 42 }: { x: number; y: number; size?: number 
       <View style={{ position: "absolute", width: s, height: 4, backgroundColor: "rgba(217,75,61,0.65)" }} />
       <View style={{ position: "absolute", width: s * 0.7, height: 3, backgroundColor: "rgba(217,75,61,0.65)", transform: [{ rotate: "45deg" }] }} />
       <View style={{ position: "absolute", width: s * 0.7, height: 3, backgroundColor: "rgba(217,75,61,0.65)", transform: [{ rotate: "-45deg" }] }} />
+    </View>
+  );
+}
+
+function Road({ x, y, w, h, horizontal = true }: { x: number; y: number; w: number; h: number; horizontal?: boolean }) {
+  return (
+    <View
+      style={{
+        position: "absolute",
+        left: x * MAP_SX,
+        top: y * MAP_SY,
+        width: w * MAP_SX,
+        height: h * MAP_SY,
+        backgroundColor: "#263039",
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.08)",
+        shadowColor: "#000",
+        shadowOpacity: 0.28,
+        shadowRadius: 4,
+        elevation: 1
+      }}
+    >
+      <View
+        style={{
+          position: "absolute",
+          left: horizontal ? 0 : "48%",
+          right: horizontal ? 0 : undefined,
+          top: horizontal ? "48%" : 0,
+          bottom: horizontal ? undefined : 0,
+          width: horizontal ? undefined : 2,
+          height: horizontal ? 2 : undefined,
+          backgroundColor: "rgba(247,203,91,0.72)"
+        }}
+      />
+    </View>
+  );
+}
+
+function MapLabel({ x, y, text, tone = "dark" }: { x: number; y: number; text: string; tone?: "dark" | "light" | "green" | "blue" }) {
+  const bg = tone === "green" ? "rgba(16,78,46,0.88)" : tone === "blue" ? "rgba(13,88,116,0.88)" : tone === "light" ? "rgba(246,248,241,0.9)" : "rgba(8,15,25,0.86)";
+  const fg = tone === "light" ? "#1b2733" : "#ffffff";
+  return (
+    <View style={{
+      position: "absolute",
+      left: x * MAP_SX,
+      top: y * MAP_SY,
+      paddingHorizontal: 7,
+      paddingVertical: 3,
+      borderRadius: 8,
+      backgroundColor: bg,
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.28)"
+    }}>
+      <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: fg, fontSize: 9, fontWeight: "900" }}>{text}</Text>
+    </View>
+  );
+}
+
+function ParkingLot({ x, y, w, h }: { x: number; y: number; w: number; h: number }) {
+  return (
+    <View style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, width: w * MAP_SX, height: h * MAP_SY, backgroundColor: "#59616a", borderRadius: 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" }}>
+      {[0.22, 0.44, 0.66].map((row) => (
+        <View key={row} style={{ position: "absolute", left: 6, right: 6, top: h * MAP_SY * row, height: 1, backgroundColor: "rgba(255,255,255,0.58)" }} />
+      ))}
+      {[0.25, 0.50, 0.75].map((col) => (
+        <View key={col} style={{ position: "absolute", top: 4, bottom: 4, left: w * MAP_SX * col, width: 1, backgroundColor: "rgba(255,255,255,0.45)" }} />
+      ))}
     </View>
   );
 }
@@ -452,20 +520,20 @@ function LocationTile({
     <Pressable onPress={onPress} style={{ position: "absolute", left: box.x, top: box.y, width: box.w, height: box.h }}>
       <Animated.View style={{
         width: "100%", height: "100%",
-        borderRadius: 10,
+        borderRadius: 12,
         borderWidth: isHere ? 2.5 : 1,
-        borderColor: isHere ? colors.accent : "rgba(255,255,255,0.14)",
+        borderColor: isHere ? colors.accent : "rgba(255,255,255,0.24)",
         opacity: glow,
         overflow: "hidden",
         shadowColor: tile.color,
-        shadowOpacity: isHere ? 0.7 : 0.3,
-        shadowRadius: isHere ? 10 : 4,
+        shadowOpacity: isHere ? 0.85 : 0.42,
+        shadowRadius: isHere ? 14 : 6,
         elevation: isHere ? 6 : 2,
       }}>
         {/* fond dégradé */}
         <View style={{ position:"absolute", top:0, left:0, right:0, bottom:0, backgroundColor: tile.color }} />
         {/* bande toit foncée */}
-        <View style={{ position:"absolute", top:3, left:3, right:3, bottom:3, borderRadius:8, backgroundColor:"rgba(0,0,0,0.16)", borderWidth:1, borderColor:"rgba(255,255,255,0.10)" }} />
+        <View style={{ position:"absolute", top:3, left:3, right:3, bottom:3, borderRadius:9, backgroundColor:"rgba(0,0,0,0.12)", borderWidth:1, borderColor:"rgba(255,255,255,0.18)" }} />
         {/* reflet bas */}
         <View style={{ position:"absolute", top:8, left:8, right:8, height:5, borderRadius:3, backgroundColor:"rgba(255,255,255,0.22)" }} />
         <View style={{ position:"absolute", bottom:7, left:8, right:8, height:5, borderRadius:3, backgroundColor:"rgba(0,0,0,0.24)" }} />
@@ -487,8 +555,8 @@ function LocationTile({
         {/* contenu */}
         <View style={{ flex:1, padding: 7, justifyContent:"space-between" }}>
           <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center" }}>
-            <View style={{ backgroundColor:"rgba(0,0,0,0.3)", borderRadius:8, padding:3 }}>
-              <Ionicons name={tile.icon as never} size={16} color="#fff" />
+            <View style={{ backgroundColor:"rgba(0,0,0,0.42)", borderRadius:9, padding:4, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" }}>
+              <Ionicons name={tile.icon as never} size={17} color="#fff" />
             </View>
             {(npcCount > 0 || onlineCount > 0) && (
               <View style={{ backgroundColor: onlineCount>0 ? "#38c793" : "rgba(255,255,255,0.25)", borderRadius: 9, paddingHorizontal: 5, paddingVertical: 1 }}>
@@ -498,8 +566,8 @@ function LocationTile({
               </View>
             )}
           </View>
-          <View>
-            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color:"#fff", fontSize:11, fontWeight:"900", textShadowColor:"rgba(0,0,0,0.5)", textShadowOffset:{width:0,height:1}, textShadowRadius:2 }}>
+          <View style={{ backgroundColor: "rgba(5,10,18,0.70)", borderRadius: 8, paddingHorizontal: 5, paddingVertical: 3, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)" }}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color:"#fff", fontSize:12, fontWeight:"900", textShadowColor:"rgba(0,0,0,0.7)", textShadowOffset:{width:0,height:1}, textShadowRadius:2 }}>
               {label}
             </Text>
             {isHere && (
@@ -972,38 +1040,35 @@ export default function WorldScreen() {
           shadowRadius: 12,
           elevation: 5
         }}>
-          {/* fond herbe */}
-          <View style={{ position:"absolute", inset:0, backgroundColor:"#0d2010", opacity:0.6 }} />
-          {/* routes horizontales */}
-          <View style={{ position:"absolute", left:0, right:0, top:MAP_H*0.40, height:28, backgroundColor:"rgba(26,33,48,0.95)" }} />
-          <View style={{ position:"absolute", left:0, right:0, top:MAP_H*0.40+13, height:2, borderStyle:"dashed", borderWidth:0, backgroundColor:"transparent" }} />
-          {/* lignes pointillées route */}
-          {[0,0.10,0.20,0.30,0.40,0.55,0.65,0.75,0.85].map((x,i) => (
-            <View key={i} style={{ position:"absolute", left:MAP_W*x, top:MAP_H*0.413, width:MAP_W*0.07, height:2, backgroundColor:"rgba(251,191,36,0.4)" }} />
-          ))}
-          {/* route verticale */}
-          <View style={{ position:"absolute", left:MAP_W*0.47, top:0, bottom:0, width:22, backgroundColor:"rgba(26,33,48,0.9)" }} />
-          {[0,0.10,0.20,0.30,0.55,0.65,0.75,0.85,0.95].map((y,i) => (
-            <View key={i} style={{ position:"absolute", left:MAP_W*0.479, top:MAP_H*y, width:2, height:MAP_H*0.07, backgroundColor:"rgba(251,191,36,0.4)" }} />
-          ))}
-          {/* place centrale */}
-          <View style={{ position:"absolute", left:MAP_W*0.12, right:MAP_W*0.12, top:MAP_H*0.47, height:50, borderRadius:25, backgroundColor:"rgba(56,199,147,0.10)", borderWidth:1, borderColor:"rgba(56,199,147,0.2)" }}>
-            <Text style={{ position:"absolute", left:0, right:0, top:16, textAlign:"center", color:"#8ee0bd", fontSize:11, fontWeight:"900" }}>⛲ Place centrale</Text>
-          </View>
-          <View style={{ position:"absolute", inset:0, backgroundColor:"#9bb98f" }} />
-          <View style={{ position:"absolute", left:210 * MAP_SX, right:0, top:0, height:92 * MAP_SY, backgroundColor:"#1784a2" }} />
+          {/* base quartiers */}
+          <View style={{ position:"absolute", inset:0, backgroundColor:"#b7d0a3" }} />
+          <View style={{ position:"absolute", left:0, top:0, width:126 * MAP_SX, height:132 * MAP_SY, backgroundColor:"#a6c69c" }} />
+          <View style={{ position:"absolute", left:132 * MAP_SX, top:0, width:88 * MAP_SX, height:132 * MAP_SY, backgroundColor:"#9fc1d0" }} />
+          <View style={{ position:"absolute", left:0, top:164 * MAP_SY, width:126 * MAP_SX, height:106 * MAP_SY, backgroundColor:"#8fc688" }} />
+          <View style={{ position:"absolute", left:264 * MAP_SX, top:164 * MAP_SY, width:116 * MAP_SX, height:120 * MAP_SY, backgroundColor:"#b8cbb4" }} />
+          <View style={{ position:"absolute", left:0, top:304 * MAP_SY, width:150 * MAP_SX, height:156 * MAP_SY, backgroundColor:"#87bd78" }} />
+          <View style={{ position:"absolute", left:144 * MAP_SX, top:304 * MAP_SY, width:136 * MAP_SX, height:156 * MAP_SY, backgroundColor:"#a69dbe" }} />
+
+          {/* eau et quais */}
+          <View style={{ position:"absolute", left:210 * MAP_SX, right:0, top:0, height:92 * MAP_SY, backgroundColor:"#1488a8" }} />
           <View style={{ position:"absolute", left:250 * MAP_SX, right:0, bottom:0, height:96 * MAP_SY, backgroundColor:"#0f7892" }} />
-          <View style={{ position:"absolute", left:226 * MAP_SX, top:76 * MAP_SY, width:164 * MAP_SX, height:18 * MAP_SY, backgroundColor:"#d6c7a4", transform:[{ rotate:"-8deg" }] }} />
-          <View style={{ position:"absolute", left:270 * MAP_SX, bottom:82 * MAP_SY, width:128 * MAP_SX, height:18 * MAP_SY, backgroundColor:"#d6c7a4", transform:[{ rotate:"6deg" }] }} />
+          <View style={{ position:"absolute", left:226 * MAP_SX, top:76 * MAP_SY, width:164 * MAP_SX, height:20 * MAP_SY, backgroundColor:"#d9c79c", borderWidth: 1, borderColor: "rgba(96,66,32,0.18)", transform:[{ rotate:"-8deg" }] }} />
+          <View style={{ position:"absolute", left:270 * MAP_SX, bottom:82 * MAP_SY, width:128 * MAP_SX, height:20 * MAP_SY, backgroundColor:"#d9c79c", borderWidth: 1, borderColor: "rgba(96,66,32,0.18)", transform:[{ rotate:"6deg" }] }} />
+          {[235, 278, 322, 354].map((x, i) => (
+            <View key={`dock-${i}`} style={{ position:"absolute", left:x * MAP_SX, top:(i % 2 === 0 ? 86 : 80) * MAP_SY, width:24 * MAP_SX, height:5 * MAP_SY, backgroundColor:"#8a6a43", transform:[{ rotate:"-8deg" }] }} />
+          ))}
+          <Text style={{ position:"absolute", right:16, top:22 * MAP_SY, color:"#e5fbff", fontSize:12, fontWeight:"900", textShadowColor:"rgba(0,0,0,0.35)", textShadowRadius:2 }}>Port</Text>
+
           <Cloud x={18} y={16} scale={0.9} />
           <Cloud x={300} y={116} scale={0.72} />
           <Birds x={244} y={26} />
 
-          <View style={{ position:"absolute", left:0, right:0, top:130 * MAP_SY, height:34 * MAP_SY, backgroundColor:"#2d3238" }} />
-          <View style={{ position:"absolute", left:0, right:0, top:270 * MAP_SY, height:34 * MAP_SY, backgroundColor:"#2d3238" }} />
-          <View style={{ position:"absolute", left:120 * MAP_SX, top:0, bottom:0, width:24 * MAP_SX, backgroundColor:"#2d3238" }} />
-          <View style={{ position:"absolute", left:240 * MAP_SX, top:0, bottom:0, width:24 * MAP_SX, backgroundColor:"#2d3238" }} />
-          <View style={{ position:"absolute", left:0, top:390 * MAP_SY, width:300 * MAP_SX, height:34 * MAP_SY, backgroundColor:"#2d3238", transform:[{ rotate:"-10deg" }] }} />
+          {/* routes principales */}
+          <Road x={0} y={130} w={380} h={36} horizontal />
+          <Road x={0} y={270} w={380} h={36} horizontal />
+          <Road x={120} y={0} w={26} h={460} horizontal={false} />
+          <Road x={240} y={0} w={26} h={460} horizontal={false} />
+          <View style={{ position:"absolute", left:0, top:390 * MAP_SY, width:300 * MAP_SX, height:36 * MAP_SY, backgroundColor:"#263039", borderWidth:1, borderColor:"rgba(255,255,255,0.08)", transform:[{ rotate:"-10deg" }] }} />
 
           {[0, 44, 88, 154, 198, 286, 330].map((x) => <RoadLine key={`r1-${x}`} x={x} y={146} w={22} h={3} />)}
           {[12, 56, 100, 164, 208, 284, 328].map((x) => <RoadLine key={`r2-${x}`} x={x} y={286} w={22} h={3} />)}
@@ -1014,12 +1079,18 @@ export default function WorldScreen() {
           <Crosswalk x={122} y={300} horizontal={false} />
           <Crosswalk x={242} y={164} horizontal={false} />
 
-          <View style={{ position:"absolute", left:152 * MAP_SX, top:270 * MAP_SY, width:82 * MAP_SX, height:82 * MAP_SY, borderRadius:42 * MAP_SX, backgroundColor:"#2b3338", alignItems:"center", justifyContent:"center" }}>
-            <View style={{ width:60 * MAP_SX, height:60 * MAP_SX, borderRadius:30 * MAP_SX, backgroundColor:"#7fa455", alignItems:"center", justifyContent:"center" }}>
+          {/* rond-point et place centrale */}
+          <View style={{ position:"absolute", left:152 * MAP_SX, top:270 * MAP_SY, width:82 * MAP_SX, height:82 * MAP_SY, borderRadius:42 * MAP_SX, backgroundColor:"#20282f", borderWidth: 2, borderColor: "rgba(255,255,255,0.18)", alignItems:"center", justifyContent:"center" }}>
+            <View style={{ width:60 * MAP_SX, height:60 * MAP_SX, borderRadius:30 * MAP_SX, backgroundColor:"#87ab59", alignItems:"center", justifyContent:"center" }}>
               <View style={{ width:30 * MAP_SX, height:30 * MAP_SX, borderRadius:15 * MAP_SX, backgroundColor:"#75c9ed", borderWidth:2, borderColor:"rgba(255,255,255,0.62)" }} />
             </View>
             <Text style={{ position:"absolute", bottom:8, color:"#f2ffe9", fontSize:9, fontWeight:"900" }}>Fontaine</Text>
           </View>
+
+          <MapLabel x={154} y={246} text="Centre-ville" tone="green" />
+          <MapLabel x={18} y={142} text="Avenue Nord" />
+          <MapLabel x={284} y={284} text="Boulevard Est" />
+          <MapLabel x={72} y={398} text="Pont urbain" />
 
           <FerrisWheel x={282} y={28} size={46} />
           <DecoBuilding x={8} y={20} w={72} h={44} color="#7b604e" label="INDUS" />
@@ -1029,12 +1100,17 @@ export default function WorldScreen() {
           <DecoBuilding x={96} y={348} w={44} h={58} color="#34495e" />
           <DecoBuilding x={142} y={342} w={42} h={64} color="#2f6d85" />
           <DecoBuilding x={274} y={388} w={72} h={48} color="#44606a" label="PORT" />
+          <DecoBuilding x={274} y={154} w={58} h={42} color="#c4904d" label="HOTEL" />
+          <DecoBuilding x={330} y={158} w={40} h={38} color="#526b82" label="BANK" />
+          <ParkingLot x={92} y={414} w={58} h={34} />
+          <ParkingLot x={284} y={104} w={58} h={28} />
           <View style={{ position:"absolute", left:292 * MAP_SX, top:332 * MAP_SY, width:78 * MAP_SX, height:46 * MAP_SY, borderRadius:38, backgroundColor:"#36424c", borderWidth:6, borderColor:"#6f7d86", alignItems:"center", justifyContent:"center" }}>
             <View style={{ width:50 * MAP_SX, height:24 * MAP_SY, borderRadius:24, backgroundColor:"#67b56b", borderWidth:2, borderColor:"rgba(255,255,255,0.35)" }} />
+            <Text style={{ position:"absolute", bottom:-18, color:"#24313a", fontSize:9, fontWeight:"900" }}>Stade</Text>
           </View>
 
-          {[18, 44, 88, 332, 354, 18, 54, 214, 280, 352, 148, 236, 258, 92, 182].map((x, i) => (
-            <CityTree key={`tree-${i}`} x={x} y={[172, 158, 176, 112, 126, 250, 248, 108, 160, 186, 314, 246, 250, 430, 420][i]} size={i % 3 === 0 ? 14 : 11} />
+          {[18, 44, 88, 332, 354, 18, 54, 214, 280, 352, 148, 236, 258, 92, 182, 314, 336, 68, 108, 218, 28, 342].map((x, i) => (
+            <CityTree key={`tree-${i}`} x={x} y={[172, 158, 176, 112, 126, 250, 248, 108, 160, 186, 314, 246, 250, 430, 420, 214, 238, 92, 106, 220, 336, 322][i]} size={i % 3 === 0 ? 14 : 11} />
           ))}
           <MovingCar y={140} color="#3498db" dir={1} speed={8400} delay={250} />
           <MovingCar y={153} color="#e74c3c" dir={-1} speed={10200} delay={1400} />
