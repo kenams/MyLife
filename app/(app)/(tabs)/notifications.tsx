@@ -2,11 +2,20 @@ import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, Pressable, ScrollView, Text, View } from "react-native";
 
+import { starterResidents } from "@/lib/game-engine";
 import { getActiveMissions, getMission } from "@/lib/missions";
+import { buildSmartNotifications, type SmartNotificationPriority } from "@/lib/smart-notifications";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 
 const XP_PER_LEVEL = 200;
+
+const smartPriorityColor: Record<SmartNotificationPriority, string> = {
+  critical: "#ef4444",
+  high: "#f6b94f",
+  medium: "#60a5fa",
+  low: colors.muted
+};
 
 function DailyTaskRow({ emoji, label, done, urgency, detail, onPress }: {
   emoji: string; label: string; done: boolean;
@@ -66,6 +75,8 @@ export default function QuetesTab() {
   const notifications     = useGameStore((s) => s.notifications);
   const markAllRead       = useGameStore((s) => s.markAllNotificationsRead);
   const stats             = useGameStore((s) => s.stats);
+  const avatar            = useGameStore((s) => s.avatar);
+  const relationships     = useGameStore((s) => s.relationships);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
@@ -77,6 +88,7 @@ export default function QuetesTab() {
   const unreadNotifs    = notifications.filter((n) => !n.read);
   const xpInLevel       = playerXp % XP_PER_LEVEL;
   const xpPct           = (xpInLevel / XP_PER_LEVEL) * 100;
+  const smartNotifs     = buildSmartNotifications({ avatar, stats, relationships, residents: starterResidents });
 
   // Tâches obligatoires quotidiennes
   const hoursSinceEat  = stats.lastMealAt
@@ -173,6 +185,52 @@ export default function QuetesTab() {
         </View>
 
         <View style={{ padding: 20, gap: 20 }}>
+
+          {/* Notifications intelligentes */}
+          <View style={{ gap: 10 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+              <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
+                NOTIFICATIONS INTELLIGENTES
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 11 }}>
+                {smartNotifs.length} signal{smartNotifs.length > 1 ? "s" : ""}
+              </Text>
+            </View>
+            {smartNotifs.slice(0, 4).map((n) => {
+              const priorityColor = smartPriorityColor[n.priority];
+              return (
+                <Pressable
+                  key={n.id}
+                  onPress={() => router.push(n.route as any)}
+                  style={{
+                    backgroundColor: priorityColor + "10",
+                    borderRadius: 15,
+                    padding: 13,
+                    borderWidth: 1.5,
+                    borderColor: priorityColor + "35",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 12
+                  }}>
+                  <View style={{ width: 42, height: 42, borderRadius: 21,
+                    backgroundColor: priorityColor + "20", alignItems: "center", justifyContent: "center",
+                    borderWidth: 1, borderColor: priorityColor + "45" }}>
+                    <Text style={{ color: priorityColor, fontWeight: "900", fontSize: 12 }}>
+                      {n.priority === "critical" ? "!" : n.priority === "high" ? "!!" : "i"}
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>{n.title}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 11, marginTop: 2 }}>{n.body}</Text>
+                  </View>
+                  <View style={{ backgroundColor: priorityColor + "18", borderRadius: 9,
+                    paddingHorizontal: 9, paddingVertical: 5, borderWidth: 1, borderColor: priorityColor + "35" }}>
+                    <Text style={{ color: priorityColor, fontSize: 10, fontWeight: "900" }}>{n.actionLabel}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
 
           {/* Tâches obligatoires */}
           <View style={{ gap: 10 }}>

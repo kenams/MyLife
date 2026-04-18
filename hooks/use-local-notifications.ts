@@ -2,6 +2,8 @@ import * as Notifications from "expo-notifications";
 import { useEffect, useRef } from "react";
 import { Platform } from "react-native";
 
+import { starterResidents } from "@/lib/game-engine";
+import { getBestProfileMatches } from "@/lib/profile-matching";
 import { useGameStore } from "@/stores/game-store";
 
 // Les notifications push ne sont pas supportées sur le web
@@ -79,9 +81,11 @@ const WARN_THRESHOLD = 30;
 
 export function useLocalNotifications() {
   const stats       = useGameStore((s) => s.stats);
+  const avatar      = useGameStore((s) => s.avatar);
   const session     = useGameStore((s) => s.session);
   const invitations = useGameStore((s) => s.invitations);
   const dailyEvent  = useGameStore((s) => s.dailyEvent);
+  const relationships = useGameStore((s) => s.relationships);
   const hasPermission    = useRef(false);
   const lastAlertRef     = useRef<Record<string, number>>({});
   const dailyScheduled   = useRef(false);
@@ -137,6 +141,24 @@ export function useLocalNotifications() {
       }
     }
   }, [dailyEvent]);
+
+  // Match social pertinent selon le profil
+  useEffect(() => {
+    if (IS_WEB || !hasPermission.current) return;
+    const [bestMatch] = getBestProfileMatches(avatar, starterResidents, relationships);
+    if (!bestMatch || bestMatch.score < 72) return;
+
+    const key = `match-${bestMatch.resident.id}`;
+    const now = Date.now();
+    if (now - (lastAlertRef.current[key] ?? 0) > 12 * 60 * 60 * 1000) {
+      lastAlertRef.current[key] = now;
+      void scheduleLocalNotification(
+        `Match ${bestMatch.score}% avec ${bestMatch.resident.name}`,
+        "Un profil compatible t'attend dans Decouvrir.",
+        4
+      );
+    }
+  }, [avatar, relationships]);
 
   useEffect(() => {
     if (IS_WEB || !hasPermission.current) return;

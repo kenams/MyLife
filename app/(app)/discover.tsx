@@ -3,7 +3,8 @@ import { useEffect, useRef } from "react";
 import { Animated, Pressable, ScrollView, Text, View } from "react-native";
 
 import { starterResidents } from "@/lib/game-engine";
-import { getCompatibilityBadge, getRelationshipLabel, getResidentAccessibility } from "@/lib/selectors";
+import { getBestProfileMatches } from "@/lib/profile-matching";
+import { getRelationshipLabel, getResidentAccessibility } from "@/lib/selectors";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 
@@ -19,6 +20,8 @@ export default function DiscoverScreen() {
     Animated.timing(fadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
   }, []);
 
+  const matches = getBestProfileMatches(avatar, starterResidents, relationships);
+
   return (
     <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} showsVerticalScrollIndicator={false}>
@@ -33,18 +36,19 @@ export default function DiscoverScreen() {
           </Pressable>
           <Text style={{ color: colors.text, fontWeight: "900", fontSize: 26 }}>🔍 Découvrir</Text>
           <Text style={{ color: colors.muted, fontSize: 12, marginTop: 3 }}>
-            Profils compatibles — {starterResidents.length} résidents
+            Matches selon ton profil - {starterResidents.length} residents
           </Text>
         </View>
 
         <View style={{ padding: 20, gap: 14 }}>
-          {starterResidents.map((resident) => {
+          {matches.map((match) => {
+            const resident     = match.resident;
             const relationship = relationships.find((r) => r.residentId === resident.id);
             const access       = getResidentAccessibility(resident.id, stats);
-            const compat       = getCompatibilityBadge(avatar?.interests ?? [], resident.interests);
             const relLabel     = getRelationshipLabel(relationship);
             const accessColor  = access.level === "accessible" ? "#38c793" : access.level === "receptif" ? "#fbbf24" : colors.muted;
             const rankColor    = resident.socialRank === "elite" ? "#f6b94f" : resident.socialRank === "influent" ? "#c084fc" : colors.accent;
+            const matchColor   = match.tier === "excellent" ? "#38c793" : match.tier === "strong" ? "#60a5fa" : match.tier === "good" ? "#f6b94f" : colors.muted;
 
             return (
               <View key={resident.id} style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 18,
@@ -72,9 +76,11 @@ export default function DiscoverScreen() {
 
                 {/* Badges */}
                 <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
-                  <View style={{ backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 8,
-                    paddingHorizontal: 8, paddingVertical: 4 }}>
-                    <Text style={{ color: colors.muted, fontSize: 10 }}>🎯 {compat}</Text>
+                  <View style={{ backgroundColor: matchColor + "18", borderRadius: 8,
+                    paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: matchColor + "40" }}>
+                    <Text style={{ color: matchColor, fontSize: 10, fontWeight: "900" }}>
+                      Match {match.score}% - {match.tier}
+                    </Text>
                   </View>
                   <View style={{ backgroundColor: accessColor + "15", borderRadius: 8,
                     paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: accessColor + "35" }}>
@@ -88,6 +94,12 @@ export default function DiscoverScreen() {
                       <Text style={{ color: colors.accent, fontSize: 10, fontWeight: "700" }}>{relLabel}</Text>
                     </View>
                   )}
+                  {match.reasons.slice(0, 3).map((reason) => (
+                    <View key={reason} style={{ backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 8,
+                      paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
+                      <Text style={{ color: colors.muted, fontSize: 10 }}>{reason}</Text>
+                    </View>
+                  ))}
                 </View>
 
                 {/* Access hint */}
