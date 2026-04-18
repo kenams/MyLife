@@ -5,20 +5,31 @@ import { Text, View } from "react-native";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 
-function MissionsBadge({ color }: { color: string }) {
-  const missions = useGameStore((s) => s.missionProgresses ?? []);
-  const claimable = missions.filter((m) => m.status === "completed").length;
-  if (claimable === 0) return <Ionicons name="trophy-outline" color={color} size={24} />;
+function QueuetesBadge({ color, focused }: { color: string; focused: boolean }) {
+  const missions   = useGameStore((s) => s.missionProgresses ?? []);
+  const stats      = useGameStore((s) => s.stats);
+  const claimable  = missions.filter((m) => m.status === "completed").length;
+  const hoursSinceEat = stats.lastMealAt
+    ? (Date.now() - new Date(stats.lastMealAt).getTime()) / 3_600_000 : 99;
+  const criticalTasks = [
+    hoursSinceEat > 7,
+    stats.energy < 15,
+    stats.hygiene < 20,
+  ].filter(Boolean).length;
+  const badgeCount = claimable + criticalTasks;
+  const badgeColor = criticalTasks > 0 ? "#ef4444" : "#f6b94f";
   return (
     <View style={{ position: "relative" }}>
-      <Ionicons name="trophy" color={color} size={24} />
-      <View style={{
-        position: "absolute", top: -4, right: -6,
-        width: 16, height: 16, borderRadius: 8,
-        backgroundColor: "#ff6b6b", alignItems: "center", justifyContent: "center"
-      }}>
-        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: "#fff" }} />
-      </View>
+      <Ionicons name={focused ? "trophy" : "trophy-outline"} color={color} size={24} />
+      {badgeCount > 0 && (
+        <View style={{
+          position: "absolute", top: -4, right: -6,
+          minWidth: 16, height: 16, borderRadius: 8,
+          backgroundColor: badgeColor, alignItems: "center", justifyContent: "center", paddingHorizontal: 3
+        }}>
+          <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>{badgeCount > 9 ? "9+" : badgeCount}</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -89,7 +100,7 @@ export default function TabsLayout() {
         name="notifications"
         options={{
           title: "Quêtes",
-          tabBarIcon: ({ color }) => <MissionsBadge color={color} />,
+          tabBarIcon: ({ color, focused }) => <QueuetesBadge color={color} focused={focused} />,
         }}
       />
       <Tabs.Screen
