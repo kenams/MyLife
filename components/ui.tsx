@@ -1,47 +1,6 @@
-import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
-import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { colors } from "@/lib/theme";
-
-// ─── NavBack — bouton retour universel ───────────────────────────────────────
-export function NavBack({ fallback }: { fallback: string }) {
-  const goBack = () => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace(fallback as never);
-    }
-  };
-  return (
-    <Pressable
-      onPress={goBack}
-      style={{
-        flexDirection: "row", alignItems: "center", gap: 6,
-        paddingHorizontal: 12, paddingVertical: 8,
-        borderRadius: 10, backgroundColor: "rgba(255,255,255,0.06)",
-        alignSelf: "flex-start"
-      }}
-      hitSlop={12}
-    >
-      <Text style={{ color: colors.text, fontSize: 14, fontWeight: "700" }}>←</Text>
-      <Text style={{ color: colors.muted, fontSize: 13, fontWeight: "600" }}>Retour</Text>
-    </Pressable>
-  );
-}
-
-export function AppShell({ children }: { children: React.ReactNode }) {
-  return (
-    <LinearGradient colors={["#050d18", "#0b1730", "#09111d"]} style={StyleSheet.absoluteFill}>
-      <SafeAreaView style={styles.safe}>
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-          {children}
-        </ScrollView>
-      </SafeAreaView>
-    </LinearGradient>
-  );
-}
 
 export function Card({
   children,
@@ -214,34 +173,7 @@ export function ListRow({
   );
 }
 
-export function AvatarBadge({
-  title,
-  subtitle,
-  tone = "accent"
-}: {
-  title: string;
-  subtitle: string;
-  tone?: "accent" | "violet";
-}) {
-  return (
-    <LinearGradient
-      colors={tone === "violet" ? ["#1b1733", "#241f49"] : ["#10243d", "#0f1a30"]}
-      style={styles.avatarBadge}
-    >
-      <View style={styles.avatarCore}>
-        <Text style={styles.avatarInitial}>{title.slice(0, 2).toUpperCase()}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.avatarTitle}>{title}</Text>
-        <Text style={styles.avatarSubtitle}>{subtitle}</Text>
-      </View>
-    </LinearGradient>
-  );
-}
-
 export const styles = StyleSheet.create({
-  safe: { flex: 1 },
-  scroll: { paddingHorizontal: 18, paddingTop: 10, paddingBottom: 40, gap: 16 },
   card: {
     backgroundColor: "rgba(13, 23, 41, 0.9)",
     borderRadius: 26,
@@ -341,25 +273,5 @@ export const styles = StyleSheet.create({
     paddingVertical: 10
   },
   listTitle: { color: colors.text, fontSize: 15, fontWeight: "700" },
-  listSubtitle: { color: colors.muted, fontSize: 13, lineHeight: 18 },
-  avatarBadge: {
-    borderRadius: 22,
-    padding: 14,
-    flexDirection: "row",
-    gap: 12,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.08)"
-  },
-  avatarCore: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: "rgba(255,255,255,0.08)",
-    alignItems: "center",
-    justifyContent: "center"
-  },
-  avatarInitial: { color: colors.text, fontSize: 16, fontWeight: "800" },
-  avatarTitle: { color: colors.text, fontSize: 16, fontWeight: "800" },
-  avatarSubtitle: { color: colors.muted, fontSize: 13, marginTop: 2 }
+  listSubtitle: { color: colors.muted, fontSize: 13, lineHeight: 18 }
 });

@@ -22,7 +22,6 @@
     "expo-asset": "~11.0.5",
     "expo-constants": "~17.0.3",
     "expo-font": "~13.0.4",
-    "expo-linear-gradient": "~14.0.2",
     "expo-notifications": "~0.29.14",
     "expo-router": "~4.0.17",
     "expo-status-bar": "~2.0.1",

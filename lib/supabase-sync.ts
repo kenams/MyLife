@@ -259,7 +259,7 @@ export async function registerPushTokenToSupabase(
   token: string,
   platform: string
 ): Promise<{ ok: boolean; error?: string }> {
-  if (!isSupabaseConfigured || !supabase) return { ok: false, error: "Supabase non configurÃ©" };
+  if (!isSupabaseConfigured || !supabase) return { ok: false, error: "Supabase non configuré" };
 
   const { error } = await supabase.from("push_tokens").upsert(
     {

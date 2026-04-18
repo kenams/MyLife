@@ -58,7 +58,7 @@ function DailyTaskRow({ emoji, label, done, urgency, detail, onPress }: {
   );
 }
 
-export default function QuestesTab() {
+export default function QuetesTab() {
   const missionProgresses = useGameStore((s) => s.missionProgresses ?? []);
   const playerLevel       = useGameStore((s) => s.playerLevel ?? 1);
   const playerXp          = useGameStore((s) => s.playerXp ?? 0);

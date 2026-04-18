@@ -1,7 +1,6 @@
 import { useMemo, useState } from "react";
-import { Text, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 
-import { Button, Card, Input, Muted, Pill, SectionTitle } from "@/components/ui";
 import {
   ageRanges,
   ambitionLevels,
@@ -31,6 +30,101 @@ import {
 } from "@/lib/game-data";
 import { colors } from "@/lib/theme";
 import type { AvatarProfile } from "@/lib/types";
+
+function Card({ children, accent = false }: { children: React.ReactNode; accent?: boolean }) {
+  return (
+    <View style={{
+      backgroundColor: accent ? "rgba(13,26,45,0.96)" : "rgba(13,23,41,0.9)",
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: accent ? "rgba(88,214,163,0.24)" : colors.border,
+      padding: 18,
+      gap: 12
+    }}>
+      {children}
+    </View>
+  );
+}
+
+function Pill({ children }: { children: React.ReactNode }) {
+  return (
+    <View style={{
+      alignSelf: "flex-start",
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 999,
+      backgroundColor: "rgba(88,214,163,0.14)",
+      borderWidth: 1,
+      borderColor: "rgba(88,214,163,0.22)"
+    }}>
+      <Text style={{ color: colors.text, fontSize: 12, fontWeight: "700" }}>{children}</Text>
+    </View>
+  );
+}
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return <Text style={{ color: colors.text, fontSize: 19, fontWeight: "800" }}>{children}</Text>;
+}
+
+function Muted({ children }: { children: React.ReactNode }) {
+  return <Text style={{ color: colors.muted, fontSize: 15, lineHeight: 22 }}>{children}</Text>;
+}
+
+function Input({
+  value,
+  onChangeText,
+  placeholder,
+  multiline = false,
+  keyboardType
+}: {
+  value: string;
+  onChangeText: (value: string) => void;
+  placeholder: string;
+  multiline?: boolean;
+  keyboardType?: "default" | "email-address" | "numeric";
+}) {
+  return (
+    <TextInput
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      placeholderTextColor={colors.muted}
+      autoCapitalize="none"
+      multiline={multiline}
+      keyboardType={keyboardType}
+      style={{
+        minHeight: multiline ? 112 : 56,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: colors.border,
+        backgroundColor: colors.bgSoft,
+        paddingHorizontal: 16,
+        paddingTop: multiline ? 14 : undefined,
+        color: colors.text,
+        fontSize: 16,
+        textAlignVertical: multiline ? "top" : "center"
+      }}
+    />
+  );
+}
+
+function FormButton({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        minHeight: 54,
+        borderRadius: 16,
+        alignItems: "center",
+        justifyContent: "center",
+        paddingHorizontal: 18,
+        backgroundColor: colors.accentStrong
+      }}
+    >
+      <Text style={{ color: "#052117", fontWeight: "800", fontSize: 16 }}>{label}</Text>
+    </Pressable>
+  );
+}
 
 function ChoiceGroup({
   label,
@@ -231,22 +325,22 @@ export function AvatarForm({
   return (
     <View style={{ gap: 16 }}>
       <Card accent>
-        <Pill>Identite</Pill>
+        <Pill>Identité</Pill>
         <SectionTitle>{displayName.trim() || "Avatar premium"}</SectionTitle>
         <Muted>{summary}</Muted>
       </Card>
 
       <Card>
-        <Input value={displayName} onChangeText={setDisplayName} placeholder="Prenom ou pseudo" />
+        <Input value={displayName} onChangeText={setDisplayName} placeholder="Prénom ou pseudo" />
         <Input value={bio} onChangeText={setBio} placeholder="Bio courte" multiline />
-        <ChoiceGroup label="Tranche d'age" options={ageRanges} selected={ageRange} onSelect={setAgeRange} />
+        <ChoiceGroup label="Tranche d'âge" options={ageRanges} selected={ageRange} onSelect={setAgeRange} />
         <ChoiceGroup label="Genre" options={genderOptions} selected={gender} onSelect={setGender} />
         <ChoiceGroup label="Style photo" options={photoStyles} selected={photoStyle} onSelect={setPhotoStyle} />
         <ChoiceGroup label="Origine / style" options={originStyles} selected={originStyle} onSelect={setOriginStyle} />
       </Card>
 
       <Card>
-        <SectionTitle>Physique et presence</SectionTitle>
+        <SectionTitle>Physique et présence</SectionTitle>
         <View style={{ flexDirection: "row", gap: 12 }}>
           <View style={{ flex: 1 }}>
             <Input value={heightCm} onChangeText={setHeightCm} placeholder="Taille (cm)" keyboardType="numeric" />
@@ -269,22 +363,22 @@ export function AvatarForm({
       <Card>
         <SectionTitle>Profil comportemental</SectionTitle>
         <ChoiceGroup label="Trait principal" options={personalityTraits} selected={personalityTrait} onSelect={setPersonalityTrait} />
-        <ChoiceGroup label="Sociabilite" options={sociabilityLevels} selected={sociabilityStyle} onSelect={setSociabilityStyle} />
+        <ChoiceGroup label="Sociabilité" options={sociabilityLevels} selected={sociabilityStyle} onSelect={setSociabilityStyle} />
         <ChoiceGroup label="Ambition" options={ambitionLevels} selected={ambition} onSelect={setAmbition} />
         <ChoiceGroup label="Rythme de vie" options={lifeRhythms} selected={lifeRhythm} onSelect={setLifeRhythm} />
         <ChoiceGroup label="Style relationnel" options={relationshipStyles} selected={relationshipStyle} onSelect={setRelationshipStyle} />
         <ChoiceGroup label="Objectif personnel" options={personalGoals} selected={personalGoal} onSelect={setPersonalGoal} />
         <ChoiceGroup label="Habitude dominante" options={lifeHabits} selected={lifeHabit} onSelect={setLifeHabit} />
-        <ChoiceGroup label="Metier de depart" options={jobs.map((job) => job.slug)} selected={starterJob} onSelect={setStarterJob} />
+        <ChoiceGroup label="Métier de départ" options={jobs.map((job) => job.slug)} selected={starterJob} onSelect={setStarterJob} />
       </Card>
 
       <Card>
-        <SectionTitle>Vie sociale et preferences</SectionTitle>
-        <Input value={friendshipIntent} onChangeText={setFriendshipIntent} placeholder="Ce que tu cherches en amitie" />
+        <SectionTitle>Vie sociale et préférences</SectionTitle>
+        <Input value={friendshipIntent} onChangeText={setFriendshipIntent} placeholder="Ce que tu cherches en amitié" />
         <Input value={romanceIntent} onChangeText={setRomanceIntent} placeholder="Vision des rencontres" />
-        <ChoiceGroup label="Ambiance preferee" options={preferredVibes} selected={preferredVibe} onSelect={setPreferredVibe} />
+        <ChoiceGroup label="Ambiance préférée" options={preferredVibes} selected={preferredVibe} onSelect={setPreferredVibe} />
         <MultiChoiceGroup
-          label="Centres d'interet"
+          label="Centres d'intérêt"
           options={interestOptions}
           selected={interests}
           onToggle={(value) => setInterests((current) => toggleInArray(current, value, 4))}
@@ -305,21 +399,21 @@ export function AvatarForm({
           limit={4}
         />
         <MultiChoiceGroup
-          label="Activites pref"
+          label="Activités préférées"
           options={interestOptions}
           selected={favoriteActivities}
           onToggle={(value) => setFavoriteActivities((current) => toggleInArray(current, value, 3))}
           limit={3}
         />
         <MultiChoiceGroup
-          label="Sorties pref"
+          label="Sorties préférées"
           options={["coffee", "cinema", "restaurant", "park", "gym"]}
           selected={favoriteOutingsState}
           onToggle={(value) => setFavoriteOutingsState((current) => toggleInArray(current, value, 3))}
           limit={3}
         />
         <MultiChoiceGroup
-          label="Traits apprecies"
+          label="Traits appréciés"
           options={traitPreferences}
           selected={appreciatedTraits}
           onToggle={(value) => setAppreciatedTraits((current) => toggleInArray(current, value, 3))}
@@ -327,7 +421,7 @@ export function AvatarForm({
         />
       </Card>
 
-      <Button label={submitLabel} onPress={submit} />
+      <FormButton label={submitLabel} onPress={submit} />
     </View>
   );
 }

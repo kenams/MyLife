@@ -5,7 +5,7 @@ import { Text, View } from "react-native";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 
-function QueuetesBadge({ color, focused }: { color: string; focused: boolean }) {
+function QuetesBadge({ color, focused }: { color: string; focused: boolean }) {
   const missions   = useGameStore((s) => s.missionProgresses ?? []);
   const stats      = useGameStore((s) => s.stats);
   const claimable  = missions.filter((m) => m.status === "completed").length;
@@ -100,7 +100,7 @@ export default function TabsLayout() {
         name="notifications"
         options={{
           title: "Quêtes",
-          tabBarIcon: ({ color, focused }) => <QueuetesBadge color={color} focused={focused} />,
+          tabBarIcon: ({ color, focused }) => <QuetesBadge color={color} focused={focused} />,
         }}
       />
       <Tabs.Screen
