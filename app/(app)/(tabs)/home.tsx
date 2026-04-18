@@ -166,6 +166,86 @@ function QuestRow({ label, done, xp }: { label: string; done: boolean; xp?: numb
   );
 }
 
+function JourneyCard({
+  emoji,
+  title,
+  body,
+  primary,
+  color,
+  routes
+}: {
+  emoji: string;
+  title: string;
+  body: string;
+  primary: { label: string; route: string };
+  color: string;
+  routes: { label: string; route: string }[];
+}) {
+  return (
+    <View style={{
+      backgroundColor: color + "10",
+      borderRadius: 18,
+      padding: 14,
+      gap: 12,
+      borderWidth: 1,
+      borderColor: color + "35"
+    }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <View style={{
+          width: 42,
+          height: 42,
+          borderRadius: 14,
+          backgroundColor: color + "20",
+          alignItems: "center",
+          justifyContent: "center",
+          borderWidth: 1,
+          borderColor: color + "45"
+        }}>
+          <Text style={{ fontSize: 22 }}>{emoji}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.text, fontSize: 15, fontWeight: "900" }}>{title}</Text>
+          <Text style={{ color: colors.muted, fontSize: 11, marginTop: 2 }}>{body}</Text>
+        </View>
+      </View>
+
+      <Pressable
+        onPress={() => router.push(primary.route as never)}
+        style={{
+          backgroundColor: color + "22",
+          borderRadius: 12,
+          paddingVertical: 10,
+          paddingHorizontal: 12,
+          alignItems: "center",
+          borderWidth: 1,
+          borderColor: color + "55"
+        }}
+      >
+        <Text style={{ color, fontWeight: "900", fontSize: 13 }}>{primary.label}</Text>
+      </Pressable>
+
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 7 }}>
+        {routes.map((item) => (
+          <Pressable
+            key={item.route}
+            onPress={() => router.push(item.route as never)}
+            style={{
+              paddingHorizontal: 10,
+              paddingVertical: 7,
+              borderRadius: 12,
+              backgroundColor: "rgba(255,255,255,0.055)",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.08)"
+            }}
+          >
+            <Text style={{ color: colors.textSoft, fontSize: 11, fontWeight: "700" }}>{item.label}</Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
 // ─── Daily Event Modal ────────────────────────────────────────────────────────
 function DailyEventModal() {
   const dailyEvent        = useGameStore((s) => s.dailyEvent);
@@ -298,7 +378,6 @@ export default function HomeScreen() {
   const playerLevel         = useGameStore((s) => s.playerLevel ?? 1);
   const housingTier         = useGameStore((s) => s.housingTier);
   const checkHousingRent    = useGameStore((s) => s.checkHousingRent);
-  const wealthScore         = useGameStore((s) => s.wealthScore);
 
   useFocusEffect(useCallback(() => { bootstrap(); checkHousingRent(); }, [bootstrap, checkHousingRent]));
 
@@ -312,6 +391,14 @@ export default function HomeScreen() {
   const wbColor      = wellbeing > 65 ? colors.accent : wellbeing > 40 ? colors.gold : colors.danger;
   const suggestedActions = getSuggestedActions(timeCtx);
   const isActionPrime    = (id: LifeActionId) => suggestedActions.includes(id);
+  const essentialActionIds: LifeActionId[] = ["healthy-meal", "sleep", "shower", "work-shift", "walk", "cafe-chat"];
+  const simpleActions = ALL_ACTIONS.filter((action) => essentialActionIds.includes(action.id) && !isActionPrime(action.id));
+  const urgentNeeds = [
+    stats.hunger < 35 ? "faim" : null,
+    stats.energy < 35 ? "énergie" : null,
+    stats.hygiene < 35 ? "hygiène" : null,
+    stats.mood < 35 ? "humeur" : null
+  ].filter(Boolean);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(30)).current;
@@ -554,6 +641,72 @@ export default function HomeScreen() {
             </Pressable>
           )}
 
+          {/* ── MODE SIMPLE ── */}
+          <View>
+            <SectionTitle text="PLAN SIMPLE" />
+            <View style={{
+              backgroundColor: "rgba(255,255,255,0.04)",
+              borderRadius: 18,
+              padding: 14,
+              gap: 12,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.08)"
+            }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <View style={{
+                  width: 44,
+                  height: 44,
+                  borderRadius: 14,
+                  backgroundColor: urgentNeeds.length > 0 ? colors.dangerGlow : colors.accentGlow,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderWidth: 1,
+                  borderColor: urgentNeeds.length > 0 ? colors.danger + "45" : colors.accent + "45"
+                }}>
+                  <Text style={{ fontSize: 22 }}>{urgentNeeds.length > 0 ? "!" : "✓"}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: colors.text, fontWeight: "900", fontSize: 15 }}>
+                    {urgentNeeds.length > 0 ? "Commence par stabiliser ton avatar" : "Ton avatar est stable"}
+                  </Text>
+                  <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>
+                    {urgentNeeds.length > 0
+                      ? `À régler maintenant : ${urgentNeeds.join(", ")}.`
+                      : "Tu peux explorer, socialiser ou avancer tes objectifs."}
+                  </Text>
+                </View>
+              </View>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable
+                  onPress={() => performAction(recommended.action)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: colors.accent,
+                    borderRadius: 12,
+                    paddingVertical: 11,
+                    alignItems: "center"
+                  }}
+                >
+                  <Text style={{ color: "#07111f", fontWeight: "900", fontSize: 13 }}>Faire l'action utile</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => router.push("/(app)/(tabs)/world" as never)}
+                  style={{
+                    flex: 1,
+                    backgroundColor: "rgba(255,255,255,0.06)",
+                    borderRadius: 12,
+                    paddingVertical: 11,
+                    alignItems: "center",
+                    borderWidth: 1,
+                    borderColor: "rgba(255,255,255,0.1)"
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>Aller en ville</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+
           {/* ── ACTION RECOMMANDÉE ── */}
           <View>
             <SectionTitle text="PRIORITÉ DU MOMENT" />
@@ -581,7 +734,7 @@ export default function HomeScreen() {
 
           {/* ── ACTIONS ── */}
           <View>
-            <SectionTitle text="ACTIONS"
+            <SectionTitle text="ACTIONS ESSENTIELLES"
               right={<Text style={{ color: timeCtx.color, fontSize: 11, fontWeight: "700" }}>{timeCtx.emoji} {timeCtx.label}</Text>} />
             {suggestedActions.length > 0 && (
               <View style={{ backgroundColor: timeCtx.color + "0d", borderRadius: 14, padding: 10,
@@ -605,8 +758,7 @@ export default function HomeScreen() {
               </View>
             )}
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-              {ALL_ACTIONS.map(({ id, emoji, label, cost, reward, minEnergy, minMoney }) => {
-                if (isActionPrime(id)) return null;
+              {simpleActions.map(({ id, emoji, label, cost, reward, minEnergy, minMoney }) => {
                 const disabled = !!(minEnergy && stats.energy < minEnergy) || !!(minMoney && stats.money < minMoney);
                 return (
                   <ActionBtn key={id} emoji={emoji} label={label} cost={cost}
@@ -617,22 +769,58 @@ export default function HomeScreen() {
             </View>
           </View>
 
-          {/* ── EXPLORER ── */}
+          {/* ── PARCOURS ── */}
           <View>
-            <SectionTitle text="EXPLORER" />
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              {[
-                { label: "Carte Live", emoji: "🗺️", route: "/(app)/world-live", color: colors.purple },
-                { label: getHousingTier(housingTier).name, emoji: getHousingTier(housingTier).emoji, route: "/(app)/housing", color: getHousingTier(housingTier).color },
-                { label: "Dates",      emoji: "💘", route: "/(app)/dates",      color: "#ff6b6b"     },
-              ].map((item) => (
-                <Pressable key={item.route} onPress={() => router.push(item.route as never)}
-                  style={{ flex: 1, backgroundColor: item.color + "14", borderRadius: 16, padding: 14,
-                    borderWidth: 1, borderColor: item.color + "35", alignItems: "center", gap: 6 }}>
-                  <Text style={{ fontSize: 26 }}>{item.emoji}</Text>
-                  <Text style={{ color: item.color, fontWeight: "800", fontSize: 11 }}>{item.label}</Text>
-                </Pressable>
-              ))}
+            <SectionTitle text="PARCOURS" />
+            <View style={{ gap: 12 }}>
+              <JourneyCard
+                emoji="🏙️"
+                title="Explorer la ville"
+                body="Carte, lieux, rooms et personnes présentes."
+                primary={{ label: "Ouvrir la ville", route: "/(app)/(tabs)/world" }}
+                color={colors.purple}
+                routes={[
+                  { label: "Rooms", route: "/(app)/rooms" },
+                  { label: "Carte live", route: "/(app)/world-live" },
+                  { label: getHousingTier(housingTier).name, route: "/(app)/housing" }
+                ]}
+              />
+              <JourneyCard
+                emoji="💬"
+                title="Social et rencontres"
+                body="Messages, relations, sorties et rendez-vous."
+                primary={{ label: "Ouvrir le chat", route: "/(app)/(tabs)/chat" }}
+                color={colors.accent}
+                routes={[
+                  { label: "Relations", route: "/(app)/relations" },
+                  { label: "Sorties", route: "/(app)/outings" },
+                  { label: "Dates", route: "/(app)/dates" }
+                ]}
+              />
+              <JourneyCard
+                emoji="📈"
+                title="Progression"
+                body="Quêtes, missions, niveau et objectifs."
+                primary={{ label: "Voir les quêtes", route: "/(app)/(tabs)/notifications" }}
+                color={colors.gold}
+                routes={[
+                  { label: "Missions", route: "/(app)/missions" },
+                  { label: "Talents", route: "/(app)/progression" },
+                  { label: "Classement", route: "/(app)/leaderboard" }
+                ]}
+              />
+              <JourneyCard
+                emoji="🧭"
+                title="Vie pratique"
+                body="Travail, santé, argent et coaching."
+                primary={{ label: "Travailler", route: "/(app)/work" }}
+                color={colors.blue}
+                routes={[
+                  { label: "Santé", route: "/(app)/health" },
+                  { label: "Économie", route: "/(app)/economy" },
+                  { label: "Coach", route: "/(app)/coach" }
+                ]}
+              />
             </View>
           </View>
 
@@ -668,43 +856,17 @@ export default function HomeScreen() {
             )}
           </View>
 
-          {/* ── GAME HUB ── */}
+          {/* ── OUTILS AVANCÉS ── */}
           <View>
-            <SectionTitle text="GAME HUB" />
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              {[
-                { label: "Missions",     emoji: "🎯", route: "/(app)/missions",    color: colors.accent },
-                { label: "Progression",  emoji: "⚡", route: "/(app)/progression", color: colors.gold   },
-                { label: "Classement",   emoji: "🏆", route: "/(app)/leaderboard", color: colors.purple },
-                { label: "Trading",      emoji: "💱", route: "/(app)/trading",     color: colors.blue   },
-              ].map((item) => (
-                <Pressable key={item.route} onPress={() => router.push(item.route as never)}
-                  style={{ flex: 1, backgroundColor: item.color + "12", borderRadius: 14, padding: 12,
-                    borderWidth: 1, borderColor: item.color + "30", alignItems: "center", gap: 4 }}>
-                  <Text style={{ fontSize: 20 }}>{item.emoji}</Text>
-                  <Text style={{ color: item.color, fontWeight: "700", fontSize: 10 }}>{item.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-          </View>
-
-          {/* ── NAVIGATION ── */}
-          <View>
-            <SectionTitle text="NAVIGATION" />
+            <SectionTitle text="OUTILS AVANCÉS" />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {[
-                { label: "🏠 Logement",     route: "/(app)/housing"        },
-                { label: "💪 Sport",       route: "/(app)/health"         },
-                { label: "💼 Travail",     route: "/(app)/work"           },
-                { label: "🍷 Sorties",     route: "/(app)/outings"        },
-                { label: "💘 Rendez-vous", route: "/(app)/dates"          },
-                { label: "👥 Relations",   route: "/(app)/relations"      },
-                { label: "🔐 Secret",      route: "/(app)/secret-room"    },
-                { label: "🤖 Coach ARIA",  route: "/(app)/coach"          },
-                { label: "📚 Études",      route: "/(app)/studies"        },
-                { label: "📊 Stats",       route: "/(app)/tips"           },
-                { label: "⭐ Premium",     route: "/(app)/premium"        },
-                { label: "👤 Profil",      route: "/(app)/profile-public" },
+                { label: "📚 Études", route: "/(app)/studies" },
+                { label: "💱 Trading", route: "/(app)/trading" },
+                { label: "🔐 Secret", route: "/(app)/secret-room" },
+                { label: "💡 Conseils", route: "/(app)/tips" },
+                { label: "⭐ Premium", route: "/(app)/premium" },
+                { label: "👤 Profil public", route: "/(app)/profile-public" },
               ].map((item) => (
                 <Pressable key={item.route} onPress={() => router.push(item.route as never)}
                   style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 22,

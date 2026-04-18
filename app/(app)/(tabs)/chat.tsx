@@ -47,6 +47,35 @@ function OnlineDot({ online }: { online: boolean }) {
   );
 }
 
+function QuickReplyBar({ replies, onPick }: { replies: string[]; onPick: (text: string) => void }) {
+  if (replies.length === 0) return null;
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ gap: 8, paddingHorizontal: 14, paddingVertical: 8 }}
+      style={{ backgroundColor: colors.bgSoft, borderTopWidth: 1, borderTopColor: colors.border }}
+    >
+      {replies.map((reply) => (
+        <Pressable
+          key={reply}
+          onPress={() => onPick(reply)}
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            borderRadius: 18,
+            backgroundColor: colors.accent + "14",
+            borderWidth: 1,
+            borderColor: colors.accent + "35"
+          }}
+        >
+          <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "800" }}>{reply}</Text>
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
+}
+
 // ─── Avatar NPC avec dot ──────────────────────────────────────────────────────
 function NpcAvatar({ npc, size = 40, showOnline = false }: {
   npc: NpcState; size?: number; showOnline?: boolean;
@@ -87,9 +116,21 @@ function ConversationView({ conv, npc, onBack }: {
 
   function send() {
     if (!input.trim()) return;
-    sendMessage(conv.id, input.trim());
+    sendText(input.trim());
     setInput("");
   }
+
+  function sendText(text: string) {
+    sendMessage(conv.id, text);
+  }
+
+  const firstName = npcInfo?.name.split(" ")[0] ?? conv.title.split(" ")[0];
+  const quickReplies = [
+    `Salut ${firstName}, ça va ?`,
+    "Tu fais quoi en ce moment ?",
+    "On se retrouve en ville ?",
+    "Tu veux prendre un café ?"
+  ];
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
@@ -160,6 +201,8 @@ function ConversationView({ conv, npc, onBack }: {
         })}
       </ScrollView>
 
+      <QuickReplyBar replies={quickReplies} onPick={sendText} />
+
       {/* Input */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10,
         paddingHorizontal: 14, paddingVertical: 10,
@@ -211,9 +254,20 @@ function RoomChatView({ roomId, roomName, onBack }: {
 
   function send() {
     if (!input.trim()) return;
-    sendRoomMessage(roomId, input.trim());
+    sendText(input.trim());
     setInput("");
   }
+
+  function sendText(text: string) {
+    sendRoomMessage(roomId, text);
+  }
+
+  const roomQuickReplies = [
+    "Qui est dispo ici ?",
+    "Je viens d'arriver dans la room.",
+    "On teste une sortie ensemble ?",
+    "Quelqu'un veut discuter ?"
+  ];
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
@@ -371,6 +425,8 @@ function RoomChatView({ roomId, roomName, onBack }: {
         })}
       </ScrollView>
 
+      <QuickReplyBar replies={roomQuickReplies} onPick={sendText} />
+
       {/* Input */}
       <View style={{ flexDirection: "row", alignItems: "center", gap: 10,
         paddingHorizontal: 14, paddingVertical: 10,
@@ -523,7 +579,7 @@ export default function ChatScreen() {
           {(["amis", "rooms", "lounge"] as Tab[]).map((t) => {
             const active = tab === t;
             const badge = t === "amis" ? unreadTotal : t === "rooms" ? pendingRoomInvites.length : 0;
-            const labels: Record<Tab, string> = { amis: "Amis", rooms: "Rooms", lounge: "Lounge" };
+            const labels: Record<Tab, string> = { amis: "Messages", rooms: "Rooms", lounge: "Ville" };
             const icons: Record<Tab, string> = { amis: "💬", rooms: "🏠", lounge: "🌍" };
             return (
               <Pressable key={t} onPress={() => setTab(t)}
@@ -595,6 +651,73 @@ export default function ChatScreen() {
               ))}
             </View>
           )}
+
+          {/* ── DÉMARRAGE RAPIDE ── */}
+          <View style={{
+            marginHorizontal: 14,
+            marginTop: 14,
+            backgroundColor: "rgba(255,255,255,0.035)",
+            borderRadius: 16,
+            padding: 12,
+            gap: 10,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.07)"
+          }}>
+            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "900", letterSpacing: 1.5 }}>
+              COMMENCER
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <Pressable
+                onPress={() => setOpenRoomId("room-lounge-global")}
+                style={{
+                  flex: 1,
+                  backgroundColor: colors.accent + "15",
+                  borderRadius: 12,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.accent + "35"
+                }}
+              >
+                <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 12 }}>🌍 Ville</Text>
+                <Text style={{ color: colors.muted, fontSize: 10, marginTop: 2 }}>Chat public</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const npc = onlineNpcs[0];
+                  const conv = npc ? conversations.find((c) => c.peerId === npc.id) : sortedConvs[0];
+                  if (conv) setOpenConvId(conv.id);
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: colors.purpleGlow,
+                  borderRadius: 12,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.purple + "35"
+                }}
+              >
+                <Text style={{ color: colors.purple, fontWeight: "900", fontSize: 12 }}>💬 Parler</Text>
+                <Text style={{ color: colors.muted, fontSize: 10, marginTop: 2 }}>NPC en ligne</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => {
+                  const room = createPrivateRoom("Room test rapide");
+                  setOpenRoomId(room.id);
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: colors.goldGlow,
+                  borderRadius: 12,
+                  padding: 10,
+                  borderWidth: 1,
+                  borderColor: colors.gold + "35"
+                }}
+              >
+                <Text style={{ color: colors.gold, fontWeight: "900", fontSize: 12 }}>🔒 Room</Text>
+                <Text style={{ color: colors.muted, fontSize: 10, marginTop: 2 }}>Créer</Text>
+              </Pressable>
+            </View>
+          </View>
 
           {/* ═══════ TAB AMIS ═══════ */}
           {tab === "amis" && (

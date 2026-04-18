@@ -39,7 +39,7 @@ function ChatBadge({ color, focused }: { color: string; focused: boolean }) {
   const unread = conversations.reduce((s, c) => s + c.unreadCount, 0);
   return (
     <View style={{ position: "relative" }}>
-      <Ionicons name={focused ? "people" : "people-outline"} color={color} size={24} />
+      <Ionicons name={focused ? "chatbubbles" : "chatbubbles-outline"} color={color} size={24} />
       {unread > 0 && (
         <View style={{
           position: "absolute", top: -4, right: -8,
@@ -83,7 +83,7 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="world"
         options={{
-          title: "Monde",
+          title: "Ville",
           tabBarIcon: ({ color, focused }) => (
             <Ionicons name={focused ? "compass" : "compass-outline"} color={color} size={24} />
           )
@@ -92,14 +92,14 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="chat"
         options={{
-          title: "Social",
+          title: "Chat",
           tabBarIcon: ({ color, focused }) => <ChatBadge color={color} focused={focused} />
         }}
       />
       <Tabs.Screen
         name="notifications"
         options={{
-          title: "Quêtes",
+          title: "Objectifs",
           tabBarIcon: ({ color, focused }) => <QuetesBadge color={color} focused={focused} />,
         }}
       />
