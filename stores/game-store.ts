@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
+import { buildDirectBotReply, buildRoomBotReplies } from "@/lib/bot-brain";
 import { applyActionToMissions, claimMissionReward } from "@/lib/missions";
 import { seedNpcs, tickAllNpcs } from "@/lib/npc-brain";
 import { generateNpcEvents } from "@/lib/npc-ai";
@@ -31,7 +32,6 @@ import {
   appendNotification,
   buildDatePlan,
   buildAutomaticNotifications,
-  buildResidentReply,
   buildResidentVisitMessage,
   checkStreakMilestone,
   createFeedFromAction,
@@ -1576,7 +1576,29 @@ export const useGameStore = create<GameState>()(
           // Réponse résident dans les DM (1 message sur 2, seulement direct)
           const isDirectConv = targetConversation?.kind === "direct";
           const selfMessages = (targetConversation?.messages ?? []).filter((m) => m.authorId === "self").length;
-          const reply = isDirectConv && residentId ? buildResidentReply(residentId, selfMessages) : null;
+          const residentNpc = residentId ? state.npcs.find((npc) => npc.id === residentId) : null;
+          const relationshipScore = residentId
+            ? (relationships.find((relationship) => relationship.residentId === residentId)?.score ?? 0)
+            : 0;
+          const replyBody = isDirectConv && residentId
+            ? buildDirectBotReply({
+                npc: residentNpc,
+                residentId,
+                residentName: msgResident?.name ?? targetConversation?.title,
+                playerName: state.avatar?.displayName ?? "Moi",
+                playerMessage: cleanBody,
+                relationshipScore,
+                messageCount: selfMessages
+              })
+            : null;
+          const reply = replyBody && residentId ? {
+            id: `reply-ai-${residentId}-${Date.now()}`,
+            authorId: residentId,
+            body: replyBody,
+            createdAt: nowIso(),
+            read: false,
+            kind: "message" as const
+          } : null;
 
           return {
             conversations: state.conversations.map((conversation) => {
@@ -2679,7 +2701,7 @@ export const useGameStore = create<GameState>()(
         // Auto-réponse NPC (30% chance, délai simulé)
         const npcReplies: RoomMessage[] = [];
         const onlineNpcs = state.npcs.filter((n) => n.presenceOnline);
-        if (onlineNpcs.length > 0 && Math.random() < 0.35) {
+        if (false && onlineNpcs.length > 0 && Math.random() < 0.35) {
           const npc = onlineNpcs[Math.floor(Math.random() * onlineNpcs.length)];
           const REPLIES = [
             "Bien dit 👌", "Je suis d'accord !", "Ah intéressant 🤔", "Lol 😂", "🔥🔥",
@@ -2696,10 +2718,20 @@ export const useGameStore = create<GameState>()(
           });
         }
 
+        const room = state.rooms.find((candidate) => candidate.id === roomId);
+        const aiReplies = buildRoomBotReplies({
+          roomId,
+          roomName: room?.name ?? "Room",
+          playerName: authorName,
+          playerMessage: body,
+          onlineNpcs: state.npcs.filter((n) => n.presenceOnline),
+          maxReplies: room?.kind === "private" ? 2 : 3
+        });
+
         set((s) => ({
           roomMessages: {
             ...s.roomMessages,
-            [roomId]: [...(s.roomMessages[roomId] ?? []), msg, ...npcReplies].slice(-200),
+            [roomId]: [...(s.roomMessages[roomId] ?? []), msg, ...npcReplies, ...aiReplies].slice(-200),
           },
         }));
       },

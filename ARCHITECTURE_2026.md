@@ -48,9 +48,22 @@ Objectif: garder le jeu local-first, rapide sur mobile, mais separer clairement 
 
 L'ecran `app/(app)/(tabs)/chat.tsx` se concentre donc davantage sur l'interface MSN 2026, pendant que le tri et la selection sociale vivent dans un module pur et teste.
 
+## Couche IA/bots
+
+`lib/bot-brain.ts` ajoute une couche IA locale, deterministe et testable:
+
+- detection d'intention: salutation, invitation, activite, fatigue, travail, budget, map, test, aide
+- reponses directes personnalisees par NPC
+- reconnaissance du nom joueur dans les DM
+- reponses de groupe dans les rooms live
+- personnalites distinctes pour Ava, Malik, Noa, Leila, Yan et Sana
+
+Cette couche reste local-first: elle fonctionne sans API externe et peut ensuite etre remplacee ou enrichie par un vrai service IA sans changer l'UI.
+
 ## Prochaines extractions recommandees
 
 - Extraire `world.tsx` en `lib/world-map-view-model.ts` + composants de carte.
 - Decouper `stores/game-store.ts` par slices: auth, avatar, routine, social, rooms, economy, studies.
 - Ajouter un adaptateur `lib/realtime-adapter.ts` qui masque Supabase/local simulation derriere une API unique.
 - Ajouter des tests sur les rooms: creation, invitation, messages, expiration.
+- Enrichir `bot-brain.ts` avec memoire conversationnelle et objectifs NPC persistants.
