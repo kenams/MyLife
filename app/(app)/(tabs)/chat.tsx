@@ -138,6 +138,39 @@ function Bubble({ body, time, me, author, npc }: { body: string; time: string; m
   );
 }
 
+function InfoPanel({ icon, title, body, action, onPress }: { icon: IconName; title: string; body: string; action?: string; onPress?: () => void }) {
+  return (
+    <View style={s.infoPanel}>
+      <View style={s.infoIcon}><Ionicons name={icon} size={18} color={colors.accent} /></View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.infoTitle} numberOfLines={1}>{title}</Text>
+        <Text style={s.infoBody} numberOfLines={2}>{body}</Text>
+      </View>
+      {action && onPress && (
+        <Pressable onPress={onPress} style={s.infoAction}>
+          <Text style={s.infoActionText}>{action}</Text>
+        </Pressable>
+      )}
+    </View>
+  );
+}
+
+function MemberRail({ me, online, invite }: { me: string; online: NpcState[]; invite: (id: string) => void }) {
+  return (
+    <View style={s.memberRail}>
+      <View style={s.memberMe}><PlayerFace name={me} size={34} /><Text style={s.memberName} numberOfLines={1}>{me}</Text></View>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.memberList}>
+        {online.slice(0, 10).map((npc) => (
+          <Pressable key={npc.id} onPress={() => invite(npc.id)} style={s.memberItem}>
+            <NpcFace npc={npc} size={34} />
+            <Text style={s.memberName} numberOfLines={1}>{npc.name.split(" ")[0]}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
 function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcState | null; back: () => void }) {
   const sendMessage = useGameStore((x) => x.sendMessage);
   const markConversationRead = useGameStore((x) => x.markConversationRead);
@@ -168,7 +201,15 @@ function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcSta
           { label: "Jeux", icon: "game-controller", onPress: () => post("Petit defi social : on teste une sortie ?") }
         ]} />
         <Text style={s.roomTitle} numberOfLines={1}>Conversation privee avec {name}</Text>
+        <InfoPanel
+          icon={npc?.presenceOnline ? "flash" : "time"}
+          title={npc?.presenceOnline ? "Contact disponible maintenant" : "Contact absent"}
+          body={info?.bio ?? "Conversation privee. Utilise les actions MSN pour proposer une room, une activite ou un message rapide."}
+          action="Room"
+          onPress={() => post("Je cree une room live, tu me rejoins ?")}
+        />
         <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={s.msgList} showsVerticalScrollIndicator={false}>
+          {conv.messages.length === 0 && <Text style={s.empty}>Aucun message. Commence avec une phrase simple ou un Wizz.</Text>}
           {conv.messages.map((m) => {
             const isMe = m.authorId === myId || ["player", "user", "self", "local"].includes(m.authorId);
             if (m.kind === "system") return <Text key={m.id} style={s.system}>{m.body}</Text>;
@@ -216,7 +257,15 @@ function RoomView({ id, name, back }: { id: string; name: string; back: () => vo
           { label: "Jeux", icon: "game-controller", onPress: () => post("Mini-jeu social : chacun propose une sortie.") }
         ]} />
         {invite && <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.invites} contentContainerStyle={{ gap: 12, padding: 12 }}>{online.map((n) => <Pressable key={n.id} onPress={() => { inviteNpcToRoom(id, n.id); setInvite(false); }} style={s.inviteNpc}><NpcFace npc={n} size={42} /><Text style={s.inviteText} numberOfLines={1}>{n.name.split(" ")[0]}</Text></Pressable>)}</ScrollView>}
+        <MemberRail me={me} online={online} invite={(npcId) => inviteNpcToRoom(id, npcId)} />
         <Text style={s.roomTitle} numberOfLines={1}>{room?.description ?? "Chat groupe live"} {room?.code ? `- #${room.code}` : ""}</Text>
+        <InfoPanel
+          icon="radio"
+          title={room?.kind === "private" ? "Room privee active" : "Room publique live"}
+          body="Les messages partent dans la room. Les residents peuvent repondre automatiquement et rejoindre si tu les invites."
+          action={room?.code ? `#${room.code}` : "Live"}
+          onPress={() => room?.code ? post(`Code room: ${room.code}`) : post("Live check : qui est present ?")}
+        />
         <ScrollView ref={scroll} style={{ flex: 1 }} contentContainerStyle={s.msgList} showsVerticalScrollIndicator={false}>
           {messages.length === 0 && <Text style={s.empty}>La room est ouverte. Ecris ou invite un contact.</Text>}
           {messages.map((m) => {
@@ -322,6 +371,12 @@ export default function ChatScreen() {
           <Pressable onPress={() => setRoomId("room-lounge-global")} style={[s.shortcut, { backgroundColor: colors.teal + "16", borderColor: colors.teal + "34" }]}><Ionicons name="radio" size={18} color={colors.teal} /><Text style={[s.shortcutText, { color: colors.teal }]}>Live chat</Text></Pressable>
           <Pressable onPress={() => { const room = createPrivateRoom("Room groupe MSN"); setRoomId(room.id); }} style={[s.shortcut, { backgroundColor: colors.purpleGlow, borderColor: colors.purple + "38" }]}><Ionicons name="add-circle" size={18} color={colors.purple} /><Text style={[s.shortcutText, { color: colors.purple }]}>Groupe</Text></Pressable>
         </ScrollView>
+        <View style={s.dashboard}>
+          <View style={s.metric}><Text style={s.metricValue}>{online.length}</Text><Text style={s.metricLabel}>en ligne</Text></View>
+          <View style={s.metric}><Text style={s.metricValue}>{unread}</Text><Text style={s.metricLabel}>non lus</Text></View>
+          <View style={s.metric}><Text style={s.metricValue}>{myRooms.length}</Text><Text style={s.metricLabel}>rooms</Text></View>
+          <View style={s.metric}><Text style={s.metricValue}>{pendingInvites.length + pendingRooms.length}</Text><Text style={s.metricLabel}>invites</Text></View>
+        </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.onlineStrip}>
           {online.map((npc) => {
             const c = conversations.find((conv) => conv.peerId === npc.id);
@@ -340,6 +395,7 @@ export default function ChatScreen() {
           </View>}
           {tab === "contacts" && <View>
             <Text style={s.section}>CONTACTS EN LIGNE</Text>
+            {online.filter((n) => (relationships.find((r) => r.residentId === n.id)?.score ?? 0) >= 40).length === 0 && <InfoPanel icon="person" title="Aucun proche en ligne" body="Les autres contacts restent accessibles dans Messages. Le lounge permet aussi de trouver du monde." action="Lounge" onPress={() => setRoomId("room-lounge-global")} />}
             {online.filter((n) => (relationships.find((r) => r.residentId === n.id)?.score ?? 0) >= 40).map((npc) => {
               const c = conversations.find((conv) => conv.peerId === npc.id);
               const score = relationships.find((r) => r.residentId === npc.id)?.score;
@@ -355,6 +411,7 @@ export default function ChatScreen() {
           {tab === "rooms" && <View>
             <View style={s.createBox}>{!createOpen ? <Pressable onPress={() => setCreateOpen(true)} style={s.createBtn}><Ionicons name="add-circle" size={20} color={colors.accent} /><Text style={s.createText}>Creer une room groupee</Text></Pressable> : <View style={{ gap: 10 }}><TextInput value={roomName} onChangeText={setRoomName} placeholder="Nom de la room" placeholderTextColor={colors.muted} style={s.createInput} /><View style={{ flexDirection: "row", gap: 8 }}><Pressable onPress={makeRoom} style={s.createOk}><Text style={s.createOkText}>Creer</Text></Pressable><Pressable onPress={() => { setCreateOpen(false); setRoomName(""); }} style={s.createCancel}><Text style={s.createCancelText}>Annuler</Text></Pressable></View></View>}</View>
             <Text style={s.section}>MES ROOMS LIVE</Text>{myRooms.map((r) => <RoomRow key={r.id} room={r} last={(roomMessages[r.id] ?? []).at(-1)} open={() => setRoomId(r.id)} />)}
+            {myRooms.length === 0 && <InfoPanel icon="people" title="Pas encore de room active" body="Cree une room groupee pour inviter des contacts et tester le chat live." action="Creer" onPress={makeRoom} />}
             <Text style={s.section}>REJOINDRE UNE ROOM</Text>{otherRooms.map((r) => <RoomRow key={r.id} room={r} last={(roomMessages[r.id] ?? []).at(-1)} open={() => setRoomId(r.id)} />)}
           </View>}
           {tab === "lounge" && <View>
@@ -461,5 +518,20 @@ const s = StyleSheet.create({
   loungeBtn: { borderRadius: 13, backgroundColor: colors.accent, padding: 13, alignSelf: "stretch", alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 8 },
   loungeBtnText: { color: "#05211a", fontSize: 13, fontWeight: "900" },
   publicMsg: { padding: 11, borderRadius: 13, backgroundColor: "#ffffff08", borderWidth: 1, borderColor: colors.border, marginBottom: 8 },
-  publicAuthor: { color: colors.accent, fontSize: 11, fontWeight: "900" }
+  publicAuthor: { color: colors.accent, fontSize: 11, fontWeight: "900" },
+  infoPanel: { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 12, marginTop: 10, marginBottom: 6, padding: 11, borderRadius: 14, backgroundColor: "#ffffff08", borderWidth: 1, borderColor: "#ffffff12" },
+  infoIcon: { width: 34, height: 34, borderRadius: 10, backgroundColor: colors.accent + "18", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: colors.accent + "35" },
+  infoTitle: { color: colors.text, fontSize: 12, fontWeight: "900" },
+  infoBody: { color: colors.textSoft, fontSize: 11, lineHeight: 16, marginTop: 2 },
+  infoAction: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, backgroundColor: colors.accent + "18", borderWidth: 1, borderColor: colors.accent + "35" },
+  infoActionText: { color: colors.accent, fontSize: 11, fontWeight: "900" },
+  memberRail: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 9, backgroundColor: "#ffffff08", borderBottomWidth: 1, borderBottomColor: colors.border },
+  memberMe: { width: 74, alignItems: "center", gap: 3, borderRightWidth: 1, borderRightColor: colors.border, paddingRight: 10 },
+  memberList: { gap: 10 },
+  memberItem: { width: 58, alignItems: "center", gap: 3 },
+  memberName: { color: colors.textSoft, fontSize: 10, fontWeight: "800", textAlign: "center" },
+  dashboard: { flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingBottom: 10 },
+  metric: { flex: 1, minHeight: 52, borderRadius: 13, backgroundColor: "#ffffff08", borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
+  metricValue: { color: colors.text, fontSize: 16, fontWeight: "900" },
+  metricLabel: { color: colors.muted, fontSize: 10, fontWeight: "800", marginTop: 2 }
 });
