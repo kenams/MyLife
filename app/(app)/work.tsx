@@ -2,6 +2,7 @@
  * Travail — Système de shifts avec timer, XP, niveaux et historique
  */
 
+import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   Animated,
@@ -12,7 +13,6 @@ import {
   View,
 } from "react-native";
 
-import { Button, NavBack, Pill } from "@/components/ui";
 import { jobs } from "@/lib/game-engine";
 import { getActionTimeScore, useTimeContext } from "@/lib/time-context";
 import { colors } from "@/lib/theme";
@@ -179,7 +179,9 @@ export default function WorkScreen() {
         contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
         showsVerticalScrollIndicator={false}
       >
-        <NavBack fallback="/(app)/(tabs)/home" />
+        <Pressable onPress={() => router.back()} style={{ marginBottom: 14 }}>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>← Retour</Text>
+        </Pressable>
 
         {/* ── Header job ── */}
         <View style={{
@@ -196,7 +198,10 @@ export default function WorkScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: "row", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
-                <Pill tone="accent">Travail</Pill>
+                <View style={{ backgroundColor: colors.accent + "25", borderRadius: 8,
+                  paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: colors.accent + "40" }}>
+                  <Text style={{ color: colors.accent, fontSize: 10, fontWeight: "800" }}>Travail</Text>
+                </View>
                 {isWorkPrime && (
                   <View style={{ backgroundColor: "#38c79322", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
                     <Text style={{ color: "#38c793", fontSize: 10, fontWeight: "800" }}>
@@ -377,7 +382,11 @@ export default function WorkScreen() {
               </View>
             </View>
             <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center", fontStyle: "italic" }}>{jobTip}</Text>
-            <Button label="Nouveau shift" onPress={cancelWorkShift} />
+            <Pressable onPress={cancelWorkShift}
+              style={{ backgroundColor: jobColor, borderRadius: 14, paddingVertical: 13, paddingHorizontal: 24,
+                alignItems: "center" }}>
+              <Text style={{ color: "#000", fontWeight: "900", fontSize: 14 }}>Nouveau shift</Text>
+            </Pressable>
           </View>
         )}
 
@@ -424,7 +433,12 @@ export default function WorkScreen() {
                         </Text>
                       </View>
                     </View>
-                    {isActive && <Pill>actuel</Pill>}
+                    {isActive && (
+                      <View style={{ backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 8,
+                        paddingHorizontal: 8, paddingVertical: 3 }}>
+                        <Text style={{ color: colors.text, fontSize: 10, fontWeight: "700" }}>actuel</Text>
+                      </View>
+                    )}
                   </View>
                 </TouchableOpacity>
               );
