@@ -325,6 +325,8 @@ export type Conversation = {
 
 export type PremiumTier = "monthly" | "yearly";
 
+export type HousingTierId = import("@/lib/housing").HousingTierId;
+
 export type PremiumFeature =
   | "boost_x2"
   | "cosmetics"

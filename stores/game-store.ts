@@ -18,6 +18,7 @@ import {
   syncStudyProgressToSupabase
 } from "@/lib/supabase-sync";
 import type { BoostItem, CosmeticItem, MoneyTransfer, NpcState, PremiumTier, Room, RoomInvite, RoomKind, RoomMessage, SecretRoom, SecretMessage, StudyProgress, StudySessionInput } from "@/lib/types";
+import { computeWealthScore, getHousingTier, getMaxAffordableHousing, type HousingTierId } from "@/lib/housing";
 import {
   activities,
   applyActivityToStats,
@@ -150,6 +151,12 @@ type GameState = {
   // Supabase
   supabaseAvatarId: string | null;
   syncToSupabase: () => Promise<void>;
+  // Logement
+  housingTier: HousingTierId;
+  housingLastPaidAt: string | null;
+  upgradeHousing: (tierId: HousingTierId) => { ok: boolean; error?: string };
+  checkHousingRent: () => void;
+  wealthScore: number;
   // Monde vivant — NPCs
   npcs: NpcState[];
   tickNpcs: () => void;
@@ -235,6 +242,9 @@ function initialState() {
     unlockedTalents: [] as string[],
     studyProgress: [] as StudyProgress[],
     moneyTransfers: [] as MoneyTransfer[],
+    housingTier: "squat" as HousingTierId,
+    housingLastPaidAt: null as string | null,
+    wealthScore: 0,
     roomMessages: {} as Record<string, RoomMessage[]>,
     joinedRooms: ["room-test-live", "room-lounge-global"] as string[],
     roomInvites: [] as RoomInvite[],
@@ -1394,15 +1404,78 @@ export const useGameStore = create<GameState>()(
             });
           }
 
+          // ── Pénalités tâches non effectuées ──────────────────────────────
+          let penaltyStats = { ...stats };
+          let penaltyNotif: typeof notifications = notifications;
+          const penaltyNow = Date.now();
+
+          // Pas mangé depuis > 6h → perd argent (urgence alimentaire)
+          const hoursSinceEat = stats.lastMealAt
+            ? (penaltyNow - new Date(stats.lastMealAt).getTime()) / 3_600_000
+            : 0;
+          if (hoursSinceEat > 6 && penaltyStats.money > 0) {
+            const penalty = Math.min(penaltyStats.money, Math.floor(hoursSinceEat / 6) * 3);
+            penaltyStats = { ...penaltyStats, money: penaltyStats.money - penalty };
+            if (!penaltyNotif.some((n) => n.id.startsWith("penalty-meal-"))) {
+              penaltyNotif = appendNotification(penaltyNotif, {
+                id: `penalty-meal-${today}`,
+                kind: "needs",
+                title: `🍽️ Tu n'as pas mangé — −${penalty} cr`,
+                body: "Chaque heure sans repas te coûte des crédits. Mange !",
+                createdAt: nowIso(), read: false,
+              });
+              void sendLocalNotification("🍽️ Mange maintenant !", `−${penalty} cr de pénalité.`).catch(() => {});
+            }
+          }
+
+          // Pas dormi (énergie < 15 depuis longtemps) → perd réputation
+          if (penaltyStats.energy < 15) {
+            penaltyStats = { ...penaltyStats, reputation: Math.max(0, penaltyStats.reputation - 2) };
+            if (!penaltyNotif.some((n) => n.id.startsWith("penalty-sleep-"))) {
+              penaltyNotif = appendNotification(penaltyNotif, {
+                id: `penalty-sleep-${today}`,
+                kind: "needs",
+                title: "😴 Épuisement — −2 rep",
+                body: "Tu es épuisé. Les gens le voient. Dors.",
+                createdAt: nowIso(), read: false,
+              });
+              void sendLocalNotification("😴 Dors maintenant !", "L'épuisement détruit ta réputation.").catch(() => {});
+            }
+          }
+
+          // Pas travaillé depuis > 48h → perd motivation
+          const hoursSinceWork = state.workSession?.startedAt
+            ? (penaltyNow - new Date(state.workSession.startedAt).getTime()) / 3_600_000
+            : 999;
+          if (hoursSinceWork > 48 && penaltyStats.motivation > 5) {
+            penaltyStats = { ...penaltyStats, motivation: Math.max(0, penaltyStats.motivation - 5), discipline: Math.max(0, penaltyStats.discipline - 3) };
+            if (!penaltyNotif.some((n) => n.id.startsWith("penalty-work-"))) {
+              penaltyNotif = appendNotification(penaltyNotif, {
+                id: `penalty-work-${today}`,
+                kind: "work",
+                title: "💼 Sans travail — −5 motivation",
+                body: "48h sans travailler. Tu perds le fil. Go bosser.",
+                createdAt: nowIso(), read: false,
+              });
+              void sendLocalNotification("💼 Travaille !", "48h d'inactivité — tu perds ta motivation.").catch(() => {});
+            }
+          }
+
+          // Score de richesse recalculé
+          const newWealthScore = computeWealthScore(
+            penaltyStats.money, state.playerXp, penaltyStats.reputation, penaltyStats.streak, state.housingTier, state.playerLevel
+          );
+
           return {
-            stats,
-            advice: buildAdvice(stats),
-            notifications,
+            stats: normalizeStats(penaltyStats),
+            advice: buildAdvice(penaltyStats),
+            notifications: penaltyNotif,
             invitations,
             datePlans,
             dailyEvent,
             lastKnownRank,
             dailyGoals,
+            wealthScore: newWealthScore,
             ...(goalsNeedReset ? { lastDailyGoalResetAt: today } : {})
           };
         }),
@@ -2045,6 +2118,92 @@ export const useGameStore = create<GameState>()(
         }));
         return { ok: true };
       },
+
+      // ── Logement ──────────────────────────────────────────────────────────
+      upgradeHousing: (tierId) => {
+        const state = get();
+        const tier  = getHousingTier(tierId);
+        if (state.stats.money < tier.minMoney)        return { ok: false, error: `Il te faut ${tier.minMoney} crédits minimum.` };
+        if (state.playerLevel < tier.minLevel)         return { ok: false, error: `Niveau ${tier.minLevel} requis.` };
+        if (state.stats.reputation < tier.minReputation) return { ok: false, error: `Réputation ${tier.minReputation} requise.` };
+        if (state.stats.streak < tier.minStreak)       return { ok: false, error: `Streak ${tier.minStreak} jours requis.` };
+        const newWealth = computeWealthScore(state.stats.money, state.playerXp, state.stats.reputation, state.stats.streak, tierId, state.playerLevel);
+        set((s) => ({
+          housingTier:    tierId,
+          housingLastPaidAt: nowIso(),
+          wealthScore:    newWealth,
+          notifications: appendNotification(s.notifications, {
+            id: `housing-upgrade-${Date.now()}`,
+            kind: "reward",
+            title: `${tier.emoji} Tu as emménagé : ${tier.name}`,
+            body: tier.description,
+            createdAt: nowIso(),
+            read: false,
+          }),
+        }));
+        void sendLocalNotification(`${tier.emoji} Nouveau logement`, `Bienvenue dans ton ${tier.name} !`).catch(() => {});
+        return { ok: true };
+      },
+
+      checkHousingRent: () => set((s) => {
+        const tier = getHousingTier(s.housingTier);
+        if (tier.rentPerDay === 0) {
+          // Squat : pénalité passive humeur
+          if (s.stats.mood > 5) {
+            return { stats: normalizeStats({ ...s.stats, mood: s.stats.mood - 0.5, reputation: Math.max(0, s.stats.reputation - 0.1) }) };
+          }
+          return {};
+        }
+        const now  = Date.now();
+        const last = s.housingLastPaidAt ? new Date(s.housingLastPaidAt).getTime() : now;
+        const hoursOwed = Math.floor((now - last) / (1000 * 60 * 60));
+        if (hoursOwed < 24) return {};
+
+        const daysOwed = Math.floor(hoursOwed / 24);
+        const due = tier.rentPerDay * daysOwed;
+
+        if (s.stats.money >= due) {
+          // Paiement OK → bonus logement
+          const newWealth = computeWealthScore(s.stats.money - due, s.playerXp, s.stats.reputation, s.stats.streak, s.housingTier, s.playerLevel);
+          return {
+            stats: normalizeStats({
+              ...s.stats,
+              money: s.stats.money - due,
+              mood: Math.min(100, s.stats.mood + tier.moodBonus * 0.1),
+              reputation: Math.min(100, s.stats.reputation + tier.reputationBonus * 0.05),
+            }),
+            housingLastPaidAt: new Date(now).toISOString(),
+            wealthScore: newWealth,
+          };
+        } else {
+          // Pas assez d'argent → rétrogradation
+          const newTier: HousingTierId = s.housingTier === "manoir" ? "villa"
+            : s.housingTier === "villa" ? "penthouse"
+            : s.housingTier === "penthouse" ? "loft"
+            : s.housingTier === "loft" ? "appartement"
+            : s.housingTier === "appartement" ? "studio"
+            : "squat";
+          void sendLocalNotification("⬇️ Loyer impayé", `Tu n'avais pas assez de crédits — rétrogradé en ${newTier}.`).catch(() => {});
+          return {
+            housingTier: newTier,
+            housingLastPaidAt: new Date(now).toISOString(),
+            stats: normalizeStats({
+              ...s.stats,
+              money: 0,
+              mood: Math.max(0, s.stats.mood - 20),
+              reputation: Math.max(0, s.stats.reputation - 10),
+            }),
+            notifications: appendNotification(s.notifications, {
+              id: `housing-evict-${Date.now()}`,
+              kind: "social",
+              title: "⬇️ Loyer impayé — Rétrogradé",
+              body: `Tu n'avais pas assez. Tu vis maintenant dans un ${newTier}.`,
+              createdAt: nowIso(),
+              read: false,
+            }),
+          };
+        }
+      }),
 
       // ── Économie sociale ──────────────────────────────────────────────────
       sendMoneyToResident: (residentId, residentName, amount) => {

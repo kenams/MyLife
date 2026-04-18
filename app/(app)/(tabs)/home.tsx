@@ -2,6 +2,7 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Pressable, ScrollView, Text, View } from "react-native";
 
+import { getHousingTier } from "@/lib/housing";
 import { getLocationName, getMomentumState, getRecommendedActionMeta, getWellbeingScore } from "@/lib/selectors";
 import { getActionTimeScore, getTimeModeDescription, getSuggestedActions, useTimeContext } from "@/lib/time-context";
 import { colors } from "@/lib/theme";
@@ -295,8 +296,11 @@ export default function HomeScreen() {
   const dailyEvent          = useGameStore((s) => s.dailyEvent);
   const playerXp            = useGameStore((s) => s.playerXp ?? 0);
   const playerLevel         = useGameStore((s) => s.playerLevel ?? 1);
+  const housingTier         = useGameStore((s) => s.housingTier);
+  const checkHousingRent    = useGameStore((s) => s.checkHousingRent);
+  const wealthScore         = useGameStore((s) => s.wealthScore);
 
-  useFocusEffect(useCallback(() => { bootstrap(); }, [bootstrap]));
+  useFocusEffect(useCallback(() => { bootstrap(); checkHousingRent(); }, [bootstrap, checkHousingRent]));
 
   const timeCtx      = useTimeContext();
   const wellbeing    = getWellbeingScore(stats);
@@ -344,7 +348,7 @@ export default function HomeScreen() {
               transform: [{ translateY: scanAnim }] }} />
           </View>
 
-          {/* Top row: location + money */}
+          {/* Top row: location + money + logement */}
           <View style={{ flexDirection: "row", justifyContent: "space-between", paddingHorizontal: 20, paddingTop: 56, marginBottom: 16 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 6,
               backgroundColor: "rgba(255,255,255,0.07)", borderRadius: 20,
@@ -355,12 +359,25 @@ export default function HomeScreen() {
                 {getLocationName(currentLocationSlug)}
               </Text>
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 6,
-              backgroundColor: colors.goldGlow, borderRadius: 20,
-              paddingHorizontal: 12, paddingVertical: 6,
-              borderWidth: 1, borderColor: colors.gold + "55" }}>
-              <Text style={{ fontSize: 14 }}>💰</Text>
-              <Text style={{ color: colors.gold, fontSize: 13, fontWeight: "900" }}>{stats.money} cr</Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {/* Badge logement */}
+              <Pressable onPress={() => router.push("/(app)/housing" as never)}
+                style={{ flexDirection: "row", alignItems: "center", gap: 5,
+                  backgroundColor: getHousingTier(housingTier).color + "15", borderRadius: 20,
+                  paddingHorizontal: 10, paddingVertical: 6,
+                  borderWidth: 1, borderColor: getHousingTier(housingTier).color + "45" }}>
+                <Text style={{ fontSize: 14 }}>{getHousingTier(housingTier).emoji}</Text>
+                <Text style={{ color: getHousingTier(housingTier).color, fontSize: 10, fontWeight: "800" }}>
+                  {getHousingTier(housingTier).name}
+                </Text>
+              </Pressable>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5,
+                backgroundColor: colors.goldGlow, borderRadius: 20,
+                paddingHorizontal: 10, paddingVertical: 6,
+                borderWidth: 1, borderColor: colors.gold + "55" }}>
+                <Text style={{ fontSize: 14 }}>💰</Text>
+                <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>{stats.money} cr</Text>
+              </View>
             </View>
           </View>
 
@@ -493,6 +510,33 @@ export default function HomeScreen() {
             </View>
           </View>
 
+          {/* ── BANNIÈRE DE CRISE ── */}
+          {(() => {
+            const crises: { emoji: string; label: string; action: LifeActionId; urgent: boolean }[] = [];
+            if (stats.hunger < 18)  crises.push({ emoji: "🍽️", label: "Tu meurs de faim — mange maintenant", action: "healthy-meal", urgent: true });
+            if (stats.energy < 15)  crises.push({ emoji: "😴", label: "Épuisement critique — dors", action: "sleep", urgent: true });
+            if (stats.hygiene < 15) crises.push({ emoji: "🚿", label: "Hygiène critique — douche urgente", action: "shower", urgent: false });
+            if (stats.mood < 15)    crises.push({ emoji: "💔", label: "Moral à zéro — prends soin de toi", action: "meditate", urgent: false });
+            if (crises.length === 0) return null;
+            return crises.map((c) => (
+              <Pressable key={c.action} onPress={() => performAction(c.action)}
+                style={{ backgroundColor: c.urgent ? colors.dangerGlow : colors.goldGlow, borderRadius: 14, padding: 12,
+                  borderWidth: 1.5, borderColor: c.urgent ? colors.danger + "60" : colors.gold + "55",
+                  flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Text style={{ fontSize: 20 }}>{c.emoji}</Text>
+                <Text style={{ color: c.urgent ? colors.danger : colors.gold, fontWeight: "900", fontSize: 13, flex: 1 }}>
+                  {c.label}
+                </Text>
+                <View style={{ backgroundColor: c.urgent ? colors.danger + "25" : colors.gold + "25",
+                  borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5 }}>
+                  <Text style={{ color: c.urgent ? colors.danger : colors.gold, fontSize: 11, fontWeight: "800" }}>
+                    Agir →
+                  </Text>
+                </View>
+              </Pressable>
+            ));
+          })()}
+
           {/* ── ÉVÉNEMENT DU JOUR ── */}
           {dailyEvent && !dailyEvent.resolved && (
             <Pressable onPress={() => bootstrap()}
@@ -579,7 +623,7 @@ export default function HomeScreen() {
             <View style={{ flexDirection: "row", gap: 10 }}>
               {[
                 { label: "Carte Live", emoji: "🗺️", route: "/(app)/world-live", color: colors.purple },
-                { label: "Rooms",      emoji: "🏠", route: "/(app)/rooms",      color: colors.accent },
+                { label: getHousingTier(housingTier).name, emoji: getHousingTier(housingTier).emoji, route: "/(app)/housing", color: getHousingTier(housingTier).color },
                 { label: "Dates",      emoji: "💘", route: "/(app)/dates",      color: "#ff6b6b"     },
               ].map((item) => (
                 <Pressable key={item.route} onPress={() => router.push(item.route as never)}
@@ -649,6 +693,7 @@ export default function HomeScreen() {
             <SectionTitle text="NAVIGATION" />
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {[
+                { label: "🏠 Logement",     route: "/(app)/housing"        },
                 { label: "💪 Sport",       route: "/(app)/health"         },
                 { label: "💼 Travail",     route: "/(app)/work"           },
                 { label: "🍷 Sorties",     route: "/(app)/outings"        },
