@@ -216,11 +216,13 @@ export function seedNpcs(): NpcState[] {
       level:         baseLevel,
       reputation:    r.reputation,
       streak:        Math.floor(Math.random() * 7),
-      lastTickAt:    now,
-      lastMessageAt: null,
-      lastInviteAt:  null,
-      posX:          coords.posX + Math.random() * 4 - 2,
-      posY:          coords.posY + Math.random() * 4 - 2,
+      lastTickAt:      now,
+      lastMessageAt:   null,
+      lastInviteAt:    null,
+      posX:            coords.posX + Math.random() * 4 - 2,
+      posY:            coords.posY + Math.random() * 4 - 2,
+      presenceOnline:  i % 2 === 0, // alternating initial online/offline
+      lastOnlineAt:    i % 2 === 0 ? now : null,
     };
   });
 }

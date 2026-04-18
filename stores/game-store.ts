@@ -17,7 +17,7 @@ import {
   logSocialTransferToSupabase,
   syncStudyProgressToSupabase
 } from "@/lib/supabase-sync";
-import type { BoostItem, CosmeticItem, MoneyTransfer, NpcState, PremiumTier, Room, RoomKind, SecretRoom, SecretMessage, StudyProgress, StudySessionInput } from "@/lib/types";
+import type { BoostItem, CosmeticItem, MoneyTransfer, NpcState, PremiumTier, Room, RoomInvite, RoomKind, RoomMessage, SecretRoom, SecretMessage, StudyProgress, StudySessionInput } from "@/lib/types";
 import {
   activities,
   applyActivityToStats,
@@ -155,9 +155,16 @@ type GameState = {
   tickNpcs: () => void;
   // Rooms live
   rooms: Room[];
+  roomMessages: Record<string, RoomMessage[]>;  // roomId → messages locaux
+  joinedRooms: string[];                         // IDs rooms rejointes
+  roomInvites: RoomInvite[];
   createRoom: (name: string, description: string, kind: RoomKind) => Room;
   joinRoom: (code: string) => Room | null;
   leaveRoom: (roomId: string) => void;
+  sendRoomMessage: (roomId: string, body: string) => void;
+  createPrivateRoom: (name: string) => Room;
+  inviteNpcToRoom: (roomId: string, residentId: string) => void;
+  respondRoomInvite: (inviteId: string, status: "accepted" | "declined") => void;
   // Secret Rooms — éphémères, max 4, messages 2h TTL
   secretRooms: SecretRoom[];
   secretMessages: Record<string, SecretMessage[]>; // roomId → messages
@@ -175,6 +182,20 @@ function initialState() {
     session: null as UserSession | null,
     npcs: seedNpcs() as NpcState[],
     rooms: [
+      {
+        id:          "room-lounge-global",
+        name:        "🌍 Lounge — La ville",
+        kind:        "public" as RoomKind,
+        code:        "LOUNGE",
+        ownerId:     "system",
+        ownerName:   "Système",
+        locationSlug: "cafe",
+        memberCount: 6,
+        maxMembers:  100,
+        description: "Chat public de la ville — tout le monde peut écrire ici.",
+        createdAt:   new Date().toISOString(),
+        isActive:    true
+      } as Room,
       {
         id:          "room-test-live",
         name:        "Room Live — Ava, Noa & Leila",
@@ -214,6 +235,9 @@ function initialState() {
     unlockedTalents: [] as string[],
     studyProgress: [] as StudyProgress[],
     moneyTransfers: [] as MoneyTransfer[],
+    roomMessages: {} as Record<string, RoomMessage[]>,
+    joinedRooms: ["room-test-live", "room-lounge-global"] as string[],
+    roomInvites: [] as RoomInvite[],
     secretRooms: [] as SecretRoom[],
     secretMessages: {} as Record<string, SecretMessage[]>,
     supabaseAvatarId: null as string | null,
@@ -2329,12 +2353,85 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        // ── Présence amis : détection "vient de se connecter" ────────────────
+        const now = Date.now();
+        const finalNpcs = updatedNpcs.map((npc) => {
+          const prev = prevNpcs.find((p) => p.id === npc.id);
+          const canBeOnline = npc.energy > 25 && npc.mood > 20 && npc.action !== "sleeping";
+          // Probabilité de transition : 15% chance online/tick si conditions ok, 10% offline
+          const roll = Math.random();
+          let presenceOnline = npc.presenceOnline ?? false;
+          let lastOnlineAt   = npc.lastOnlineAt ?? null;
+
+          if (!presenceOnline && canBeOnline && roll < 0.15) {
+            presenceOnline = true;
+            lastOnlineAt   = new Date(now).toISOString();
+
+            // Notif si c'est un ami (score > 50)
+            const rel = s.relationships.find((r) => r.residentId === npc.id);
+            const wasOffline = !(prev?.presenceOnline ?? false);
+            if (rel && rel.score >= 50 && wasOffline) {
+              notifications = appendNotification(notifications, {
+                id:        `presence-${now}-${npc.id}`,
+                kind:      "social",
+                title:     `🟢 ${npc.name} est connecté(e)`,
+                body:      `${npc.name} vient de se connecter — dis-lui bonjour !`,
+                createdAt: new Date(now).toISOString(),
+                read:      false,
+              });
+              void sendLocalNotification(
+                `🟢 ${npc.name} est en ligne`,
+                `${npc.name} vient de se connecter — dis-lui bonjour !`
+              ).catch(() => {});
+            }
+          } else if (presenceOnline && (!canBeOnline || roll < 0.08)) {
+            presenceOnline = false;
+          }
+
+          return { ...npc, presenceOnline, lastOnlineAt };
+        });
+
+        // ── NPC auto-messages dans le Lounge ──────────────────────────────────
+        const loungeMessages = s.roomMessages["room-lounge-global"] ?? [];
+        const lastLoungeAt = loungeMessages.length > 0
+          ? new Date(loungeMessages[loungeMessages.length - 1].createdAt).getTime()
+          : 0;
+        let newLoungeMessages = [...loungeMessages];
+        if (now - lastLoungeAt > 45_000) {
+          const onlineNpcs = finalNpcs.filter((n) => n.presenceOnline);
+          if (onlineNpcs.length > 0 && Math.random() < 0.6) {
+            const npc = onlineNpcs[Math.floor(Math.random() * onlineNpcs.length)];
+            const LOUNGE_MSGS: Record<string, string[]> = {
+              ava:   ["Bonne journée à tous 😊", "Quelqu'un au café ce soir ?", "C'est calme ici aujourd'hui ✨"],
+              malik: ["Yo 🔥", "La city est vivante aujourd'hui", "Quelqu'un a des plans ?"],
+              noa:   ["Salut tout le monde 👋", "On est bien là 💪", "Qui veut trainer ?"],
+              leila: ["Belle journée 🌿", "Calme et positif ici", "Respire, profite ✨"],
+              yan:   ["Grind mode 💼", "Bonne séance au bureau", "Focus today."],
+              sana:  ["Séance de sport check ✅", "Qui vient au parc ?", "Energy level 100 💪"],
+            };
+            const pool = LOUNGE_MSGS[npc.id] ?? ["..."];
+            const body = pool[Math.floor(Math.random() * pool.length)];
+            newLoungeMessages = [...newLoungeMessages, {
+              id: `lounge-npc-${now}-${npc.id}`,
+              authorId: npc.id,
+              authorName: npc.name,
+              body,
+              createdAt: new Date(now).toISOString(),
+              kind: "message" as const,
+            }].slice(-100);
+          }
+        }
+
         return {
-          npcs:          updatedNpcs,
+          npcs:          finalNpcs,
           conversations,
           invitations,
           notifications,
           lifeFeed,
+          roomMessages: {
+            ...s.roomMessages,
+            "room-lounge-global": newLoungeMessages,
+          },
         };
       }),
 
@@ -2401,7 +2498,148 @@ export const useGameStore = create<GameState>()(
             r.id === roomId
               ? { ...r, memberCount: Math.max(0, r.memberCount - 1), isActive: isOwner ? false : r.isActive }
               : r
-          )
+          ),
+          joinedRooms: s.joinedRooms.filter((id) => id !== roomId),
+        }));
+      },
+
+      sendRoomMessage: (roomId, body) => {
+        const state = get();
+        const authorId   = state.session?.email ?? "local";
+        const authorName = state.avatar?.displayName ?? "Moi";
+        const msg: RoomMessage = {
+          id:         `rm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          authorId,
+          authorName,
+          body:       body.trim(),
+          createdAt:  nowIso(),
+          kind:       "message",
+        };
+        const current = state.roomMessages[roomId] ?? [];
+
+        // Auto-réponse NPC (30% chance, délai simulé)
+        const npcReplies: RoomMessage[] = [];
+        const onlineNpcs = state.npcs.filter((n) => n.presenceOnline);
+        if (onlineNpcs.length > 0 && Math.random() < 0.35) {
+          const npc = onlineNpcs[Math.floor(Math.random() * onlineNpcs.length)];
+          const REPLIES = [
+            "Bien dit 👌", "Je suis d'accord !", "Ah intéressant 🤔", "Lol 😂", "🔥🔥",
+            "Bonne question", "C'est vrai ça !", "On est là 💪", "Haha exactement", "✨",
+            "Ouais, pareil pour moi", "Ça marche !", "T'as raison", "Nice !", "💯"
+          ];
+          npcReplies.push({
+            id:         `rm-npc-${Date.now()}-${npc.id}`,
+            authorId:   npc.id,
+            authorName: npc.name,
+            body:       REPLIES[Math.floor(Math.random() * REPLIES.length)],
+            createdAt:  new Date(Date.now() + 2000).toISOString(),
+            kind:       "message",
+          });
+        }
+
+        set((s) => ({
+          roomMessages: {
+            ...s.roomMessages,
+            [roomId]: [...(s.roomMessages[roomId] ?? []), msg, ...npcReplies].slice(-200),
+          },
+        }));
+      },
+
+      createPrivateRoom: (name) => {
+        const code = Math.random().toString(36).slice(2, 8).toUpperCase();
+        const state = get();
+        const ownerName = state.avatar?.displayName ?? "Anonyme";
+        const ownerId   = state.session?.email ?? "local";
+        const room: Room = {
+          id:          `room-priv-${Date.now()}`,
+          name,
+          kind:        "private",
+          code,
+          ownerId,
+          ownerName,
+          locationSlug: state.currentLocationSlug,
+          memberCount:  1,
+          maxMembers:   10,
+          description:  `Room privée de ${ownerName}`,
+          createdAt:   nowIso(),
+          isActive:    true,
+        };
+        set((s) => ({
+          rooms: [room, ...s.rooms].slice(0, 50),
+          joinedRooms: [...s.joinedRooms, room.id],
+          roomMessages: { ...s.roomMessages, [room.id]: [{
+            id: `sys-create-${Date.now()}`,
+            authorId: "system",
+            authorName: "Système",
+            body: `Room "${name}" créée — partage le code ${code} pour inviter`,
+            createdAt: nowIso(),
+            kind: "system" as const,
+          }]},
+        }));
+        return room;
+      },
+
+      inviteNpcToRoom: (roomId, residentId) => {
+        const state = get();
+        const room = state.rooms.find((r) => r.id === roomId);
+        if (!room) return;
+        const npc = state.npcs.find((n) => n.id === residentId);
+        if (!npc) return;
+        const invite: RoomInvite = {
+          id:       `rinvite-${Date.now()}-${residentId}`,
+          roomId,
+          roomName: room.name,
+          fromId:   state.session?.email ?? "local",
+          fromName: state.avatar?.displayName ?? "Moi",
+          toId:     residentId,
+          status:   "pending",
+          createdAt: nowIso(),
+        };
+        // NPC accepte automatiquement si relation > 30, sinon 50% chance
+        const rel = state.relationships.find((r) => r.residentId === residentId);
+        const accepted = rel ? rel.score > 30 : Math.random() > 0.5;
+        const finalInvite: RoomInvite = { ...invite, status: accepted ? "accepted" : "declined" };
+
+        set((s) => {
+          const msgs = s.roomMessages[roomId] ?? [];
+          const sysMsg: RoomMessage = {
+            id: `sys-invite-${Date.now()}`,
+            authorId: "system",
+            authorName: "Système",
+            body: accepted
+              ? `${npc.name} a rejoint la room 🎉`
+              : `${npc.name} a décliné l'invitation.`,
+            createdAt: nowIso(),
+            kind: "system",
+          };
+          return {
+            roomInvites: [...s.roomInvites, finalInvite],
+            rooms: s.rooms.map((r) =>
+              r.id === roomId
+                ? { ...r, memberCount: accepted ? r.memberCount + 1 : r.memberCount }
+                : r
+            ),
+            roomMessages: {
+              ...s.roomMessages,
+              [roomId]: [...msgs, sysMsg].slice(-200),
+            },
+          };
+        });
+
+        void sendLocalNotification(
+          accepted ? `✅ ${npc.name} a rejoint la room` : `❌ ${npc.name} a décliné`,
+          accepted ? `${npc.name} est maintenant dans "${room.name}"` : `${npc.name} n'est pas disponible.`
+        ).catch(() => {});
+      },
+
+      respondRoomInvite: (inviteId, status) => {
+        set((s) => ({
+          roomInvites: s.roomInvites.map((i) =>
+            i.id === inviteId ? { ...i, status } : i
+          ),
+          joinedRooms: status === "accepted"
+            ? [...s.joinedRooms, s.roomInvites.find((i) => i.id === inviteId)?.roomId ?? ""]
+            : s.joinedRooms,
         }));
       },
 

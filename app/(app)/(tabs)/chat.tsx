@@ -11,315 +11,424 @@ import { getNpcVisual } from "@/lib/avatar-visual";
 import { activities, starterResidents } from "@/lib/game-engine";
 import { getRelationshipLabel } from "@/lib/selectors";
 import { colors } from "@/lib/theme";
-import type { Conversation, NpcState } from "@/lib/types";
+import type { Conversation, NpcState, RoomMessage } from "@/lib/types";
 import { useGameStore } from "@/stores/game-store";
 
-// ─── Helper couleur relation ──────────────────────────────────────────────────
-function relColor(score: number): string {
-  if (score > 60) return "#38c793";
-  if (score > 30) return "#f6b94f";
-  return "rgba(255,255,255,0.2)";
+type Tab = "amis" | "rooms" | "lounge";
+
+function relColor(score: number) {
+  if (score > 60) return colors.accent;
+  if (score > 30) return colors.gold;
+  return colors.muted;
 }
 
-// ─── Avatar conversation ──────────────────────────────────────────────────────
-function ConvAvatar({ peerId, action, size = "xs", unread = 0 }: {
-  peerId?: string | null; action?: string; size?: "xs" | "sm"; unread?: number;
-}) {
-  const npc = peerId ? starterResidents.find((r) => r.id === peerId) : null;
-  if (!npc || !peerId) {
-    return (
-      <View style={{ width: size === "sm" ? 44 : 36, height: size === "sm" ? 44 : 36,
-        borderRadius: 22, backgroundColor: "rgba(255,255,255,0.08)",
-        alignItems: "center", justifyContent: "center" }}>
-        <Ionicons name="chatbubbles" size={18} color={colors.muted} />
-        {unread > 0 && (
-          <View style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16,
-            borderRadius: 8, backgroundColor: "#e74c3c", alignItems: "center", justifyContent: "center",
-            paddingHorizontal: 3 }}>
-            <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>{unread > 9 ? "9+" : unread}</Text>
-          </View>
-        )}
-      </View>
-    );
-  }
-  const visual = getNpcVisual(peerId);
+// ─── Online dot ───────────────────────────────────────────────────────────────
+function OnlineDot({ online }: { online: boolean }) {
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!online) return;
+    Animated.loop(Animated.sequence([
+      Animated.timing(pulseAnim, { toValue: 1.5, duration: 900, useNativeDriver: true }),
+      Animated.timing(pulseAnim, { toValue: 1,   duration: 900, useNativeDriver: true }),
+    ])).start();
+  }, [online]);
+
+  if (!online) return (
+    <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: colors.muted + "88",
+      borderWidth: 1.5, borderColor: colors.bg }} />
+  );
   return (
-    <View style={{ position: "relative" }}>
-      <AvatarSprite visual={visual} action={(action ?? "idle") as never} size={size} />
-      {unread > 0 && (
-        <View style={{ position: "absolute", top: -3, right: -3, minWidth: 16, height: 16,
-          borderRadius: 8, backgroundColor: "#e74c3c", alignItems: "center", justifyContent: "center",
-          paddingHorizontal: 3, borderWidth: 1.5, borderColor: colors.bg }}>
-          <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>{unread > 9 ? "9+" : unread}</Text>
+    <View style={{ width: 10, height: 10, alignItems: "center", justifyContent: "center" }}>
+      <Animated.View style={{ position: "absolute", width: 10, height: 10, borderRadius: 5,
+        backgroundColor: "#22c55e44", transform: [{ scale: pulseAnim }] }} />
+      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: "#22c55e",
+        borderWidth: 1.5, borderColor: colors.bg }} />
+    </View>
+  );
+}
+
+// ─── Avatar NPC avec dot ──────────────────────────────────────────────────────
+function NpcAvatar({ npc, size = 40, showOnline = false }: {
+  npc: NpcState; size?: number; showOnline?: boolean;
+}) {
+  const visual = getNpcVisual(npc.id);
+  return (
+    <View style={{ position: "relative", width: size, height: size }}>
+      <AvatarSprite visual={visual} action={npc.action as never} size="sm" />
+      {showOnline && (
+        <View style={{ position: "absolute", bottom: 0, right: 0 }}>
+          <OnlineDot online={npc.presenceOnline ?? false} />
         </View>
       )}
     </View>
   );
 }
 
-// ─── Vue conversation individuelle ───────────────────────────────────────────
+// ─── DM Conversation individuelle ────────────────────────────────────────────
 function ConversationView({ conv, npc, onBack }: {
-  conv: Conversation; npc: NpcState | undefined; onBack: () => void;
+  conv: Conversation;
+  npc: NpcState | null;
+  onBack: () => void;
 }) {
-  const sendMessageStore       = useGameStore((s) => s.sendMessage);
-  const markConversationRead   = useGameStore((s) => s.markConversationRead);
-  const [draft, setDraft]      = useState("");
-  const scrollRef              = useRef<ScrollView>(null);
-  const slideAnim              = useRef(new Animated.Value(40)).current;
-  const fadeAnim               = useRef(new Animated.Value(0)).current;
+  const sendMessage         = useGameStore((s) => s.sendMessage);
+  const markConversationRead = useGameStore((s) => s.markConversationRead);
+  const [input, setInput]   = useState("");
+  const scrollRef           = useRef<ScrollView>(null);
+  const npcInfo             = npc ? starterResidents.find((r) => r.id === npc.id) : null;
 
   useEffect(() => {
     markConversationRead(conv.id);
-    Animated.parallel([
-      Animated.timing(slideAnim, { toValue: 0, duration: 280, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-      Animated.timing(fadeAnim,  { toValue: 1, duration: 280, useNativeDriver: true }),
-    ]).start();
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 100);
   }, [conv.id]);
 
-  const send = () => {
-    const t = draft.trim();
-    if (!t) return;
-    setDraft("");
-    sendMessageStore(conv.id, t);
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
-  };
+  useEffect(() => {
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }, [conv.messages.length]);
 
-  const resident = starterResidents.find((r) => r.id === conv.peerId);
-  const visual   = conv.peerId ? getNpcVisual(conv.peerId) : null;
-  const moodColor = npc ? (npc.mood > 65 ? "#38c793" : npc.mood > 35 ? "#f6b94f" : "#e74c3c") : colors.muted;
-  const action = npc?.action ?? "idle";
-
-  const ACTION_LABEL: Record<string, string> = {
-    sleeping: "😴 Dort", eating: "🍽️ Mange", chatting: "💬 Bavarde",
-    exercising: "💪 S'entraîne", walking: "🚶 Marche", working: "💼 Travaille", idle: "💭 Disponible"
-  };
+  function send() {
+    if (!input.trim()) return;
+    sendMessage(conv.id, input.trim());
+    setInput("");
+  }
 
   return (
-    <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
       {/* Header */}
-      <View style={{ backgroundColor: "#0b1828", paddingTop: 52, paddingHorizontal: 16,
-        paddingBottom: 14, borderBottomWidth: 1, borderColor: "rgba(255,255,255,0.07)",
-        flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <Pressable onPress={onBack} style={{ width: 36, height: 36, borderRadius: 18,
-          backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" }}>
-          <Ionicons name="arrow-back" size={18} color={colors.text} />
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12,
+        paddingHorizontal: 16, paddingTop: 56, paddingBottom: 14,
+        backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <Pressable onPress={onBack} hitSlop={12}>
+          <Ionicons name="chevron-back" size={22} color={colors.accent} />
         </Pressable>
-        {visual && (
-          <View style={{ borderWidth: 2, borderColor: moodColor, borderRadius: 24 }}>
-            <AvatarSprite visual={visual} action={action as never} size="sm" />
-          </View>
-        )}
+        {npc && <NpcAvatar npc={npc} size={40} showOnline />}
         <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16 }}>{conv.title}</Text>
-          <Text style={{ color: colors.muted, fontSize: 11 }}>
-            {resident?.role ? `${resident.role} · ` : ""}
-            {npc ? (ACTION_LABEL[action] ?? "Actif") : "Résident"}
+          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 15 }}>
+            {npcInfo?.name ?? conv.title}
+          </Text>
+          <Text style={{ color: npc?.presenceOnline ? "#22c55e" : colors.muted, fontSize: 11, fontWeight: "600" }}>
+            {npc?.presenceOnline ? "● En ligne" : "○ Hors ligne"} · {npcInfo?.role ?? ""}
           </Text>
         </View>
-        <Pressable onPress={() => router.push("/(app)/world-live")}
-          style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10,
-            backgroundColor: "rgba(255,255,255,0.06)" }}>
-          <Text style={{ color: colors.muted, fontSize: 12 }}>🗺️</Text>
+      </View>
+
+      {/* NPC bio intro */}
+      {conv.messages.length <= 3 && npcInfo && (
+        <View style={{ margin: 16, backgroundColor: colors.accentGlow, borderRadius: 14, padding: 12,
+          borderWidth: 1, borderColor: colors.accent + "35" }}>
+          <Text style={{ color: colors.accent, fontWeight: "800", fontSize: 11, marginBottom: 4 }}>
+            {npcInfo.name}
+          </Text>
+          <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>{npcInfo.bio}</Text>
+        </View>
+      )}
+
+      {/* Messages */}
+      <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 10 }}
+        showsVerticalScrollIndicator={false}>
+        {conv.messages.map((msg) => {
+          const isMe = msg.authorId === "player" || msg.authorId === "user";
+          const isSystem = msg.kind === "system";
+          if (isSystem) return (
+            <View key={msg.id} style={{ alignItems: "center", paddingVertical: 4 }}>
+              <Text style={{ color: colors.muted, fontSize: 11, fontStyle: "italic" }}>{msg.body}</Text>
+            </View>
+          );
+          return (
+            <View key={msg.id} style={{ flexDirection: isMe ? "row-reverse" : "row", gap: 8, alignItems: "flex-end" }}>
+              {!isMe && npc && (
+                <View style={{ width: 28, height: 28, flexShrink: 0 }}>
+                  <AvatarSprite visual={getNpcVisual(npc.id)} action="idle" size="xs" />
+                </View>
+              )}
+              <View style={{
+                maxWidth: "75%",
+                backgroundColor: isMe ? colors.accent + "25" : colors.cardAlt,
+                borderRadius: 16,
+                borderBottomRightRadius: isMe ? 4 : 16,
+                borderBottomLeftRadius: isMe ? 16 : 4,
+                padding: 10, paddingHorizontal: 13,
+                borderWidth: 1,
+                borderColor: isMe ? colors.accent + "40" : colors.border,
+              }}>
+                <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>{msg.body}</Text>
+                <Text style={{ color: colors.muted, fontSize: 9, marginTop: 4, textAlign: isMe ? "right" : "left" }}>
+                  {new Date(msg.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                </Text>
+              </View>
+            </View>
+          );
+        })}
+      </ScrollView>
+
+      {/* Input */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10,
+        paddingHorizontal: 14, paddingVertical: 10,
+        backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border }}>
+        <TextInput
+          value={input}
+          onChangeText={setInput}
+          onSubmitEditing={send}
+          placeholder="Écrire un message..."
+          placeholderTextColor={colors.muted}
+          returnKeyType="send"
+          style={{ flex: 1, backgroundColor: colors.cardAlt, borderRadius: 22,
+            paddingHorizontal: 16, paddingVertical: 10,
+            color: colors.text, fontSize: 14, borderWidth: 1, borderColor: colors.border }}
+        />
+        <Pressable onPress={send}
+          style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: colors.accent,
+            alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="send" size={16} color="#fff" />
         </Pressable>
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+// ─── Room Chat (Lounge ou Room privée) ───────────────────────────────────────
+function RoomChatView({ roomId, roomName, onBack }: {
+  roomId: string; roomName: string; onBack: () => void;
+}) {
+  const sendRoomMessage  = useGameStore((s) => s.sendRoomMessage);
+  const roomMessages     = useGameStore((s) => s.roomMessages[roomId] ?? []);
+  const npcs             = useGameStore((s) => s.npcs);
+  const avatar           = useGameStore((s) => s.avatar);
+  const rooms            = useGameStore((s) => s.rooms);
+  const inviteNpcToRoom  = useGameStore((s) => s.inviteNpcToRoom);
+  const room             = rooms.find((r) => r.id === roomId);
+  const onlineNpcs       = npcs.filter((n) => n.presenceOnline ?? false);
+
+  const [input, setInput] = useState("");
+  const [showInvite, setShowInvite] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+
+  useEffect(() => {
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: false }), 100);
+  }, []);
+  useEffect(() => {
+    scrollRef.current?.scrollToEnd({ animated: true });
+  }, [roomMessages.length]);
+
+  function send() {
+    if (!input.trim()) return;
+    sendRoomMessage(roomId, input.trim());
+    setInput("");
+  }
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
+      {/* Header */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12,
+        paddingHorizontal: 16, paddingTop: 56, paddingBottom: 14,
+        backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <Pressable onPress={onBack} hitSlop={12}>
+          <Ionicons name="chevron-back" size={22} color={colors.accent} />
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 15 }}>{roomName}</Text>
+          <Text style={{ color: colors.muted, fontSize: 11 }}>
+            {room?.memberCount ?? onlineNpcs.length} membre(s) · {onlineNpcs.length} en ligne
+          </Text>
+        </View>
+        {room?.kind === "private" && (
+          <Pressable onPress={() => setShowInvite((v) => !v)}
+            style={{ backgroundColor: colors.purpleGlow, borderRadius: 10,
+              paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: colors.purple + "55" }}>
+            <Text style={{ color: colors.purple, fontSize: 11, fontWeight: "800" }}>+ Inviter</Text>
+          </Pressable>
+        )}
+        {room?.kind === "private" && room.code && (
+          <View style={{ backgroundColor: colors.cardAlt, borderRadius: 8,
+            paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: colors.border }}>
+            <Text style={{ color: colors.gold, fontSize: 10, fontWeight: "900" }}>#{room.code}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Panel invite NPC */}
+      {showInvite && (
+        <View style={{ backgroundColor: colors.card, borderBottomWidth: 1, borderBottomColor: colors.border,
+          padding: 12 }}>
+          <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 8 }}>
+            INVITER UN AMI EN LIGNE
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              {onlineNpcs.map((npc) => (
+                <Pressable key={npc.id} onPress={() => { inviteNpcToRoom(roomId, npc.id); setShowInvite(false); }}
+                  style={{ alignItems: "center", gap: 4 }}>
+                  <NpcAvatar npc={npc} size={40} showOnline />
+                  <Text style={{ color: colors.textSoft, fontSize: 9 }}>{npc.name.split(" ")[0]}</Text>
+                </Pressable>
+              ))}
+              {onlineNpcs.length === 0 && (
+                <Text style={{ color: colors.muted, fontSize: 12 }}>Aucun ami en ligne</Text>
+              )}
+            </View>
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Online members strip */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8,
+        paddingHorizontal: 14, paddingVertical: 8,
+        backgroundColor: colors.bgSoft, borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "700" }}>EN LIGNE :</Text>
+        {/* Player */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+          <View style={{ width: 24, height: 24, borderRadius: 12, backgroundColor: colors.accentGlow,
+            alignItems: "center", justifyContent: "center", borderWidth: 1.5, borderColor: colors.accent }}>
+            <Text style={{ fontSize: 12 }}>🧑</Text>
+          </View>
+          <Text style={{ color: colors.accent, fontSize: 10, fontWeight: "700" }}>
+            {avatar?.displayName?.split(" ")[0] ?? "Moi"}
+          </Text>
+        </View>
+        {onlineNpcs.slice(0, 5).map((npc) => (
+          <View key={npc.id} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+            <NpcAvatar npc={npc} size={24} />
+            <Text style={{ color: colors.textSoft, fontSize: 10 }}>{npc.name.split(" ")[0]}</Text>
+          </View>
+        ))}
+        {onlineNpcs.length > 5 && (
+          <Text style={{ color: colors.muted, fontSize: 10 }}>+{onlineNpcs.length - 5}</Text>
+        )}
       </View>
 
       {/* Messages */}
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={0}>
-        <ScrollView
-          ref={scrollRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 24 }}
-          showsVerticalScrollIndicator={false}
-          onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}
-        >
-          {/* Bio NPC si dispo */}
-          {resident?.bio && conv.messages.length <= 3 && (
-            <View style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 14,
-              padding: 12, marginBottom: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" }}>
-              <Text style={{ color: colors.muted, fontSize: 11, fontStyle: "italic" }}>
-                {resident.bio}
+      <ScrollView ref={scrollRef} style={{ flex: 1, backgroundColor: colors.bg }}
+        contentContainerStyle={{ padding: 14, gap: 8 }} showsVerticalScrollIndicator={false}>
+        {roomMessages.length === 0 && (
+          <View style={{ alignItems: "center", paddingTop: 40, gap: 8 }}>
+            <Text style={{ fontSize: 32 }}>💬</Text>
+            <Text style={{ color: colors.muted, fontSize: 13 }}>Personne n'a encore écrit</Text>
+            <Text style={{ color: colors.muted, fontSize: 11 }}>Sois le premier !</Text>
+          </View>
+        )}
+        {roomMessages.map((msg) => {
+          const isMe = msg.authorId === (useGameStore.getState().session?.email ?? "local")
+            || msg.authorId === "local"
+            || (msg.authorName === (useGameStore.getState().avatar?.displayName ?? "__"));
+          const isSystem = msg.kind === "system";
+          const isEmote  = msg.kind === "emote";
+          const npc = npcs.find((n) => n.id === msg.authorId);
+
+          if (isSystem) return (
+            <View key={msg.id} style={{ alignItems: "center", paddingVertical: 4 }}>
+              <View style={{ backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 10,
+                paddingHorizontal: 12, paddingVertical: 4 }}>
+                <Text style={{ color: colors.muted, fontSize: 10, fontStyle: "italic" }}>{msg.body}</Text>
+              </View>
+            </View>
+          );
+
+          if (isEmote) return (
+            <View key={msg.id} style={{ alignItems: "center", paddingVertical: 4 }}>
+              <Text style={{ fontSize: 11, color: colors.muted }}>
+                {msg.authorName} : <Text style={{ fontSize: 22 }}>{msg.body}</Text>
               </Text>
             </View>
-          )}
+          );
 
-          {conv.messages.map((msg) => {
-            const mine = msg.authorId === "self";
-            const time = new Date(msg.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" });
-            return (
-              <View key={msg.id}
-                style={{ flexDirection: mine ? "row-reverse" : "row", gap: 8, alignItems: "flex-end" }}>
-                {!mine && visual && (
-                  <AvatarSprite visual={visual} action="idle" size="xs" />
+          return (
+            <View key={msg.id} style={{ flexDirection: isMe ? "row-reverse" : "row", gap: 8, alignItems: "flex-end" }}>
+              {!isMe && (
+                <View style={{ width: 28, height: 28, flexShrink: 0 }}>
+                  {npc
+                    ? <AvatarSprite visual={getNpcVisual(npc.id)} action="idle" size="xs" />
+                    : <View style={{ width: 28, height: 28, borderRadius: 14,
+                        backgroundColor: colors.cardAlt, alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ fontSize: 14 }}>👤</Text>
+                      </View>
+                  }
+                </View>
+              )}
+              <View>
+                {!isMe && (
+                  <Text style={{ color: npc ? relColor(60) : colors.muted, fontSize: 10, fontWeight: "700",
+                    marginBottom: 3, marginLeft: 4 }}>
+                    {msg.authorName}
+                  </Text>
                 )}
-                <View style={{ maxWidth: "78%" }}>
-                  <View style={{
-                    backgroundColor: mine ? colors.accent : "rgba(255,255,255,0.09)",
-                    borderRadius: 18,
-                    borderBottomRightRadius: mine ? 4 : 18,
-                    borderBottomLeftRadius: mine ? 18 : 4,
-                    paddingHorizontal: 14, paddingVertical: 10
-                  }}>
-                    <Text style={{ color: mine ? "#07111f" : colors.text, fontSize: 14, lineHeight: 20,
-                      fontWeight: mine ? "600" : "400" }}>
-                      {msg.body}
-                    </Text>
-                  </View>
-                  <Text style={{ color: "rgba(255,255,255,0.25)", fontSize: 9,
-                    marginTop: 3, alignSelf: mine ? "flex-end" : "flex-start",
-                    marginHorizontal: 6 }}>
-                    {time}
+                <View style={{
+                  maxWidth: 260,
+                  backgroundColor: isMe ? colors.accent + "22" : colors.cardAlt,
+                  borderRadius: 14,
+                  borderBottomRightRadius: isMe ? 4 : 14,
+                  borderBottomLeftRadius: isMe ? 14 : 4,
+                  padding: 9, paddingHorizontal: 13,
+                  borderWidth: 1,
+                  borderColor: isMe ? colors.accent + "40" : colors.border,
+                }}>
+                  <Text style={{ color: colors.text, fontSize: 14, lineHeight: 20 }}>{msg.body}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 9, marginTop: 3, textAlign: isMe ? "right" : "left" }}>
+                    {new Date(msg.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
                   </Text>
                 </View>
               </View>
-            );
-          })}
-        </ScrollView>
-
-        {/* Input */}
-        <View style={{ flexDirection: "row", gap: 8, padding: 12, paddingBottom: 20,
-          backgroundColor: "rgba(7,17,31,0.98)", borderTopWidth: 1, borderColor: "rgba(255,255,255,0.07)" }}>
-          <TextInput
-            value={draft}
-            onChangeText={setDraft}
-            placeholder={`Écrire à ${conv.title.split(" ")[0]}…`}
-            placeholderTextColor={colors.muted}
-            style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.07)", borderRadius: 22,
-              paddingHorizontal: 16, paddingVertical: 11, color: colors.text, fontSize: 14 }}
-            onSubmitEditing={send}
-            returnKeyType="send"
-            multiline={false}
-          />
-          <Pressable onPress={send} style={{
-            width: 44, height: 44, borderRadius: 22,
-            backgroundColor: draft.trim() ? colors.accent : "rgba(255,255,255,0.08)",
-            alignItems: "center", justifyContent: "center"
-          }}>
-            <Ionicons name="send" size={18} color={draft.trim() ? "#07111f" : colors.muted} />
-          </Pressable>
-        </View>
-      </KeyboardAvoidingView>
-    </Animated.View>
-  );
-}
-
-// ─── Carte contact ─────────────────────────────────────────────────────────────
-function ContactCard({ residentId, onChat, onInvite }: {
-  residentId: string; onChat: () => void; onInvite: () => void;
-}) {
-  const resident     = starterResidents.find((r) => r.id === residentId);
-  const relationships = useGameStore((s) => s.relationships);
-  const npcs          = useGameStore((s) => s.npcs);
-  const npc           = npcs.find((n) => n.id === residentId);
-  if (!resident) return null;
-
-  const rel    = relationships.find((r) => r.residentId === residentId);
-  const score  = rel?.score ?? 0;
-  const rc     = relColor(score);
-  const visual = getNpcVisual(residentId);
-  const action = npc?.action ?? "idle";
-
-  const ACTION_EMOJI: Record<string, string> = {
-    sleeping: "😴", eating: "🍽️", chatting: "💬",
-    exercising: "💪", walking: "🚶", working: "💼", idle: "🟢"
-  };
-
-  return (
-    <View style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 18,
-      borderWidth: 1, borderColor: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
-      {/* Banner couleur relation */}
-      <View style={{ height: 64, backgroundColor: rc + "18", alignItems: "center",
-        justifyContent: "center", position: "relative" }}>
-        <View style={{ borderWidth: 2.5, borderColor: rc, borderRadius: 26 }}>
-          <AvatarSprite visual={visual} action={action as never} size="sm" />
-        </View>
-        {/* Badge statut action */}
-        <View style={{ position: "absolute", top: 6, right: 10,
-          backgroundColor: "rgba(7,17,31,0.85)", borderRadius: 10,
-          paddingHorizontal: 7, paddingVertical: 2 }}>
-          <Text style={{ fontSize: 11 }}>{ACTION_EMOJI[action] ?? "🟢"}</Text>
-        </View>
-      </View>
-
-      <View style={{ padding: 14, gap: 6 }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>{resident.name}</Text>
-          {npc && (
-            <View style={{ backgroundColor: (npc.level >= 3 ? "#f6b94f" : "#38c793") + "22",
-              borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ color: npc.level >= 3 ? "#f6b94f" : "#38c793", fontSize: 10, fontWeight: "900" }}>
-                Nv{npc.level}
-              </Text>
             </View>
-          )}
-        </View>
-        <Text style={{ color: colors.muted, fontSize: 11 }}>{resident.role}</Text>
-        <Text style={{ color: colors.muted, fontSize: 11 }} numberOfLines={2}>{resident.bio}</Text>
+          );
+        })}
+      </ScrollView>
 
-        {/* Barre relation */}
-        <View style={{ gap: 4, marginTop: 4 }}>
-          <View style={{ height: 5, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
-            <View style={{ height: 5, width: `${Math.min(100, score)}%`, borderRadius: 3, backgroundColor: rc }} />
-          </View>
-          <Text style={{ color: rc, fontSize: 10, fontWeight: "700" }}>
-            {getRelationshipLabel({ score, residentId } as never)}
-            {score > 0 ? ` · ${score} pts` : ""}
-          </Text>
-        </View>
-
-        {/* Actions */}
-        <View style={{ flexDirection: "row", gap: 8, marginTop: 4 }}>
-          <Pressable onPress={onChat} style={{ flex: 1, backgroundColor: colors.accent + "18",
-            borderRadius: 10, paddingVertical: 10, alignItems: "center",
-            borderWidth: 1, borderColor: colors.accent + "40" }}>
-            <Text style={{ color: colors.accent, fontWeight: "700", fontSize: 12 }}>💬 Chat</Text>
-          </Pressable>
-          <Pressable onPress={onInvite} style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.05)",
-            borderRadius: 10, paddingVertical: 10, alignItems: "center",
-            borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" }}>
-            <Text style={{ color: colors.text, fontWeight: "700", fontSize: 12 }}>☕ Inviter</Text>
-          </Pressable>
-        </View>
+      {/* Input */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10,
+        paddingHorizontal: 14, paddingVertical: 10,
+        backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border }}>
+        <TextInput
+          value={input}
+          onChangeText={setInput}
+          onSubmitEditing={send}
+          placeholder="Écrire dans la room..."
+          placeholderTextColor={colors.muted}
+          returnKeyType="send"
+          style={{ flex: 1, backgroundColor: colors.cardAlt, borderRadius: 22,
+            paddingHorizontal: 16, paddingVertical: 10,
+            color: colors.text, fontSize: 14, borderWidth: 1, borderColor: colors.border }}
+        />
+        <Pressable onPress={send}
+          style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: colors.accent,
+            alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="send" size={16} color="#fff" />
+        </Pressable>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   );
 }
 
-// ─── Screen principal ─────────────────────────────────────────────────────────
-export default function SocialScreen() {
-  const conversations           = useGameStore((s) => s.conversations);
-  const invitations             = useGameStore((s) => s.invitations);
-  const npcs                    = useGameStore((s) => s.npcs);
-  const sendInvitation          = useGameStore((s) => s.sendInvitation);
-  const respondInvitation       = useGameStore((s) => s.respondInvitation);
-  const startDirectConversation = useGameStore((s) => s.startDirectConversation);
+// ─── MAIN SCREEN ─────────────────────────────────────────────────────────────
+export default function ChatScreen() {
+  const conversations  = useGameStore((s) => s.conversations);
+  const npcs           = useGameStore((s) => s.npcs);
+  const relationships  = useGameStore((s) => s.relationships);
+  const rooms          = useGameStore((s) => s.rooms);
+  const joinedRooms    = useGameStore((s) => s.joinedRooms);
+  const roomInvites    = useGameStore((s) => s.roomInvites);
+  const createPrivateRoom  = useGameStore((s) => s.createPrivateRoom);
+  const respondRoomInvite  = useGameStore((s) => s.respondRoomInvite);
+  const invitations    = useGameStore((s) => s.invitations);
+  const respondInvitation  = useGameStore((s) => s.respondInvitation);
+  const avatar         = useGameStore((s) => s.avatar);
+  const roomMessages   = useGameStore((s) => s.roomMessages);
 
-  const [tab, setTab]           = useState<"messages" | "contacts" | "invites">("messages");
-  const [openConvId, setOpenConvId] = useState<string | null>(null);
+  const [tab, setTab]           = useState<Tab>("amis");
+  const [openConvId, setOpenConvId]   = useState<string | null>(null);
+  const [openRoomId, setOpenRoomId]   = useState<string | null>(null);
+  const [showCreateRoom, setShowCreateRoom] = useState(false);
+  const [newRoomName, setNewRoomName]   = useState("");
 
-  const pendingInvites    = invitations.filter((i) => i.status === "pending");
-  const totalUnread       = conversations.reduce((s, c) => s + c.unreadCount, 0);
-  const directConvs       = useMemo(() =>
-    conversations.filter((c) => c.kind === "direct").sort((a, b) => {
-      const at = a.messages.at(-1)?.createdAt ?? a.messages[0]?.createdAt ?? "";
-      const bt = b.messages.at(-1)?.createdAt ?? b.messages[0]?.createdAt ?? "";
-      return bt.localeCompare(at);
-    }),
-    [conversations]
-  );
+  const tabAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(tabAnim, { toValue: 1, duration: 250, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    tabAnim.setValue(0);
+    Animated.timing(tabAnim, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+  }, [tab]);
 
-  const openConv = openConvId ? conversations.find((c) => c.id === openConvId) : null;
-  const openNpc  = openConv?.peerId ? npcs.find((n) => n.id === openConv.peerId) : undefined;
+  // ── Navigation ouvrir conversation ────────────────────────────────────────
+  const openConv = conversations.find((c) => c.id === openConvId);
+  const openNpc  = openConv?.peerId ? npcs.find((n) => n.id === openConv.peerId) ?? null : null;
 
-  const openDm = (residentId: string, residentName: string) => {
-    startDirectConversation(residentId, residentName);
-    const convId = `dm-${residentId}`;
-    setOpenConvId(convId);
-    setTab("messages");
-  };
-
-  // ── Vue conversation ouverte ──────────────────────────────────────────────
-  if (openConv) {
+  if (openConvId && openConv) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.bg }}>
         <ConversationView conv={openConv} npc={openNpc} onBack={() => setOpenConvId(null)} />
@@ -327,227 +436,445 @@ export default function SocialScreen() {
     );
   }
 
-  // ── Vue liste ─────────────────────────────────────────────────────────────
+  if (openRoomId) {
+    const room = rooms.find((r) => r.id === openRoomId);
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.bg }}>
+        <RoomChatView
+          roomId={openRoomId}
+          roomName={room?.name ?? "Room"}
+          onBack={() => setOpenRoomId(null)}
+        />
+      </View>
+    );
+  }
+
+  // ── Données ───────────────────────────────────────────────────────────────
+  const onlineNpcs = npcs.filter((n) => n.presenceOnline ?? false);
+  const friendOnline = onlineNpcs.filter((n) => {
+    const rel = relationships.find((r) => r.residentId === n.id);
+    return rel && rel.score >= 40;
+  });
+
+  const sortedConvs = [...conversations].sort((a, b) => {
+    const aLast = a.messages.at(-1)?.createdAt ?? a.id;
+    const bLast = b.messages.at(-1)?.createdAt ?? b.id;
+    return bLast.localeCompare(aLast);
+  });
+
+  const myRooms   = rooms.filter((r) => joinedRooms.includes(r.id));
+  const otherRooms = rooms.filter((r) => !joinedRooms.includes(r.id) && r.isActive);
+  const pendingRoomInvites = roomInvites.filter((i) => i.status === "pending" && i.toId === (avatar?.displayName ?? "__"));
+  const pendingInvites     = invitations.filter((i) => i.status === "pending");
+  const unreadTotal        = conversations.reduce((s, c) => s + c.unreadCount, 0);
+  const lounge             = rooms.find((r) => r.id === "room-lounge-global");
+  const loungeLastMsg      = (roomMessages["room-lounge-global"] ?? []).at(-1);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {/* Header */}
-      <View style={{ backgroundColor: "#07111f", paddingTop: 52, paddingHorizontal: 20, paddingBottom: 0 }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between",
-          alignItems: "center", marginBottom: 14 }}>
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 22 }}>Social</Text>
-          <View style={{ flexDirection: "row", gap: 8 }}>
-            <Pressable onPress={() => router.push("/(app)/dates")}
-              style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20,
-                backgroundColor: "rgba(255,107,107,0.15)", borderWidth: 1, borderColor: "rgba(255,107,107,0.3)" }}>
-              <Text style={{ color: "#ff6b6b", fontWeight: "700", fontSize: 12 }}>💘 Dates</Text>
-            </Pressable>
-            <Pressable onPress={() => router.push("/(app)/rooms")}
-              style={{ paddingHorizontal: 12, paddingVertical: 7, borderRadius: 20,
-                backgroundColor: "rgba(56,199,147,0.15)", borderWidth: 1, borderColor: "rgba(56,199,147,0.3)" }}>
-              <Text style={{ color: "#38c793", fontWeight: "700", fontSize: 12 }}>🏠 Rooms</Text>
-            </Pressable>
+      {/* ── Header MSN ── */}
+      <View style={{ backgroundColor: "#050e1a", paddingTop: 52, paddingBottom: 0,
+        borderBottomWidth: 1, borderBottomColor: colors.border }}>
+        {/* Titre */}
+        <View style={{ flexDirection: "row", alignItems: "center", paddingHorizontal: 20, paddingBottom: 14 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 20 }}>Messenger</Text>
+            <Text style={{ color: colors.muted, fontSize: 11 }}>
+              {onlineNpcs.length} en ligne · {unreadTotal > 0 ? `${unreadTotal} non lus` : "tout lu"}
+            </Text>
+          </View>
+          {/* Player bubble */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: colors.accentGlow,
+              borderWidth: 2, borderColor: colors.accent, alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 18 }}>🧑</Text>
+            </View>
+            <OnlineDot online />
           </View>
         </View>
 
-        {/* Tabs */}
-        <View style={{ flexDirection: "row", gap: 0, borderBottomWidth: 1, borderColor: "rgba(255,255,255,0.07)" }}>
-          {([
-            { key: "messages" as const, label: "Messages", badge: totalUnread },
-            { key: "contacts" as const, label: "Contacts", badge: 0 },
-            { key: "invites"  as const, label: "Invitations", badge: pendingInvites.length },
-          ]).map(({ key, label, badge }) => (
-            <Pressable key={key} onPress={() => setTab(key)} style={{ flex: 1, paddingVertical: 12,
-              alignItems: "center", position: "relative",
-              borderBottomWidth: tab === key ? 2 : 0,
-              borderColor: colors.accent }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                <Text style={{ color: tab === key ? colors.text : colors.muted,
-                  fontWeight: tab === key ? "800" : "500", fontSize: 12 }}>
-                  {label}
+        {/* ── Amis en ligne strip ── */}
+        {onlineNpcs.length > 0 && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 14, gap: 16, flexDirection: "row" }}>
+            {onlineNpcs.map((npc) => {
+              const rel = relationships.find((r) => r.residentId === npc.id);
+              const isFriend = rel && rel.score >= 40;
+              return (
+                <Pressable key={npc.id}
+                  onPress={() => {
+                    const conv = conversations.find((c) => c.peerId === npc.id);
+                    if (conv) setOpenConvId(conv.id);
+                  }}
+                  style={{ alignItems: "center", gap: 4 }}>
+                  <NpcAvatar npc={npc} size={44} showOnline />
+                  <Text style={{ color: isFriend ? colors.accent : colors.textSoft, fontSize: 10,
+                    fontWeight: isFriend ? "800" : "400" }}>
+                    {npc.name.split(" ")[0]}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
+
+        {/* ── Tabs ── */}
+        <View style={{ flexDirection: "row", paddingHorizontal: 16, gap: 4 }}>
+          {(["amis", "rooms", "lounge"] as Tab[]).map((t) => {
+            const active = tab === t;
+            const badge = t === "amis" ? unreadTotal : t === "rooms" ? pendingRoomInvites.length : 0;
+            const labels: Record<Tab, string> = { amis: "Amis", rooms: "Rooms", lounge: "Lounge" };
+            const icons: Record<Tab, string> = { amis: "💬", rooms: "🏠", lounge: "🌍" };
+            return (
+              <Pressable key={t} onPress={() => setTab(t)}
+                style={{ flex: 1, paddingVertical: 10, alignItems: "center", position: "relative",
+                  borderBottomWidth: active ? 2.5 : 0, borderBottomColor: colors.accent }}>
+                <Text style={{ color: active ? colors.accent : colors.muted, fontSize: 12, fontWeight: active ? "900" : "500" }}>
+                  {icons[t]} {labels[t]}
                 </Text>
                 {badge > 0 && (
-                  <View style={{ minWidth: 16, height: 16, borderRadius: 8, backgroundColor: "#e74c3c",
-                    alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }}>
+                  <View style={{ position: "absolute", top: 4, right: 12,
+                    minWidth: 16, height: 16, borderRadius: 8,
+                    backgroundColor: "#e74c3c", alignItems: "center", justifyContent: "center", paddingHorizontal: 3 }}>
                     <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>{badge}</Text>
                   </View>
                 )}
-              </View>
-            </Pressable>
-          ))}
+              </Pressable>
+            );
+          })}
         </View>
       </View>
 
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 60 }}
-        showsVerticalScrollIndicator={false}>
+      {/* ── Contenu tabs ── */}
+      <Animated.View style={{ flex: 1, opacity: tabAnim }}>
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
 
-        {/* ── MESSAGES ─────────────────────────────────────────────────────── */}
-        {tab === "messages" && (
-          <>
-            {directConvs.length === 0 ? (
-              <View style={{ alignItems: "center", paddingTop: 60, gap: 16, paddingHorizontal: 20 }}>
-                <Text style={{ fontSize: 56 }}>💬</Text>
-                <Text style={{ color: colors.text, fontWeight: "800", fontSize: 18 }}>Aucun message</Text>
-                <Text style={{ color: colors.muted, textAlign: "center" }}>
-                  Va dans Contacts pour démarrer une conversation avec un résident.
+          {/* ── INVITATIONS EN ATTENTE ── */}
+          {(pendingInvites.length > 0 || pendingRoomInvites.length > 0) && (
+            <View style={{ margin: 14, backgroundColor: colors.goldGlow, borderRadius: 14,
+              borderWidth: 1, borderColor: colors.gold + "40", padding: 12, gap: 8 }}>
+              <Text style={{ color: colors.gold, fontWeight: "900", fontSize: 12 }}>
+                📨 {pendingInvites.length + pendingRoomInvites.length} invitation(s) en attente
+              </Text>
+              {pendingInvites.map((inv) => {
+                const act = activities.find((a) => a.slug === inv.activitySlug);
+                return (
+                  <View key={inv.id} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                    <Text style={{ color: colors.textSoft, fontSize: 13, flex: 1 }}>
+                      {inv.residentName} → {act?.name ?? inv.activitySlug}
+                    </Text>
+                    <Pressable onPress={() => respondInvitation(inv.id, "accepted")}
+                      style={{ backgroundColor: colors.accent + "25", borderRadius: 10,
+                        paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.accent + "55" }}>
+                      <Text style={{ color: colors.accent, fontSize: 11, fontWeight: "800" }}>Accepter</Text>
+                    </Pressable>
+                    <Pressable onPress={() => respondInvitation(inv.id, "declined")}
+                      style={{ backgroundColor: "rgba(255,80,80,0.1)", borderRadius: 10,
+                        paddingHorizontal: 10, paddingVertical: 6 }}>
+                      <Text style={{ color: colors.danger, fontSize: 11 }}>Refuser</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+              {pendingRoomInvites.map((inv) => (
+                <View key={inv.id} style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <Text style={{ color: colors.textSoft, fontSize: 13, flex: 1 }}>
+                    {inv.fromName} t'invite dans "{inv.roomName}"
+                  </Text>
+                  <Pressable onPress={() => respondRoomInvite(inv.id, "accepted")}
+                    style={{ backgroundColor: colors.accent + "25", borderRadius: 10,
+                      paddingHorizontal: 12, paddingVertical: 6, borderWidth: 1, borderColor: colors.accent + "55" }}>
+                    <Text style={{ color: colors.accent, fontSize: 11, fontWeight: "800" }}>Rejoindre</Text>
+                  </Pressable>
+                  <Pressable onPress={() => respondRoomInvite(inv.id, "declined")}
+                    style={{ backgroundColor: "rgba(255,80,80,0.1)", borderRadius: 10,
+                      paddingHorizontal: 10, paddingVertical: 6 }}>
+                    <Text style={{ color: colors.danger, fontSize: 11 }}>Refuser</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* ═══════ TAB AMIS ═══════ */}
+          {tab === "amis" && (
+            <View style={{ paddingBottom: 20 }}>
+              {/* Amis avec relation forte */}
+              {friendOnline.length > 0 && (
+                <View style={{ marginHorizontal: 14, marginTop: 14 }}>
+                  <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 8 }}>
+                    🟢 AMIS EN LIGNE
+                  </Text>
+                  {friendOnline.map((npc) => {
+                    const rel = relationships.find((r) => r.residentId === npc.id);
+                    const conv = conversations.find((c) => c.peerId === npc.id);
+                    return (
+                      <Pressable key={npc.id}
+                        onPress={() => conv && setOpenConvId(conv.id)}
+                        style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10,
+                          paddingHorizontal: 14, backgroundColor: "#22c55e08", borderRadius: 12, marginBottom: 6,
+                          borderWidth: 1, borderColor: "#22c55e20" }}>
+                        <NpcAvatar npc={npc} size={44} showOnline />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 14 }}>{npc.name}</Text>
+                          <Text style={{ color: "#22c55e", fontSize: 11 }}>
+                            ● En ligne · {npc.action}
+                          </Text>
+                        </View>
+                        {conv && conv.unreadCount > 0 && (
+                          <View style={{ minWidth: 20, height: 20, borderRadius: 10, backgroundColor: "#e74c3c",
+                            alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}>
+                            <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>{conv.unreadCount}</Text>
+                          </View>
+                        )}
+                        <Ionicons name="chevron-forward" size={14} color={colors.muted} />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Toutes les conversations */}
+              <View style={{ marginHorizontal: 14, marginTop: 14 }}>
+                <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 8 }}>
+                  MESSAGES
                 </Text>
-                <Pressable onPress={() => setTab("contacts")}
-                  style={{ backgroundColor: colors.accent, borderRadius: 14,
-                    paddingHorizontal: 24, paddingVertical: 12 }}>
-                  <Text style={{ color: "#07111f", fontWeight: "800", fontSize: 14 }}>Voir les contacts</Text>
-                </Pressable>
-              </View>
-            ) : (
-              <View>
-                {directConvs.map((conv) => {
-                  const npc    = conv.peerId ? npcs.find((n) => n.id === conv.peerId) : undefined;
-                  const last   = conv.messages.at(-1);
-                  const time   = last ? new Date(last.createdAt).toLocaleTimeString("fr-FR",
-                    { hour: "2-digit", minute: "2-digit" }) : "";
-                  const hasUnread = conv.unreadCount > 0;
+                {sortedConvs.map((conv) => {
+                  const npc      = conv.peerId ? npcs.find((n) => n.id === conv.peerId) : null;
+                  const rel      = conv.peerId ? relationships.find((r) => r.residentId === conv.peerId) : null;
+                  const lastMsg  = conv.messages.at(-1);
+                  const isOnline = npc?.presenceOnline ?? false;
                   return (
-                    <Pressable key={conv.id}
-                      onPress={() => setOpenConvId(conv.id)}
-                      style={{ flexDirection: "row", alignItems: "center", gap: 12,
-                        paddingHorizontal: 16, paddingVertical: 14,
-                        backgroundColor: hasUnread ? "rgba(139,124,255,0.06)" : "transparent",
-                        borderBottomWidth: 1, borderColor: "rgba(255,255,255,0.05)" }}>
-                      <ConvAvatar peerId={conv.peerId} action={npc?.action}
-                        size="sm" unread={conv.unreadCount} />
-                      <View style={{ flex: 1, gap: 3 }}>
-                        <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                          <Text style={{ color: colors.text, fontWeight: hasUnread ? "800" : "600",
-                            fontSize: 14 }}>
+                    <Pressable key={conv.id} onPress={() => setOpenConvId(conv.id)}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12,
+                        borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                      {npc
+                        ? <NpcAvatar npc={npc} size={46} showOnline />
+                        : <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: colors.cardAlt,
+                            alignItems: "center", justifyContent: "center" }}>
+                            <Ionicons name="chatbubbles" size={20} color={colors.muted} />
+                          </View>
+                      }
+                      <View style={{ flex: 1, gap: 2 }}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          <Text style={{ color: colors.text, fontWeight: conv.unreadCount > 0 ? "900" : "600",
+                            fontSize: 14, flex: 1 }} numberOfLines={1}>
                             {conv.title}
                           </Text>
-                          <Text style={{ color: colors.muted, fontSize: 10 }}>{time}</Text>
+                          <Text style={{ color: colors.muted, fontSize: 10 }}>
+                            {lastMsg ? new Date(lastMsg.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : ""}
+                          </Text>
                         </View>
-                        <Text style={{ color: hasUnread ? colors.text : colors.muted,
-                          fontSize: 12, fontWeight: hasUnread ? "600" : "400" }}
-                          numberOfLines={1}>
-                          {last?.body ?? "Démarre la conversation…"}
-                        </Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          {rel && (
+                            <View style={{ width: 40, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+                              <View style={{ height: 3, borderRadius: 2, width: `${rel.score}%`, backgroundColor: relColor(rel.score) }} />
+                            </View>
+                          )}
+                          <Text style={{ color: colors.muted, fontSize: 11, flex: 1 }} numberOfLines={1}>
+                            {lastMsg ? lastMsg.body : "Commencer une conversation"}
+                          </Text>
+                          {isOnline && <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: "#22c55e" }} />}
+                        </View>
                       </View>
+                      {conv.unreadCount > 0 && (
+                        <View style={{ minWidth: 20, height: 20, borderRadius: 10, backgroundColor: "#e74c3c",
+                          alignItems: "center", justifyContent: "center", paddingHorizontal: 5 }}>
+                          <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>{conv.unreadCount}</Text>
+                        </View>
+                      )}
                     </Pressable>
                   );
                 })}
               </View>
-            )}
-          </>
-        )}
+            </View>
+          )}
 
-        {/* ── CONTACTS ─────────────────────────────────────────────────────── */}
-        {tab === "contacts" && (
-          <View style={{ padding: 16, gap: 14 }}>
-            {starterResidents.map((r) => (
-              <ContactCard
-                key={r.id}
-                residentId={r.id}
-                onChat={() => openDm(r.id, r.name)}
-                onInvite={() => sendInvitation(r.id, "coffee-meetup")}
-              />
-            ))}
-            <Pressable onPress={() => router.push("/(app)/discover")}
-              style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 14, padding: 16,
-                flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
-                borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
-              <Ionicons name="search" size={16} color={colors.muted} />
-              <Text style={{ color: colors.muted, fontWeight: "700", fontSize: 13 }}>
-                Découvrir plus de profils
-              </Text>
-            </Pressable>
-          </View>
-        )}
-
-        {/* ── INVITATIONS ──────────────────────────────────────────────────── */}
-        {tab === "invites" && (
-          <View style={{ padding: 16, gap: 12 }}>
-            {invitations.length === 0 ? (
-              <View style={{ alignItems: "center", paddingTop: 60, gap: 16 }}>
-                <Text style={{ fontSize: 56 }}>🎉</Text>
-                <Text style={{ color: colors.text, fontWeight: "800", fontSize: 18 }}>
-                  Aucune invitation
-                </Text>
-                <Text style={{ color: colors.muted, textAlign: "center" }}>
-                  Les résidents t'enverront des invitations quand ils seront de bonne humeur.
-                </Text>
+          {/* ═══════ TAB ROOMS ═══════ */}
+          {tab === "rooms" && (
+            <View style={{ padding: 14, gap: 14 }}>
+              {/* Create room */}
+              <View style={{ gap: 10 }}>
+                {!showCreateRoom ? (
+                  <Pressable onPress={() => setShowCreateRoom(true)}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 10,
+                      backgroundColor: colors.accentGlow, borderRadius: 14, padding: 14,
+                      borderWidth: 1, borderColor: colors.accent + "40" }}>
+                    <Ionicons name="add-circle" size={22} color={colors.accent} />
+                    <Text style={{ color: colors.accent, fontWeight: "800", fontSize: 14 }}>Créer une room privée</Text>
+                  </Pressable>
+                ) : (
+                  <View style={{ backgroundColor: colors.card, borderRadius: 14, padding: 14, gap: 10,
+                    borderWidth: 1, borderColor: colors.border }}>
+                    <Text style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>Nom de la room</Text>
+                    <TextInput
+                      value={newRoomName}
+                      onChangeText={setNewRoomName}
+                      placeholder="ex: Soirée cinema, Squad..."
+                      placeholderTextColor={colors.muted}
+                      style={{ backgroundColor: colors.cardAlt, borderRadius: 12, paddingHorizontal: 14,
+                        paddingVertical: 10, color: colors.text, fontSize: 14, borderWidth: 1, borderColor: colors.border }}
+                    />
+                    <View style={{ flexDirection: "row", gap: 10 }}>
+                      <Pressable onPress={() => {
+                        if (newRoomName.trim()) {
+                          const r = createPrivateRoom(newRoomName.trim());
+                          setShowCreateRoom(false);
+                          setNewRoomName("");
+                          setOpenRoomId(r.id);
+                        }
+                      }} style={{ flex: 1, backgroundColor: colors.accent + "22", borderRadius: 10,
+                        padding: 12, alignItems: "center", borderWidth: 1, borderColor: colors.accent + "55" }}>
+                        <Text style={{ color: colors.accent, fontWeight: "800" }}>Créer</Text>
+                      </Pressable>
+                      <Pressable onPress={() => { setShowCreateRoom(false); setNewRoomName(""); }}
+                        style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.05)", borderRadius: 10,
+                          padding: 12, alignItems: "center" }}>
+                        <Text style={{ color: colors.muted, fontWeight: "600" }}>Annuler</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                )}
               </View>
-            ) : (
-              invitations.map((inv) => {
-                const act       = activities.find((a) => a.slug === inv.activitySlug);
-                const isPending = inv.status === "pending";
-                const resident  = starterResidents.find((r) => r.id === inv.residentId);
-                const visual    = resident ? getNpcVisual(resident.id) : null;
-                const npc       = npcs.find((n) => n.id === inv.residentId);
 
-                const ACT_EMOJIS: Record<string, string> = {
-                  "coffee-meetup": "☕", "walk": "🌿", "gym-session": "💪",
-                  "cinema-date": "🎬", "market-shop": "🛒", "restaurant-out": "🍽️"
-                };
-                const emoji = ACT_EMOJIS[inv.activitySlug] ?? "🎯";
-
-                return (
-                  <View key={inv.id} style={{
-                    backgroundColor: isPending ? "rgba(246,185,79,0.07)" : "rgba(255,255,255,0.03)",
-                    borderRadius: 18, overflow: "hidden",
-                    borderWidth: 1, borderColor: isPending ? "rgba(246,185,79,0.3)" : "rgba(255,255,255,0.07)"
-                  }}>
-                    {/* Header invitation */}
-                    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, padding: 14 }}>
-                      {visual && npc && (
-                        <View style={{ borderWidth: 2, borderColor: isPending ? "#f6b94f" : "rgba(255,255,255,0.15)",
-                          borderRadius: 24 }}>
-                          <AvatarSprite visual={visual} action={(npc.action) as never} size="sm" />
-                        </View>
-                      )}
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>
-                            {inv.residentName}
+              {/* Mes rooms */}
+              {myRooms.length > 0 && (
+                <View>
+                  <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 8 }}>
+                    MES ROOMS
+                  </Text>
+                  {myRooms.map((room) => {
+                    const msgs = roomMessages[room.id] ?? [];
+                    const lastM = msgs.at(-1);
+                    const onlineInRoom = onlineNpcs.length;
+                    return (
+                      <Pressable key={room.id} onPress={() => setOpenRoomId(room.id)}
+                        style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12,
+                          borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                        <View style={{ width: 46, height: 46, borderRadius: 14,
+                          backgroundColor: room.kind === "private" ? colors.purpleGlow : colors.accentGlow,
+                          alignItems: "center", justifyContent: "center",
+                          borderWidth: 1, borderColor: room.kind === "private" ? colors.purple + "55" : colors.accent + "55" }}>
+                          <Text style={{ fontSize: 22 }}>
+                            {room.kind === "private" ? "🔒" : room.id === "room-lounge-global" ? "🌍" : "💬"}
                           </Text>
-                          <View style={{ paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8,
-                            backgroundColor: isPending ? "#f6b94f22"
-                              : inv.status === "accepted" ? "#38c79322" : "#ff6b6b22" }}>
-                            <Text style={{ color: isPending ? "#f6b94f"
-                              : inv.status === "accepted" ? "#38c793" : "#ff6b6b",
-                              fontWeight: "700", fontSize: 10 }}>
-                              {isPending ? "En attente" : inv.status === "accepted" ? "✓ Accepté" : "✗ Refusé"}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 14 }}>{room.name}</Text>
+                          <Text style={{ color: colors.muted, fontSize: 11 }} numberOfLines={1}>
+                            {lastM ? lastM.body : room.description}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: "flex-end", gap: 4 }}>
+                          {room.kind === "private" && (
+                            <Text style={{ color: colors.gold, fontSize: 9, fontWeight: "900" }}>#{room.code}</Text>
+                          )}
+                          <Text style={{ color: colors.muted, fontSize: 10 }}>
+                            {onlineInRoom} en ligne
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={14} color={colors.muted} />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              )}
+
+              {/* Rooms disponibles */}
+              {otherRooms.length > 0 && (
+                <View>
+                  <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 8 }}>
+                    REJOINDRE
+                  </Text>
+                  {otherRooms.map((room) => (
+                    <Pressable key={room.id} onPress={() => setOpenRoomId(room.id)}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12,
+                        borderBottomWidth: 1, borderBottomColor: colors.border, opacity: 0.75 }}>
+                      <View style={{ width: 46, height: 46, borderRadius: 14, backgroundColor: colors.cardAlt,
+                        alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ fontSize: 22 }}>💬</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: colors.text, fontWeight: "700", fontSize: 14 }}>{room.name}</Text>
+                        <Text style={{ color: colors.muted, fontSize: 11 }}>{room.description}</Text>
+                      </View>
+                      <Ionicons name="enter" size={18} color={colors.accent} />
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ═══════ TAB LOUNGE ═══════ */}
+          {tab === "lounge" && lounge && (
+            <View style={{ flex: 1 }}>
+              {/* Banner */}
+              <View style={{ margin: 14, backgroundColor: "#0a1628", borderRadius: 16, padding: 16,
+                borderWidth: 1, borderColor: colors.accentGlow + "88",
+                shadowColor: colors.accent, shadowOpacity: 0.15, shadowRadius: 12 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                  <Text style={{ fontSize: 28 }}>🌍</Text>
+                  <View>
+                    <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>Lounge — La ville</Text>
+                    <Text style={{ color: "#22c55e", fontSize: 11 }}>
+                      {onlineNpcs.length + 1} connecté(s) · Chat public
+                    </Text>
+                  </View>
+                  <View style={{ flex: 1 }} />
+                  <View style={{ flexDirection: "row" }}>
+                    {onlineNpcs.slice(0, 4).map((npc) => (
+                      <View key={npc.id} style={{ marginLeft: -8 }}>
+                        <NpcAvatar npc={npc} size={28} showOnline />
+                      </View>
+                    ))}
+                  </View>
+                </View>
+                <Pressable onPress={() => setOpenRoomId("room-lounge-global")}
+                  style={{ backgroundColor: colors.accent + "20", borderRadius: 10, padding: 12,
+                    alignItems: "center", borderWidth: 1, borderColor: colors.accent + "55" }}>
+                  <Text style={{ color: colors.accent, fontWeight: "900", fontSize: 13 }}>Entrer dans le Lounge →</Text>
+                </Pressable>
+              </View>
+
+              {/* Derniers messages */}
+              {(roomMessages["room-lounge-global"] ?? []).length > 0 && (
+                <View style={{ marginHorizontal: 14 }}>
+                  <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 8 }}>
+                    DERNIERS MESSAGES
+                  </Text>
+                  {(roomMessages["room-lounge-global"] ?? []).slice(-8).map((msg) => {
+                    const npc = npcs.find((n) => n.id === msg.authorId);
+                    if (msg.kind === "system") return null;
+                    return (
+                      <View key={msg.id} style={{ flexDirection: "row", gap: 10, paddingVertical: 8,
+                        borderBottomWidth: 1, borderBottomColor: colors.border }}>
+                        {npc
+                          ? <NpcAvatar npc={npc} size={32} />
+                          : <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: colors.cardAlt,
+                              alignItems: "center", justifyContent: "center" }}>
+                              <Text style={{ fontSize: 16 }}>🧑</Text>
+                            </View>
+                        }
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={{ color: colors.accent, fontSize: 11, fontWeight: "800" }}>{msg.authorName}</Text>
+                            <Text style={{ color: colors.muted, fontSize: 9 }}>
+                              {new Date(msg.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
                             </Text>
                           </View>
+                          <Text style={{ color: colors.textSoft, fontSize: 13 }}>{msg.body}</Text>
                         </View>
-                        <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>
-                          {emoji} t'invite à {act?.name ?? inv.activitySlug}
-                        </Text>
                       </View>
-                    </View>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
 
-                    {/* Boutons si pending */}
-                    {isPending && (
-                      <View style={{ flexDirection: "row", gap: 0, borderTopWidth: 1,
-                        borderColor: "rgba(255,255,255,0.07)" }}>
-                        <Pressable onPress={() => respondInvitation(inv.id, "accepted")}
-                          style={{ flex: 1, paddingVertical: 13, alignItems: "center",
-                            backgroundColor: "#38c79314",
-                            borderRightWidth: 1, borderColor: "rgba(255,255,255,0.07)" }}>
-                          <Text style={{ color: "#38c793", fontWeight: "800", fontSize: 14 }}>
-                            ✓ Accepter
-                          </Text>
-                        </Pressable>
-                        <Pressable onPress={() => respondInvitation(inv.id, "declined")}
-                          style={{ flex: 1, paddingVertical: 13, alignItems: "center" }}>
-                          <Text style={{ color: colors.muted, fontWeight: "600", fontSize: 14 }}>
-                            ✗ Refuser
-                          </Text>
-                        </Pressable>
-                      </View>
-                    )}
-                  </View>
-                );
-              })
-            )}
-          </View>
-        )}
-
-      </ScrollView>
+        </ScrollView>
+      </Animated.View>
     </View>
   );
 }

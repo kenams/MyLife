@@ -396,6 +396,19 @@ export type NpcState = {
   lastInviteAt: string | null;   // cooldown invitations
   posX: number;
   posY: number;
+  presenceOnline: boolean;      // simulé : true = connecté
+  lastOnlineAt: string | null;  // ISO — dernière connexion détectée
+};
+
+export type RoomInvite = {
+  id: string;
+  roomId: string;
+  roomName: string;
+  fromId: string;    // userId ou npcId
+  fromName: string;
+  toId: string;
+  status: "pending" | "accepted" | "declined";
+  createdAt: string;
 };
 
 // ─── Work ─────────────────────────────────────────────────────────────────────
