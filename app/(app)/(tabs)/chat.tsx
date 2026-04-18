@@ -6,6 +6,7 @@ import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getNpcVisual } from "@/lib/avatar-visual";
 import { activities, starterResidents } from "@/lib/game-engine";
+import { buildSocialHubSnapshot, relationshipScore } from "@/lib/social-hub";
 import { colors } from "@/lib/theme";
 import type { Conversation, NpcState, Room, RoomMessage } from "@/lib/types";
 import { useGameStore } from "@/stores/game-store";
@@ -342,14 +343,25 @@ export default function ChatScreen() {
     return <RoomView id={roomId} name={room?.name ?? "Room"} back={() => setRoomId(null)} />;
   }
 
-  const online = npcs.filter((n) => n.presenceOnline);
-  const sorted = [...conversations].sort((a, b) => (b.messages.at(-1)?.createdAt ?? b.id).localeCompare(a.messages.at(-1)?.createdAt ?? a.id));
-  const myRooms = rooms.filter((r) => joinedRooms.includes(r.id));
-  const otherRooms = rooms.filter((r) => !joinedRooms.includes(r.id) && r.isActive);
-  const pendingRooms = roomInvites.filter((i) => i.status === "pending" && i.toId === (avatar?.displayName ?? "__"));
-  const pendingInvites = invitations.filter((i) => i.status === "pending");
-  const unread = conversations.reduce((sum, c) => sum + c.unreadCount, 0);
-  const loungeLast = (roomMessages["room-lounge-global"] ?? []).at(-1);
+  const hub = buildSocialHubSnapshot({
+    avatar,
+    conversations,
+    npcs,
+    relationships,
+    rooms,
+    joinedRooms,
+    roomInvites,
+    invitations,
+    roomMessages
+  });
+  const online = hub.onlineNpcs;
+  const sorted = hub.sortedConversations;
+  const myRooms = hub.myRooms;
+  const otherRooms = hub.otherRooms;
+  const pendingRooms = hub.pendingRoomInvites;
+  const pendingInvites = hub.pendingInvitations;
+  const unread = hub.unreadTotal;
+  const loungeLast = hub.loungeLastMessage;
   const tabMeta: Record<Tab, { label: string; icon: IconName; badge: number }> = {
     contacts: { label: "Contacts", icon: "person", badge: unread },
     rooms: { label: "Rooms", icon: "people", badge: pendingRooms.length },
@@ -380,7 +392,7 @@ export default function ChatScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.onlineStrip}>
           {online.map((npc) => {
             const c = conversations.find((conv) => conv.peerId === npc.id);
-            const score = relationships.find((r) => r.residentId === npc.id)?.score ?? 0;
+            const score = relationshipScore(relationships, npc.id);
             return <Pressable key={npc.id} onPress={() => c && setConvId(c.id)} style={s.onlineItem}><NpcFace npc={npc} size={48} /><Text style={{ color: score >= 40 ? colors.accent : colors.textSoft, fontSize: 10, fontWeight: "900" }} numberOfLines={1}>{npc.name.split(" ")[0]}</Text></Pressable>;
           })}
         </ScrollView>
@@ -395,8 +407,8 @@ export default function ChatScreen() {
           </View>}
           {tab === "contacts" && <View>
             <Text style={s.section}>CONTACTS EN LIGNE</Text>
-            {online.filter((n) => (relationships.find((r) => r.residentId === n.id)?.score ?? 0) >= 40).length === 0 && <InfoPanel icon="person" title="Aucun proche en ligne" body="Les autres contacts restent accessibles dans Messages. Le lounge permet aussi de trouver du monde." action="Lounge" onPress={() => setRoomId("room-lounge-global")} />}
-            {online.filter((n) => (relationships.find((r) => r.residentId === n.id)?.score ?? 0) >= 40).map((npc) => {
+            {hub.friendOnline.length === 0 && <InfoPanel icon="person" title="Aucun proche en ligne" body="Les autres contacts restent accessibles dans Messages. Le lounge permet aussi de trouver du monde." action="Lounge" onPress={() => setRoomId("room-lounge-global")} />}
+            {hub.friendOnline.map((npc) => {
               const c = conversations.find((conv) => conv.peerId === npc.id);
               const score = relationships.find((r) => r.residentId === npc.id)?.score;
               return c ? <ContactRow key={npc.id} c={c} npc={npc} score={score} open={() => setConvId(c.id)} /> : null;
