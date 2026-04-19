@@ -4,7 +4,6 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, Easing, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 
 import { AvatarSprite } from "@/components/avatar-sprite";
-import { Button, Card, Muted, Pill, SectionTitle } from "@/components/ui";
 import type { AvatarAction } from "@/lib/avatar-visual";
 import { ACTION_COLORS, ACTION_LABELS, getAvatarVisual, getNpcVisual } from "@/lib/avatar-visual";
 import { buildCityIntel, type CityIntelUrgency } from "@/lib/city-intelligence";
@@ -1702,7 +1701,7 @@ export default function WorldScreen() {
         Ici — {worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "lieu courant"}
       </Text>
       {currentRoomNpcs.length === 0 && livePlayers.filter((p) => p.locationSlug === currentLocationSlug).length === 0 ? (
-        <Muted>Personne ici pour le moment.</Muted>
+        <Text style={{ color: colors.muted, fontSize: 12 }}>Personne ici pour le moment.</Text>
       ) : (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 12 }}>
           {currentRoomNpcs.map((npc) => (
@@ -1738,7 +1737,7 @@ export default function WorldScreen() {
         <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>{interior.title}</Text>
         <Ionicons name="business" size={18} color={colors.accent} />
       </View>
-      <Muted>{interior.tone}</Muted>
+      <Text style={{ color: colors.muted, fontSize: 12 }}>{interior.tone}</Text>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
         {(LOCATION_ACTIONS[currentLocationSlug] ?? LOCATION_ACTIONS.cafe).map((item) => (
           <Pressable
@@ -2029,7 +2028,7 @@ export default function WorldScreen() {
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <View>
             <Text style={{ color: colors.text, fontWeight: "900", fontSize: 21 }}>World Map</Text>
-            <Muted>{cityName} · clique un bâtiment pour entrer</Muted>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>{cityName} · clique un bâtiment pour entrer</Text>
           </View>
           <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
             <Pressable
@@ -2372,10 +2371,10 @@ export default function WorldScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>Chat de lieu</Text>
-                <Muted>
+                <Text style={{ color: colors.muted, fontSize: 12 }}>
                   {worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "room"}
                   {hasLiveLocationChat ? ` · live ${locationChat.connected ? "connecté" : "connexion"}` : ""}
-                </Muted>
+                </Text>
               </View>
               <Ionicons name="chatbubbles" size={22} color={hasLiveLocationChat || activeRoomNpc ? "#38c793" : colors.muted} />
             </View>
@@ -2536,7 +2535,7 @@ export default function WorldScreen() {
             ) : (
               <View style={{ flex: 1, minHeight: 120, alignItems: "center", justifyContent: "center", gap: 10 }}>
                 <Ionicons name="person-outline" size={28} color={colors.muted} />
-                <Muted>Personne ici pour le moment.</Muted>
+                <Text style={{ color: colors.muted, fontSize: 12 }}>Personne ici pour le moment.</Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <Pressable onPress={seedLiveTestPlayers} style={{ borderRadius: 11, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: "#f6b94f", flexDirection: "row", alignItems: "center", gap: 5 }}>
                     <Ionicons name="person-add" size={14} color="#07111f" />
@@ -2574,7 +2573,7 @@ export default function WorldScreen() {
 
         {/* Panel NPC */}
         {!IS_WIDE && selectedNpc && (
-          <Card>
+          <View style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 16, padding: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)", gap: 10 }}>
             {/* Header NPC */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
               <View style={{ position: "relative" }}>
@@ -2635,39 +2634,43 @@ export default function WorldScreen() {
                 <Text style={{ color: "#f6b94f", fontWeight: "800", fontSize: 13 }}>🎯 Inviter</Text>
               </Pressable>
             </View>
-          </Card>
+          </View>
         )}
 
         {/* Avatar joueur */}
         {playerVisual && (
-          <Card>
-            <SectionTitle>Ton avatar</SectionTitle>
+          <View style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 16, padding: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)", gap: 10 }}>
+            <Text style={{ color: colors.textSoft, fontSize: 12, fontWeight: "800", letterSpacing: 0.5 }}>Ton avatar</Text>
             <View style={{ flexDirection: "row", gap: 16, alignItems: "center" }}>
               <AvatarSprite visual={playerVisual} action={playerAction} size="md" />
               <View style={{ flex: 1, gap: 6 }}>
                 <Text style={{ color: colors.text, fontWeight: "800", fontSize: 15 }}>{avatar?.displayName}</Text>
                 <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-                  <Pill>Énergie {stats.energy}</Pill>
-                  <Pill tone={stats.mood > 50 ? "accent" : "warning"}>Humeur {stats.mood}</Pill>
+                  <View style={{ backgroundColor: colors.blue + "20", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ color: colors.blue, fontSize: 10, fontWeight: "700" }}>Énergie {stats.energy}</Text>
+                  </View>
+                  <View style={{ backgroundColor: (stats.mood > 50 ? colors.accent : "#f39c12") + "20", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
+                    <Text style={{ color: stats.mood > 50 ? colors.accent : "#f39c12", fontSize: 10, fontWeight: "700" }}>Humeur {stats.mood}</Text>
+                  </View>
                 </View>
                 <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                   <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ACTION_COLORS[playerAction] }} />
-                  <Muted>{ACTION_LABELS[playerAction]}</Muted>
+                  <Text style={{ color: colors.muted, fontSize: 12 }}>{ACTION_LABELS[playerAction]}</Text>
                 </View>
               </View>
             </View>
-          </Card>
+          </View>
         )}
 
         {!IS_WIDE && (
         <>
         {/* Résidents ici */}
-        <Card>
-          <SectionTitle>
+        <View style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 16, padding: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)", gap: 10 }}>
+          <Text style={{ color: colors.textSoft, fontSize: 12, fontWeight: "800", letterSpacing: 0.5 }}>
             Ici — {worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "lieu courant"}
-          </SectionTitle>
+          </Text>
           {(npcsByLoc[currentLocationSlug] ?? []).length === 0 && livePlayers.filter((p) => p.locationSlug === currentLocationSlug).length === 0 ? (
-            <Muted>Personne ici pour le moment.</Muted>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>Personne ici pour le moment.</Text>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 16, paddingVertical: 8 }}>
               {(npcsByLoc[currentLocationSlug] ?? []).map((npc) => (
@@ -2696,7 +2699,7 @@ export default function WorldScreen() {
               ))}
             </ScrollView>
           )}
-        </Card>
+        </View>
         </>
         )}
 
@@ -2747,7 +2750,7 @@ export default function WorldScreen() {
         {!IS_WIDE && (
         <>
         {/* Se déplacer */}
-        <SectionTitle>Se déplacer</SectionTitle>
+        <Text style={{ color: colors.textSoft, fontSize: 12, fontWeight: "800", letterSpacing: 0.5 }}>Se déplacer</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
           {worldLocations.map((loc) => {
             const isHere     = loc.slug === currentLocationSlug;
