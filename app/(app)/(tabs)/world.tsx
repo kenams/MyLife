@@ -61,6 +61,14 @@ type TravelNotice = {
   durationMs: number;
 };
 
+const WORLD_WIZZ_TOKEN = "[[WIZZ]]";
+const WORLD_CHAT_SHORTCUTS = [
+  "Bonjour, je suis la.",
+  "Ca va ici ?",
+  "Qui veut discuter ?",
+  "On se retrouve dans cette room ?"
+];
+
 const LOCATION_TILES: Record<string, { x: number; y: number; w: number; h: number; color: string; icon: string }> = {
   "home":       { x: 22,  y: 50,  w: 92,  h: 80, color: "#245c8f", icon: "home"       },
   "residence-populaire": { x: 18,  y: 390, w: 88,  h: 58, color: "#8a4f3d", icon: "business" },
@@ -773,6 +781,10 @@ function buildFakePlayerReply(player: WorldPresenceMember, body: string, playerN
   const firstName = player.avatarName.split(" ")[0];
   const persona = FAKE_PLAYER_PERSONAS[player.userId]?.style ?? "social";
 
+  if (clean.includes(WORLD_WIZZ_TOKEN.toLowerCase()) || /\bwizz\b/.test(clean)) {
+    return `Wizz recu ${playerName}. Je suis bien present dans ${locationName}.`;
+  }
+
   if (/\b(bonjour|salut|coucou|hello|yo|bjr)\b/.test(clean)) {
     return `Bonjour ${playerName}, je te reconnais. Moi c'est ${firstName}, je suis dans ${locationName}.`;
   }
@@ -805,6 +817,10 @@ function buildFakePlayerReply(player: WorldPresenceMember, body: string, playerN
 }
 
 // ─── NPC animé sur la carte ───────────────────────────────────────────────────
+function cleanWorldChatBody(body: string) {
+  return body.replace(WORLD_WIZZ_TOKEN, "").trim() || "Wizz !";
+}
+
 function LiveNpc({ npc, onPress }: { npc: NpcState; onPress: () => void }) {
   const visual    = getNpcVisual(npc.id);
   const pos       = pctToMap(npc.posX, npc.posY);
@@ -868,7 +884,7 @@ function LiveNpc({ npc, onPress }: { npc: NpcState; onPress: () => void }) {
 
 // ─── Tuile de lieu ────────────────────────────────────────────────────────────
 function LocationTile({
-  slug, tile, label, metaLabel, metaColor, isHere, isRecommended, npcCount, onlineCount, onPress
+  slug, tile, label, metaLabel, metaColor, isHere, isRecommended, isSelected, npcCount, onlineCount, onPress
 }: {
   slug: string;
   tile: (typeof LOCATION_TILES)[string];
@@ -877,6 +893,7 @@ function LocationTile({
   metaColor: string;
   isHere: boolean;
   isRecommended: boolean;
+  isSelected: boolean;
   npcCount: number;
   onlineCount: number;
   onPress: () => void;
@@ -914,8 +931,8 @@ function LocationTile({
       <Animated.View style={{
         width: "100%", height: box.h,
         borderRadius: 14,
-        borderWidth: isHere || isRecommended ? 3 : 1.5,
-        borderColor: isHere ? colors.accent : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)",
+        borderWidth: isHere || isRecommended || isSelected ? 3 : 1.5,
+        borderColor: isHere ? colors.accent : isSelected ? "#67d8ff" : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)",
         opacity: glow,
         overflow: "hidden",
         shadowColor: tile.color,
@@ -942,9 +959,9 @@ function LocationTile({
             <View style={{ backgroundColor:"rgba(0,0,0,0.46)", borderRadius:11, padding:5, borderWidth: 1, borderColor: "rgba(255,255,255,0.22)" }}>
               <Ionicons name={tile.icon as never} size={19} color="#fff" />
             </View>
-            {isRecommended && (
-              <View style={{ backgroundColor:"#f6b94f", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" }}>
-                <Text style={{ color:"#07111f", fontSize: 9, fontWeight: "900" }}>GO</Text>
+            {(isRecommended || isSelected) && (
+              <View style={{ backgroundColor: isSelected ? "#67d8ff" : "#f6b94f", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" }}>
+                <Text style={{ color:"#07111f", fontSize: 9, fontWeight: "900" }}>{isSelected ? "VOIR" : "GO"}</Text>
               </View>
             )}
             {(npcCount > 0 || onlineCount > 0) && (
@@ -955,7 +972,7 @@ function LocationTile({
               </View>
             )}
           </View>
-          <View style={{ backgroundColor: "rgba(5,10,18,0.88)", borderRadius: 11, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: isHere ? colors.accent : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)" }}>
+          <View style={{ backgroundColor: "rgba(5,10,18,0.88)", borderRadius: 11, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: isHere ? colors.accent : isSelected ? "#67d8ff" : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)" }}>
             <Text numberOfLines={1} adjustsFontSizeToFit style={{ color:"#fff", fontSize:14, fontWeight:"900", textShadowColor:"rgba(0,0,0,0.75)", textShadowOffset:{width:0,height:1}, textShadowRadius:2 }}>
               {label}
             </Text>
@@ -967,6 +984,9 @@ function LocationTile({
             )}
             {!isHere && isRecommended && (
               <Text style={{ color:"#ffe4a3", fontSize:9, fontWeight:"900" }}>Action conseillee</Text>
+            )}
+            {!isHere && isSelected && (
+              <Text style={{ color:"#bfeeff", fontSize:9, fontWeight:"900" }}>Selection</Text>
             )}
           </View>
         </View>
@@ -1001,6 +1021,7 @@ export default function WorldScreen() {
   const [activeRoomNpcId, setActiveRoomNpcId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState("");
   const [travelNotice, setTravelNotice] = useState<TravelNotice | null>(null);
+  const [selectedLocationSlug, setSelectedLocationSlug] = useState(currentLocationSlug);
   const travelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const playerVisual = avatar ? getAvatarVisual(avatar) : null;
@@ -1046,12 +1067,30 @@ export default function WorldScreen() {
   const hasPermit = hasDrivingPermit(playerLevel, stats.reputation, housingTier);
   const currentLocationName = worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "Ville";
   const recommendedLocationName = worldLocations.find((l) => l.slug === cityIntel.locationSlug)?.name ?? cityIntel.locationSlug;
+  const selectedLocation = worldLocations.find((l) => l.slug === selectedLocationSlug) ?? worldLocations.find((l) => l.slug === currentLocationSlug);
+  const selectedLocationName = selectedLocation?.name ?? selectedLocationSlug;
+  const selectedDistance = routeDistance(currentLocationSlug, selectedLocationSlug);
+  const selectedTravelPlans = buildTravelPlans(currentLocationSlug, selectedLocationSlug, stats.money, playerLevel, stats.reputation, housingTier);
+  const selectedRecommendedTravel = preferredTravelPlan(selectedTravelPlans, selectedDistance, selectedLocationSlug);
+  const selectedNpcCount = npcsByLoc[selectedLocationSlug]?.length ?? 0;
+  const selectedOnlineCount = onlineCounts[selectedLocationSlug] ?? 0;
+  const selectedDistrict = getResidentialDistrictForLocation(selectedLocationSlug);
+  const routeTargetSlug = travelNotice?.to ?? (selectedLocationSlug !== currentLocationSlug ? selectedLocationSlug : cityIntel.locationSlug);
+  const routeColor = travelNotice?.color ?? (selectedLocationSlug !== currentLocationSlug ? selectedRecommendedTravel?.color ?? "#67d8ff" : cityIntelTone);
+  const quickRoomMessages = WORLD_CHAT_SHORTCUTS.map((item) => {
+    if (item.startsWith("Bonjour")) return `Bonjour, c'est ${avatar?.displayName ?? "moi"}. Je suis a ${currentLocationName}.`;
+    return item;
+  });
 
   useEffect(() => {
     return () => {
       if (travelTimerRef.current) clearTimeout(travelTimerRef.current);
     };
   }, []);
+
+  useEffect(() => {
+    setSelectedLocationSlug(currentLocationSlug);
+  }, [currentLocationSlug]);
 
   useEffect(() => {
     if (currentRoomNpcs.length === 0) {
@@ -1111,8 +1150,8 @@ export default function WorldScreen() {
     }, plan.durationMs);
   }, [currentLocationSlug, housingTier, npcsByLoc, playerLevel, stats.money, stats.reputation, travelTo]);
 
-  const sendRoomMessage = useCallback(() => {
-    const cleanDraft = chatDraft.trim();
+  const postLocationMessage = useCallback((body: string) => {
+    const cleanDraft = body.trim();
     if (!cleanDraft) return;
     if (hasLiveLocationChat) {
       void locationChat.sendMessage(cleanDraft);
@@ -1133,13 +1172,20 @@ export default function WorldScreen() {
           }, 650 + index * 850);
         });
       }
-      setChatDraft("");
       return;
     }
     if (!activeConversation) return;
     sendMessageStore(activeConversation.id, cleanDraft);
+  }, [activeConversation?.id, avatar?.displayName, currentLocationSlug, hasLiveLocationChat, locationChat.addLocalMessage, locationChat.sendMessage, sendMessageStore, session?.email, simulatedPlayers]);
+
+  const sendRoomMessage = useCallback(() => {
+    postLocationMessage(chatDraft);
     setChatDraft("");
-  }, [activeConversation?.id, avatar?.displayName, chatDraft, currentLocationSlug, hasLiveLocationChat, locationChat.addLocalMessage, locationChat.sendMessage, sendMessageStore, session?.email, simulatedPlayers]);
+  }, [chatDraft, postLocationMessage]);
+
+  const sendRoomWizz = useCallback(() => {
+    postLocationMessage(`${WORLD_WIZZ_TOKEN} Wizz ! Tu es la ?`);
+  }, [postLocationMessage]);
 
   const seedLiveTestPlayers = useCallback(() => {
     const now = new Date().toISOString();
@@ -1432,6 +1478,80 @@ export default function WorldScreen() {
     </View>
   );
 
+  const selectedLocationPanel = selectedLocation ? (
+    <View style={{
+      position: "absolute",
+      right: 12,
+      bottom: travelNotice ? 162 : 12,
+      width: Math.min(270, MAP_W - 24),
+      backgroundColor: "rgba(7,17,31,0.93)",
+      borderRadius: 16,
+      padding: 12,
+      gap: 10,
+      borderWidth: 1,
+      borderColor: selectedLocationSlug === currentLocationSlug ? colors.accent + "66" : "#67d8ff66"
+    }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 9 }}>
+        <View style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: (selectedDistrict?.color ?? "#67d8ff") + "22", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: (selectedDistrict?.color ?? "#67d8ff") + "55" }}>
+          <Ionicons name={(LOCATION_TILES[selectedLocationSlug]?.icon ?? "location") as never} size={17} color={selectedDistrict?.color ?? "#67d8ff"} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#fff", fontSize: 14, fontWeight: "900" }}>{selectedLocationName}</Text>
+          <Text numberOfLines={1} style={{ color: selectedDistrict?.color ?? colors.textSoft, fontSize: 10, fontWeight: "900", marginTop: 1 }}>
+            {selectedDistrict?.label ?? selectedLocation.costHint}
+          </Text>
+        </View>
+        {selectedLocationSlug === currentLocationSlug && (
+          <View style={{ backgroundColor: colors.accent, borderRadius: 9, paddingHorizontal: 7, paddingVertical: 4 }}>
+            <Text style={{ color: "#07111f", fontSize: 9, fontWeight: "900" }}>ICI</Text>
+          </View>
+        )}
+      </View>
+      <Text numberOfLines={2} style={{ color: colors.textSoft, fontSize: 11, lineHeight: 16 }}>{selectedLocation.summary}</Text>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <View style={{ flex: 1, borderRadius: 11, padding: 8, backgroundColor: "rgba(255,255,255,0.07)", borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" }}>
+          <Text style={{ color: "#f6b94f", fontSize: 10, fontWeight: "900" }}>{selectedNpcCount}</Text>
+          <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "800" }}>residents</Text>
+        </View>
+        <View style={{ flex: 1, borderRadius: 11, padding: 8, backgroundColor: "rgba(56,199,147,0.10)", borderWidth: 1, borderColor: "rgba(56,199,147,0.22)" }}>
+          <Text style={{ color: "#38c793", fontSize: 10, fontWeight: "900" }}>{selectedOnlineCount}</Text>
+          <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "800" }}>live</Text>
+        </View>
+      </View>
+      {selectedLocationSlug !== currentLocationSlug ? (
+        <View style={{ flexDirection: "row", gap: 7 }}>
+          {selectedTravelPlans.map((plan) => (
+            <Pressable
+              key={plan.mode}
+              onPress={() => plan.available && enterLocation(selectedLocationSlug, plan.mode)}
+              disabled={!plan.available}
+              style={{
+                flex: 1,
+                minHeight: 48,
+                borderRadius: 12,
+                padding: 7,
+                backgroundColor: plan.mode === selectedRecommendedTravel?.mode ? plan.color + "22" : "rgba(255,255,255,0.06)",
+                borderWidth: 1,
+                borderColor: plan.mode === selectedRecommendedTravel?.mode ? plan.color + "70" : "rgba(255,255,255,0.10)",
+                opacity: plan.available ? 1 : 0.42,
+                alignItems: "center",
+                justifyContent: "center",
+                gap: 3
+              }}
+            >
+              <Ionicons name={plan.icon as never} size={16} color={plan.available ? plan.color : colors.muted} />
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: plan.available ? colors.text : colors.muted, fontSize: 10, fontWeight: "900" }}>{plan.durationLabel}</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <Pressable onPress={() => router.push("/(app)/(tabs)/chat")} style={{ borderRadius: 12, paddingVertical: 10, alignItems: "center", backgroundColor: colors.accent }}>
+          <Text style={{ color: "#07111f", fontSize: 12, fontWeight: "900" }}>Ouvrir le chat du lieu</Text>
+        </Pressable>
+      )}
+    </View>
+  ) : null;
+
   const residentsHere = (
     <View style={{
       backgroundColor: "rgba(255,255,255,0.055)",
@@ -1664,8 +1784,8 @@ export default function WorldScreen() {
           <Crosswalk x={242} y={164} horizontal={false} />
           <RouteGuide
             fromSlug={travelNotice?.from ?? currentLocationSlug}
-            toSlug={travelNotice?.to ?? cityIntel.locationSlug}
-            color={travelNotice ? colors.accent : cityIntelTone}
+            toSlug={routeTargetSlug}
+            color={routeColor}
           />
           {travelNotice && <LiveTravelMarker notice={travelNotice} />}
 
@@ -1728,9 +1848,13 @@ export default function WorldScreen() {
                 metaColor={residential?.color ?? "rgba(226,232,240,0.82)"}
                 isHere={currentLocationSlug === slug}
                 isRecommended={cityIntel.locationSlug === slug}
+                isSelected={selectedLocationSlug === slug && currentLocationSlug !== slug}
                 npcCount={npcsByLoc[slug]?.length ?? 0}
                 onlineCount={onlineCounts[slug] ?? 0}
-                onPress={() => enterLocation(slug)}
+                onPress={() => {
+                  setSelectedLocationSlug(slug);
+                  if (slug === currentLocationSlug) enterLocation(slug);
+                }}
               />
             );
           })}
@@ -1852,6 +1976,7 @@ export default function WorldScreen() {
               </Text>
             </View>
           )}
+          {selectedLocationPanel}
         </View>
 
           <View style={{
@@ -1926,29 +2051,74 @@ export default function WorldScreen() {
                 <ScrollView style={{ maxHeight: IS_WIDE ? MAP_H - 190 : 120 }} contentContainerStyle={{ gap: 8 }}>
                   {visibleRoomMessages.slice(-6).map((message) => {
                     const mine = message.authorId === "self" || message.authorId === session?.email;
+                    const isWizz = message.body.includes(WORLD_WIZZ_TOKEN) || /^wizz/i.test(message.body.trim());
                     return (
                       <View
                         key={message.id}
                         style={{
                           alignSelf: mine ? "flex-end" : "flex-start",
                           maxWidth: "86%",
-                          backgroundColor: mine ? colors.accent : "rgba(255,255,255,0.09)",
+                          backgroundColor: isWizz ? "#f6b94f" : mine ? colors.accent : "rgba(255,255,255,0.09)",
                           borderRadius: 12,
                           paddingHorizontal: 10,
-                          paddingVertical: 7
+                          paddingVertical: 7,
+                          borderWidth: isWizz ? 1 : 0,
+                          borderColor: isWizz ? "#fff0a8" : "transparent"
                         }}
                       >
                         {!mine && (
-                          <Text style={{ color: "#8ee0bd", fontSize: 9, fontWeight: "900", marginBottom: 2 }}>
+                          <Text style={{ color: isWizz ? "#07111f" : "#8ee0bd", fontSize: 9, fontWeight: "900", marginBottom: 2 }}>
                             {"authorName" in message ? message.authorName : activeRoomNpc?.name ?? "Résident"}
                           </Text>
                         )}
-                        <Text style={{ color: mine ? "#07111f" : colors.text, fontSize: 12, fontWeight: mine ? "800" : "600" }}>
-                          {message.body}
+                        {isWizz && (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 3 }}>
+                            <Ionicons name="flash" size={13} color="#07111f" />
+                            <Text style={{ color: "#07111f", fontSize: 9, fontWeight: "900" }}>WIZZ</Text>
+                          </View>
+                        )}
+                        <Text style={{ color: isWizz || mine ? "#07111f" : colors.text, fontSize: 12, fontWeight: isWizz || mine ? "800" : "600" }}>
+                          {cleanWorldChatBody(message.body)}
                         </Text>
                       </View>
                     );
                   })}
+                </ScrollView>
+
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                  <Pressable
+                    onPress={sendRoomWizz}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 5,
+                      paddingHorizontal: 10,
+                      paddingVertical: 7,
+                      borderRadius: 12,
+                      backgroundColor: "#f6b94f22",
+                      borderWidth: 1,
+                      borderColor: "#f6b94f55"
+                    }}
+                  >
+                    <Ionicons name="flash" size={13} color="#f6b94f" />
+                    <Text style={{ color: "#f6b94f", fontSize: 11, fontWeight: "900" }}>Wizz</Text>
+                  </Pressable>
+                  {quickRoomMessages.map((item) => (
+                    <Pressable
+                      key={item}
+                      onPress={() => postLocationMessage(item)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 7,
+                        borderRadius: 12,
+                        backgroundColor: "rgba(255,255,255,0.06)",
+                        borderWidth: 1,
+                        borderColor: "rgba(255,255,255,0.10)"
+                      }}
+                    >
+                      <Text numberOfLines={1} style={{ color: colors.textSoft, fontSize: 11, fontWeight: "800" }}>{item}</Text>
+                    </Pressable>
+                  ))}
                 </ScrollView>
 
                 <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
