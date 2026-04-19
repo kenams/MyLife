@@ -61,6 +61,12 @@ type TravelNotice = {
   durationMs: number;
 };
 
+type ArrivalNotice = {
+  locationSlug: string;
+  locationName: string;
+  at: number;
+};
+
 const WORLD_WIZZ_TOKEN = "[[WIZZ]]";
 const WORLD_CHAT_SHORTCUTS = [
   "Bonjour, je suis la.",
@@ -241,6 +247,28 @@ function LiveTravelMarker({ notice }: { notice: TravelNotice }) {
     }}>
       <Ionicons name={notice.icon as never} size={15} color="#07111f" />
     </Animated.View>
+  );
+}
+
+function TravelProgressBar({ notice, color = notice.color }: { notice: TravelNotice; color?: string }) {
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    progress.setValue(0);
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: notice.durationMs,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false
+    }).start();
+  }, [notice.at, notice.durationMs, progress]);
+
+  const width = progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+
+  return (
+    <View style={{ height: 5, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.10)", overflow: "hidden" }}>
+      <Animated.View style={{ width, height: 5, borderRadius: 999, backgroundColor: color }} />
+    </View>
   );
 }
 
@@ -1021,8 +1049,10 @@ export default function WorldScreen() {
   const [activeRoomNpcId, setActiveRoomNpcId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState("");
   const [travelNotice, setTravelNotice] = useState<TravelNotice | null>(null);
+  const [arrivalNotice, setArrivalNotice] = useState<ArrivalNotice | null>(null);
   const [selectedLocationSlug, setSelectedLocationSlug] = useState(currentLocationSlug);
   const travelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const arrivalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const playerVisual = avatar ? getAvatarVisual(avatar) : null;
   const playerAction: AvatarAction =
@@ -1084,10 +1114,17 @@ export default function WorldScreen() {
   const currentLocationActions = LOCATION_ACTIONS[currentLocationSlug] ?? LOCATION_ACTIONS.cafe;
   const primaryLocationAction = currentLocationActions[0];
   const peopleHereCount = currentRoomNpcs.length + currentLivePlayers.length;
+  const quickFlowSteps = [
+    { label: "Choisir", active: selectedLocationSlug !== currentLocationSlug && !travelNotice, done: !!travelNotice || selectedLocationSlug === currentLocationSlug },
+    { label: "Trajet", active: !!travelNotice, done: !!arrivalNotice && !travelNotice },
+    { label: "Arriver", active: !!arrivalNotice && !travelNotice, done: selectedLocationSlug === currentLocationSlug && !travelNotice },
+    { label: "Agir", active: !travelNotice && selectedLocationSlug === currentLocationSlug, done: false }
+  ];
 
   useEffect(() => {
     return () => {
       if (travelTimerRef.current) clearTimeout(travelTimerRef.current);
+      if (arrivalTimerRef.current) clearTimeout(arrivalTimerRef.current);
     };
   }, []);
 
@@ -1127,6 +1164,7 @@ export default function WorldScreen() {
     if (!plan) return;
 
     if (travelTimerRef.current) clearTimeout(travelTimerRef.current);
+    if (arrivalTimerRef.current) clearTimeout(arrivalTimerRef.current);
     const notice: TravelNotice = {
       from: currentLocationSlug,
       to: slug,
@@ -1141,15 +1179,22 @@ export default function WorldScreen() {
     };
 
     setTravelNotice(notice);
+    setArrivalNotice(null);
     setSelectedNpc(null);
     setChatDraft("");
 
     travelTimerRef.current = setTimeout(() => {
       travelTo(slug, { cost: plan.cost, modeLabel: plan.label, energyCost: plan.energyCost });
       const residents = npcsByLoc[slug] ?? [];
+      const location = worldLocations.find((item) => item.slug === slug);
       setActiveRoomNpcId(residents[0]?.id ?? null);
+      setArrivalNotice({ locationSlug: slug, locationName: location?.name ?? slug, at: Date.now() });
       setTravelNotice((current) => (current?.at === notice.at ? null : current));
       travelTimerRef.current = null;
+      arrivalTimerRef.current = setTimeout(() => {
+        setArrivalNotice((current) => (current?.locationSlug === slug ? null : current));
+        arrivalTimerRef.current = null;
+      }, 6500);
     }, plan.durationMs);
   }, [currentLocationSlug, housingTier, npcsByLoc, playerLevel, stats.money, stats.reputation, travelTo]);
 
@@ -1722,17 +1767,48 @@ export default function WorldScreen() {
         <View style={{ flex: 1 }}>
           <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "900" }}>JOUER MAINTENANT</Text>
           <Text numberOfLines={1} style={{ color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 2 }}>
-            Boucle rapide de la ville
+            {travelNotice ? `En route vers ${worldLocations.find((l) => l.slug === travelNotice.to)?.name ?? travelNotice.to}` : arrivalNotice ? `Arrive a ${arrivalNotice.locationName}` : "Boucle rapide de la ville"}
           </Text>
         </View>
-        <View style={{ backgroundColor: colors.accent + "18", borderRadius: 12, paddingHorizontal: 9, paddingVertical: 6, borderWidth: 1, borderColor: colors.accent + "40" }}>
-          <Text style={{ color: colors.accent, fontSize: 10, fontWeight: "900" }}>FOCUS</Text>
+        <View style={{ backgroundColor: (travelNotice?.color ?? colors.accent) + "18", borderRadius: 12, paddingHorizontal: 9, paddingVertical: 6, borderWidth: 1, borderColor: (travelNotice?.color ?? colors.accent) + "40" }}>
+          <Text style={{ color: travelNotice?.color ?? colors.accent, fontSize: 10, fontWeight: "900" }}>{travelNotice ? travelNotice.modeLabel : "FOCUS"}</Text>
         </View>
       </View>
+
+      <View style={{ flexDirection: "row", gap: 6 }}>
+        {quickFlowSteps.map((step, index) => {
+          const color = step.active ? colors.accent : step.done ? "#60a5fa" : "rgba(226,232,240,0.38)";
+          return (
+            <View key={step.label} style={{ flex: 1, minHeight: 34, borderRadius: 11, paddingHorizontal: 6, paddingVertical: 6, backgroundColor: color + "14", borderWidth: 1, borderColor: color + "35", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color, fontSize: 9, fontWeight: "900" }}>0{index + 1}</Text>
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ color, fontSize: 9, fontWeight: "800", marginTop: 1 }}>{step.label}</Text>
+            </View>
+          );
+        })}
+      </View>
+
+      {travelNotice && (
+        <View style={{ gap: 7, backgroundColor: travelNotice.color + "10", borderRadius: 13, padding: 10, borderWidth: 1, borderColor: travelNotice.color + "35" }}>
+          <TravelProgressBar notice={travelNotice} />
+          <Text numberOfLines={1} style={{ color: travelNotice.color, fontSize: 10, fontWeight: "900" }}>
+            Trajet en cours · {travelNotice.durationLabel}
+          </Text>
+        </View>
+      )}
+
+      {arrivalNotice && !travelNotice && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 9, backgroundColor: colors.accent + "12", borderRadius: 13, padding: 10, borderWidth: 1, borderColor: colors.accent + "35" }}>
+          <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
+          <Text numberOfLines={2} style={{ flex: 1, color: colors.text, fontSize: 11, fontWeight: "800" }}>
+            Tu es arrive. Parle aux personnes presentes ou lance l'action du lieu.
+          </Text>
+        </View>
+      )}
 
       <View style={{ gap: 8 }}>
         <Pressable
           onPress={() => {
+            if (travelNotice) return;
             if (selectedLocationSlug !== currentLocationSlug) {
               enterLocation(selectedLocationSlug, selectedRecommendedTravel?.mode);
               return;
@@ -1745,6 +1821,7 @@ export default function WorldScreen() {
             backgroundColor: selectedLocationSlug !== currentLocationSlug ? "#67d8ff18" : cityIntelTone + "18",
             borderWidth: 1,
             borderColor: selectedLocationSlug !== currentLocationSlug ? "#67d8ff55" : cityIntelTone + "55",
+            opacity: travelNotice ? 0.55 : 1,
             flexDirection: "row",
             alignItems: "center",
             gap: 10
@@ -1755,7 +1832,7 @@ export default function WorldScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: colors.text, fontSize: 13, fontWeight: "900" }}>
-              {selectedLocationSlug !== currentLocationSlug ? `Aller a ${selectedLocationName}` : cityIntel.locationSlug === currentLocationSlug ? cityIntel.actionLabel : `Aller a ${recommendedLocationName}`}
+              {travelNotice ? "Trajet en cours" : selectedLocationSlug !== currentLocationSlug ? `Aller a ${selectedLocationName}` : cityIntel.locationSlug === currentLocationSlug ? cityIntel.actionLabel : `Aller a ${recommendedLocationName}`}
             </Text>
             <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 10, fontWeight: "800", marginTop: 2 }}>
               {selectedLocationSlug !== currentLocationSlug
@@ -2146,10 +2223,40 @@ export default function WorldScreen() {
                   {" -> "}
                   {worldLocations.find((l) => l.slug === travelNotice.to)?.name ?? travelNotice.to}
                 </Text>
+                <View style={{ marginTop: 7 }}>
+                  <TravelProgressBar notice={travelNotice} />
+                </View>
               </View>
               <Text style={{ color: "rgba(226,232,240,0.7)", fontSize: 10, fontWeight: "800" }}>
                 {new Date(travelNotice.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
               </Text>
+            </View>
+          )}
+          {arrivalNotice && !travelNotice && (
+            <View pointerEvents="none" style={{
+              position: "absolute",
+              left: 12,
+              right: 12,
+              bottom: 96,
+              backgroundColor: "rgba(7,17,31,0.92)",
+              borderRadius: 14,
+              paddingHorizontal: 12,
+              paddingVertical: 10,
+              borderWidth: 1,
+              borderColor: colors.accent + "66",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10
+            }}>
+              <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="checkmark" size={17} color="#07111f" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.accent, fontSize: 11, fontWeight: "900" }}>ARRIVEE</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#ffffff", fontSize: 13, fontWeight: "900" }}>
+                  {arrivalNotice.locationName}
+                </Text>
+              </View>
             </View>
           )}
           {selectedLocationPanel}
