@@ -61,8 +61,9 @@ function Win({ title, subtitle, onBack, right, children }: {
     <View style={s.root}>
       <View style={s.win}>
         <View style={s.titleBar}>
-          {onBack && <Pressable onPress={onBack} style={s.back}><Ionicons name="chevron-back" size={20} color="#fff" /></Pressable>}
-          <View style={s.logo}><Ionicons name="chatbubble-ellipses" size={21} color="#0b3f86" /></View>
+          <View style={s.titleBarAccentLine} />
+          {onBack && <Pressable onPress={onBack} style={s.back}><Ionicons name="chevron-back" size={20} color={colors.text} /></Pressable>}
+          <View style={s.logo}><Ionicons name="chatbubble-ellipses" size={20} color={colors.accent} /></View>
           <View style={{ flex: 1 }}>
             <Text style={s.title} numberOfLines={1}>{title}</Text>
             <Text style={s.subtitle} numberOfLines={1}>{subtitle}</Text>
@@ -151,8 +152,8 @@ function Composer({ value, change, send, macro, wizz }: { value: string; change:
         ))}
       </ScrollView>
       <View style={s.inputLine}>
-        <TextInput value={value} onChangeText={change} onSubmitEditing={send} placeholder="Ecrire un message..." placeholderTextColor={colors.muted} returnKeyType="send" multiline style={s.input} />
-        <Pressable onPress={send} style={s.send}><Ionicons name="send" size={15} color="#05211a" /><Text style={s.sendText}>Send</Text></Pressable>
+        <TextInput value={value} onChangeText={change} onSubmitEditing={send} placeholder="Écrire un message…" placeholderTextColor={colors.muted} returnKeyType="send" multiline style={s.input} />
+        <Pressable onPress={send} style={s.send}><Ionicons name="send" size={15} color="#04100c" /><Text style={s.sendText}>Envoyer</Text></Pressable>
       </View>
     </View>
   );
