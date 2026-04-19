@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, ScrollView, Text, View } from "react-native";
 
 import { canAffordHousing, getHousingTier, HOUSING_TIERS, type HousingTier, type HousingTierId } from "@/lib/housing";
+import { getResidentialDistrictForHousing, RESIDENTIAL_DISTRICTS } from "@/lib/residential-districts";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 
@@ -151,6 +152,7 @@ export default function HousingScreen() {
   const currentTier  = getHousingTier(housingTier);
   const currentIdx   = HOUSING_TIERS.findIndex((t) => t.id === housingTier);
   const nextTier     = HOUSING_TIERS[currentIdx + 1] ?? null;
+  const currentDistrict = getResidentialDistrictForHousing(housingTier);
 
   function tryUpgrade(tierId: HousingTierId) {
     const res = upgradeHousing(tierId);
@@ -192,6 +194,9 @@ export default function HousingScreen() {
               <Text style={{ color: currentTier.color, fontWeight: "900", fontSize: 18 }}>{currentTier.name}</Text>
               <Text style={{ color: colors.muted, fontSize: 11 }}>
                 {currentTier.rentPerDay > 0 ? `${currentTier.rentPerDay} cr/jour` : "Gratuit"} · Score: {(wealthScore / 1000).toFixed(1)}k
+              </Text>
+              <Text style={{ color: currentDistrict.color, fontSize: 11, fontWeight: "800", marginTop: 2 }}>
+                {currentDistrict.label} - {currentDistrict.name}
               </Text>
             </View>
             {currentTier.rentPerDay > 0 && (
@@ -253,6 +258,41 @@ export default function HousingScreen() {
         </View>
 
         {/* ── TIERS ── */}
+        <View style={{ paddingHorizontal: 20, marginTop: 16, gap: 10 }}>
+          <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
+            QUARTIERS RESIDENTIELS
+          </Text>
+          <View style={{ flexDirection: "row", gap: 10, flexWrap: "wrap" }}>
+            {RESIDENTIAL_DISTRICTS.map((district) => {
+              const active = district.id === currentDistrict.id;
+              return (
+                <Pressable
+                  key={district.id}
+                  onPress={() => router.push("/(app)/(tabs)/world" as never)}
+                  style={{
+                    flexGrow: 1,
+                    flexBasis: "30%",
+                    minWidth: 104,
+                    minHeight: 112,
+                    backgroundColor: district.color + (active ? "18" : "0d"),
+                    borderRadius: 16,
+                    padding: 12,
+                    borderWidth: active ? 2 : 1,
+                    borderColor: district.color + (active ? "66" : "30"),
+                    gap: 7
+                  }}>
+                  <Text style={{ color: district.color, fontSize: 11, fontWeight: "900" }}>{district.label}</Text>
+                  <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>{district.name}</Text>
+                  <Text style={{ color: colors.textSoft, fontSize: 10, lineHeight: 14 }} numberOfLines={3}>{district.summary}</Text>
+                  <Text style={{ color: district.color, fontSize: 9, fontWeight: "900", marginTop: "auto" }}>
+                    {district.housing.map((id) => getHousingTier(id).name).join(" / ")}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
+
         <View style={{ padding: 20, gap: 14 }}>
           <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
             PROPRIÉTÉS DISPONIBLES

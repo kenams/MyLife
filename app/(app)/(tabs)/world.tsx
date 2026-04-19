@@ -11,6 +11,7 @@ import { buildCityIntel, type CityIntelUrgency } from "@/lib/city-intelligence";
 import { cityName } from "@/lib/game-data";
 import { LOCATION_COORDS, tickAllNpcs } from "@/lib/npc-brain";
 import { getNpcStatusLine, getNpcMoodEmoji } from "@/lib/npc-ai";
+import { getResidentialDistrictForLocation } from "@/lib/residential-districts";
 import { colors } from "@/lib/theme";
 import type { LifeActionId, NpcState, WorldPresenceMember } from "@/lib/types";
 import { useGameStore, worldLocations } from "@/stores/game-store";
@@ -30,6 +31,9 @@ const MAP_SY = MAP_H / MAP_BASE_H;
 
 const LOCATION_TILES: Record<string, { x: number; y: number; w: number; h: number; color: string; icon: string }> = {
   "home":       { x: 22,  y: 50,  w: 92,  h: 80, color: "#245c8f", icon: "home"       },
+  "residence-populaire": { x: 18,  y: 390, w: 88,  h: 58, color: "#8a4f3d", icon: "business" },
+  "residence-confort":   { x: 150, y: 86,  w: 78,  h: 72, color: "#4f7c9d", icon: "business" },
+  "residence-luxe":      { x: 286, y: 390, w: 78,  h: 58, color: "#b98b3d", icon: "diamond"  },
   "market":     { x: 18,  y: 286, w: 104, h: 82, color: "#2f9e62", icon: "cart"       },
   "cafe":       { x: 262, y: 66,  w: 86,  h: 78, color: "#d97328", icon: "cafe"       },
   "office":     { x: 146, y: 166, w: 94,  h: 104, color: "#2d7ec2", icon: "briefcase"  },
@@ -325,6 +329,21 @@ const INTERIORS: Record<string, { title: string; tone: string; actions: string[]
     tone: "Repos, cuisine, dressing et reset des besoins.",
     actions: ["Dormir", "Cuisiner", "Changer de style"]
   },
+  "residence-populaire": {
+    title: "Quartier populaire",
+    tone: "Loyers bas, beaucoup de passage, entraide et petites opportunites.",
+    actions: ["Se reposer", "Cuisiner", "Parler voisins"]
+  },
+  "residence-confort": {
+    title: "Residence confort",
+    tone: "Logements stables pour progresser proprement sans exploser le budget.",
+    actions: ["Routine", "Cuisiner", "Inviter"]
+  },
+  "residence-luxe": {
+    title: "Residence riche",
+    tone: "Zone premium : prestige, calme, reseau elite et image sociale forte.",
+    actions: ["Recevoir", "Reseauter", "Style"]
+  },
   market: {
     title: "Galerie commerciale",
     tone: "Courses, budget, nourriture et achats utiles.",
@@ -367,6 +386,21 @@ const LOCATION_ACTIONS: Record<string, { label: string; action: LifeActionId; ic
     { label: "Dormir", action: "sleep", icon: "moon" },
     { label: "Cuisiner", action: "home-cooking", icon: "restaurant" },
     { label: "Douche", action: "shower", icon: "water" }
+  ],
+  "residence-populaire": [
+    { label: "Repos", action: "rest-home", icon: "bed" },
+    { label: "Cuisiner", action: "home-cooking", icon: "restaurant" },
+    { label: "Voisins", action: "cafe-chat", icon: "chatbubbles" }
+  ],
+  "residence-confort": [
+    { label: "Repos", action: "rest-home", icon: "bed" },
+    { label: "Cuisiner", action: "home-cooking", icon: "restaurant" },
+    { label: "Inviter", action: "cafe-chat", icon: "people" }
+  ],
+  "residence-luxe": [
+    { label: "Recevoir", action: "go-out", icon: "sparkles" },
+    { label: "Reseau", action: "cafe-chat", icon: "people" },
+    { label: "Reset", action: "rest-home", icon: "bed" }
   ],
   market: [
     { label: "Repas sain", action: "healthy-meal", icon: "nutrition" },
@@ -849,6 +883,7 @@ export default function WorldScreen() {
           const onlineHere = onlineCounts[loc.slug] ?? 0;
           const tile = LOCATION_TILES[loc.slug];
           const isRecommended = cityIntel.locationSlug === loc.slug;
+          const residential = getResidentialDistrictForLocation(loc.slug);
           return (
             <Pressable
               key={loc.slug}
@@ -871,6 +906,9 @@ export default function WorldScreen() {
                 </Text>
               </View>
               <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: isHere ? colors.accent : colors.text, fontWeight: "800", fontSize: 12 }}>{loc.name}</Text>
+              <Text numberOfLines={1} style={{ color: residential?.color ?? colors.muted, fontSize: 9, fontWeight: residential ? "900" : "700" }}>
+                {residential ? residential.label : loc.costHint}
+              </Text>
               {isHere && <Text style={{ color: colors.accent, fontSize: 9, fontWeight: "700" }}>Tu es ici</Text>}
               {!isHere && isRecommended && <Text style={{ color: "#f6b94f", fontSize: 9, fontWeight: "900" }}>Conseille</Text>}
             </Pressable>
@@ -1074,6 +1112,9 @@ export default function WorldScreen() {
           <View style={{ position:"absolute", left:264 * MAP_SX, top:164 * MAP_SY, width:116 * MAP_SX, height:120 * MAP_SY, backgroundColor:"#b8cbb4" }} />
           <View style={{ position:"absolute", left:0, top:304 * MAP_SY, width:150 * MAP_SX, height:156 * MAP_SY, backgroundColor:"#87bd78" }} />
           <View style={{ position:"absolute", left:144 * MAP_SX, top:304 * MAP_SY, width:136 * MAP_SX, height:156 * MAP_SY, backgroundColor:"#a69dbe" }} />
+          <View style={{ position:"absolute", left:0, top:360 * MAP_SY, width:118 * MAP_SX, height:100 * MAP_SY, backgroundColor:"rgba(255,122,92,0.18)", borderWidth: 1, borderColor: "rgba(255,122,92,0.18)" }} />
+          <View style={{ position:"absolute", left:132 * MAP_SX, top:72 * MAP_SY, width:106 * MAP_SX, height:92 * MAP_SY, backgroundColor:"rgba(96,165,250,0.16)", borderWidth: 1, borderColor: "rgba(96,165,250,0.18)" }} />
+          <View style={{ position:"absolute", left:270 * MAP_SX, top:374 * MAP_SY, width:110 * MAP_SX, height:86 * MAP_SY, backgroundColor:"rgba(246,185,79,0.18)", borderWidth: 1, borderColor: "rgba(246,185,79,0.22)" }} />
 
           {/* eau et quais */}
           <View style={{ position:"absolute", left:210 * MAP_SX, right:0, top:0, height:92 * MAP_SY, backgroundColor:"#1488a8" }} />
@@ -1117,6 +1158,9 @@ export default function WorldScreen() {
           <MapLabel x={18} y={142} text="Avenue Nord" />
           <MapLabel x={284} y={284} text="Boulevard Est" />
           <MapLabel x={72} y={398} text="Pont urbain" />
+          <MapLabel x={14} y={442} text="Quartier pauvre" />
+          <MapLabel x={142} y={74} text="Moyen riche" tone="blue" />
+          <MapLabel x={286} y={432} text="Quartier riche" tone="light" />
 
           <FerrisWheel x={282} y={28} size={46} />
           <DecoBuilding x={8} y={20} w={72} h={44} color="#7b604e" label="INDUS" />
@@ -1568,6 +1612,7 @@ export default function WorldScreen() {
             const onlineHere = onlineCounts[loc.slug] ?? 0;
             const tile       = LOCATION_TILES[loc.slug];
             const isRecommended = cityIntel.locationSlug === loc.slug;
+            const residential = getResidentialDistrictForLocation(loc.slug);
             return (
               <Pressable
                 key={loc.slug}
@@ -1590,6 +1635,9 @@ export default function WorldScreen() {
                   </Text>
                 </View>
                 <Text style={{ color: isHere ? colors.accent : colors.text, fontWeight: "700", fontSize: 13 }}>{loc.name}</Text>
+                <Text style={{ color: residential?.color ?? colors.muted, fontSize: 10, fontWeight: residential ? "900" : "700" }}>
+                  {residential ? residential.label : loc.costHint}
+                </Text>
                 {isHere && <Text style={{ color: colors.accent, fontSize: 10 }}>Tu es ici</Text>}
                 {!isHere && isRecommended && <Text style={{ color: "#f6b94f", fontSize: 10, fontWeight: "900" }}>Conseille</Text>}
               </Pressable>

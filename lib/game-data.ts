@@ -10,10 +10,24 @@ export const cityName = "Neo Paris";
 
 export const neighborhoods: NeighborhoodSeed[] = [
   {
+    slug: "old-quarter",
+    name: "Quartier Populaire",
+    vibe: "dense, brut et accessible",
+    lifestyle: "debrouille, petits jobs, entraide et loyers bas",
+    costLevel: "accessible"
+  },
+  {
     slug: "central-district",
     name: "Central District",
     vibe: "dense et social",
     lifestyle: "sorties, carriere, rencontres rapides",
+    costLevel: "balanced"
+  },
+  {
+    slug: "midtown-residence",
+    name: "Midtown Residences",
+    vibe: "residentiel et stable",
+    lifestyle: "confort, routines propres, vie sociale equilibree",
     costLevel: "balanced"
   },
   {
@@ -29,13 +43,20 @@ export const neighborhoods: NeighborhoodSeed[] = [
     vibe: "creatif et premium",
     lifestyle: "style, image, ambition et reseau",
     costLevel: "premium"
+  },
+  {
+    slug: "north-estates",
+    name: "North Estates",
+    vibe: "calme, prive et tres riche",
+    lifestyle: "villas, prestige, reseau elite et securite",
+    costLevel: "premium"
   }
 ];
 
 export const locations: LocationSeed[] = [
   {
     slug: "home",
-    neighborhoodSlug: "central-district",
+    neighborhoodSlug: "midtown-residence",
     name: "Home Suite",
     kind: "home",
     summary: "Le point de reset. Tu y recuperes ton energie, ton hygiene et ton calme.",
@@ -43,8 +64,35 @@ export const locations: LocationSeed[] = [
     socialEnergy: 0
   },
   {
+    slug: "residence-populaire",
+    neighborhoodSlug: "old-quarter",
+    name: "Bloc Populaire",
+    kind: "home",
+    summary: "Residences modestes, loyers faibles, ambiance dense et entraide de quartier.",
+    costHint: "pauvre",
+    socialEnergy: 32
+  },
+  {
+    slug: "residence-confort",
+    neighborhoodSlug: "midtown-residence",
+    name: "Residence Confort",
+    kind: "home",
+    summary: "Immeubles propres pour joueurs stables : studio, appartement et loft.",
+    costHint: "moyen",
+    socialEnergy: 24
+  },
+  {
+    slug: "residence-luxe",
+    neighborhoodSlug: "north-estates",
+    name: "North Estates",
+    kind: "home",
+    summary: "Residences riches : penthouse, villa et manoir avec fort impact social.",
+    costHint: "riche",
+    socialEnergy: 18
+  },
+  {
     slug: "market",
-    neighborhoodSlug: "central-district",
+    neighborhoodSlug: "old-quarter",
     name: "Fresh Market",
     kind: "food",
     summary: "Le meilleur endroit pour gerer le budget alimentation sans degrader la sante.",

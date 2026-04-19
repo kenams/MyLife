@@ -23,6 +23,9 @@ type CityIntelInput = {
 
 const LOCATION_ACTION: Record<string, LifeActionId> = {
   home: "sleep",
+  "residence-populaire": "rest-home",
+  "residence-confort": "rest-home",
+  "residence-luxe": "rest-home",
   market: "healthy-meal",
   cafe: "cafe-chat",
   office: "work-shift",
