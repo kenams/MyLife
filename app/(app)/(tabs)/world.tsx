@@ -21,9 +21,10 @@ import { useWorldPresence } from "@/hooks/use-world-presence";
 const SCREEN_W = Dimensions.get("window").width;
 const SCREEN_H = Dimensions.get("window").height;
 const IS_WIDE = SCREEN_W >= 1360;
-// Plein écran : la map occupe toute la surface disponible
-const MAP_W = SCREEN_W;
-const MAP_H = SCREEN_H;
+// Carte principale + chat lateral : la map garde une largeur reelle et lisible.
+const WORLD_CHAT_W = IS_WIDE ? Math.min(390, Math.max(350, Math.round(SCREEN_W * 0.2))) : SCREEN_W;
+const MAP_W = IS_WIDE ? Math.max(780, SCREEN_W - WORLD_CHAT_W) : SCREEN_W;
+const MAP_H = IS_WIDE ? SCREEN_H : Math.max(560, Math.round(SCREEN_H * 0.68));
 const MAP_BASE_W = 380;
 const MAP_BASE_H = 460;
 const MAP_SX = MAP_W / MAP_BASE_W;
@@ -2052,11 +2053,14 @@ export default function WorldScreen() {
           </View>
         </View>
         {/* ── Carte 2D plein écran ── */}
-        <View style={{ flex: 1, flexDirection: IS_WIDE ? "row" : "column" }}>
+        <View style={{ flex: 1, flexDirection: IS_WIDE ? "row" : "column", backgroundColor: "#07111f" }}>
         <View style={{
-          flex: 1,
+          width: MAP_W,
+          height: MAP_H,
           backgroundColor: "#0d1f32",
           overflow: "hidden",
+          borderRightWidth: IS_WIDE ? 1 : 0,
+          borderRightColor: "rgba(255,255,255,0.10)"
         }}>
           {/* base quartiers */}
           <View style={{ position:"absolute", inset:0, backgroundColor:"#b7d0a3" }} />
@@ -2232,7 +2236,7 @@ export default function WorldScreen() {
           })()}
 
           {/* HUD lisible façon town map */}
-          <View pointerEvents="none" style={{ position: "absolute", left: 12, right: 12, top: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+          <View pointerEvents="none" style={{ position: "absolute", left: 12, right: 12, top: IS_WIDE ? 104 : 96, flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
             <View style={{
               maxWidth: MAP_W * 0.48,
               backgroundColor: "rgba(7,17,31,0.88)",
@@ -2347,14 +2351,19 @@ export default function WorldScreen() {
         </View>
 
           <View style={{
-            width: IS_WIDE ? 310 : MAP_W,
-            height: IS_WIDE ? MAP_H : undefined,
-            minHeight: IS_WIDE ? undefined : 210,
-            backgroundColor: "rgba(255,255,255,0.055)",
-            borderWidth: 1,
+            width: WORLD_CHAT_W,
+            height: IS_WIDE ? MAP_H : Math.max(280, SCREEN_H - MAP_H),
+            minHeight: IS_WIDE ? undefined : 260,
+            backgroundColor: "#0b1422",
+            borderLeftWidth: IS_WIDE ? 1 : 0,
+            borderTopWidth: IS_WIDE ? 0 : 1,
+            borderRightWidth: 0,
+            borderBottomWidth: 0,
             borderColor: hasLiveLocationChat || activeRoomNpc ? "rgba(56,199,147,0.35)" : "rgba(255,255,255,0.08)",
-            borderRadius: 16,
-            padding: 12,
+            borderRadius: IS_WIDE ? 0 : 16,
+            paddingHorizontal: IS_WIDE ? 14 : 12,
+            paddingBottom: IS_WIDE ? 14 : 12,
+            paddingTop: IS_WIDE ? 104 : 12,
             gap: 10
           }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
@@ -2366,6 +2375,80 @@ export default function WorldScreen() {
                 </Text>
               </View>
               <Ionicons name="chatbubbles" size={22} color={hasLiveLocationChat || activeRoomNpc ? "#38c793" : colors.muted} />
+            </View>
+
+            <View style={{
+              backgroundColor: selectedLocationSlug === currentLocationSlug ? "rgba(56,199,147,0.10)" : "rgba(103,216,255,0.10)",
+              borderWidth: 1,
+              borderColor: selectedLocationSlug === currentLocationSlug ? "rgba(56,199,147,0.28)" : "rgba(103,216,255,0.28)",
+              borderRadius: 16,
+              padding: 12,
+              gap: 10
+            }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 13, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name={(LOCATION_TILES[selectedLocationSlug]?.icon ?? "location") as never} size={18} color={selectedLocationSlug === currentLocationSlug ? "#38c793" : "#67d8ff"} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: colors.text, fontSize: 15, fontWeight: "900" }}>
+                    {selectedLocationName}
+                  </Text>
+                  <Text numberOfLines={1} style={{ color: selectedDistrict?.color ?? colors.muted, fontSize: 10, fontWeight: "900", marginTop: 2 }}>
+                    {selectedLocationSlug === currentLocationSlug ? "Tu es ici" : `${selectedRecommendedTravel?.label ?? "A pied"} · ${selectedRecommendedTravel?.durationLabel ?? "trajet"}`}
+                  </Text>
+                </View>
+                <View style={{ alignItems: "flex-end" }}>
+                  <Text style={{ color: selectedOnlineCount > 0 ? "#38c793" : colors.muted, fontSize: 12, fontWeight: "900" }}>{selectedOnlineCount} live</Text>
+                  <Text style={{ color: "#f6b94f", fontSize: 10, fontWeight: "800" }}>{selectedNpcCount} NPC</Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <Pressable
+                  onPress={() => {
+                    if (selectedLocationSlug !== currentLocationSlug) {
+                      enterLocation(selectedLocationSlug);
+                      return;
+                    }
+                    if (primaryLocationAction) handleLocationAction(primaryLocationAction.action);
+                  }}
+                  disabled={!!travelNotice}
+                  style={{
+                    flex: 1,
+                    minHeight: 42,
+                    borderRadius: 13,
+                    backgroundColor: selectedLocationSlug === currentLocationSlug ? colors.accent : "#67d8ff",
+                    opacity: travelNotice ? 0.55 : 1,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexDirection: "row",
+                    gap: 7
+                  }}
+                >
+                  <Ionicons name={(selectedLocationSlug === currentLocationSlug ? primaryLocationAction?.icon ?? "flash" : selectedRecommendedTravel?.icon ?? "navigate") as never} size={16} color="#07111f" />
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#07111f", fontSize: 12, fontWeight: "900" }}>
+                    {travelNotice ? "En trajet" : selectedLocationSlug === currentLocationSlug ? primaryLocationAction?.label ?? "Agir" : "Y aller"}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={speakHereNow}
+                  style={{
+                    minHeight: 42,
+                    borderRadius: 13,
+                    paddingHorizontal: 12,
+                    backgroundColor: "#f6b94f22",
+                    borderWidth: 1,
+                    borderColor: "#f6b94f55",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexDirection: "row",
+                    gap: 6
+                  }}
+                >
+                  <Ionicons name="chatbubble-ellipses" size={15} color="#f6b94f" />
+                  <Text style={{ color: "#f6b94f", fontSize: 12, fontWeight: "900" }}>Parler</Text>
+                </Pressable>
+              </View>
             </View>
 
             {hasLiveLocationChat || activeRoomNpc ? (
@@ -2538,26 +2621,6 @@ export default function WorldScreen() {
               </View>
             )}
           </View>
-
-          {IS_WIDE && (
-            <ScrollView
-              style={{ flex: 1, minWidth: 300, maxWidth: 520, maxHeight: MAP_H }}
-              contentContainerStyle={{ gap: 12, paddingRight: 4, paddingBottom: 4 }}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
-            >
-              {quickPlayPanel}
-              {selectedNpcFocusPanel}
-              {cityIntelPanel}
-              {transportPanel}
-              {districtNavPanel}
-              {travelMenu}
-              {dailyMissionPanel}
-              {locationInterior}
-              {residentsHere}
-              {liveTestPanel}
-            </ScrollView>
-          )}
         </View>
 
         {/* Panel NPC */}

@@ -410,7 +410,7 @@ export function buildDirectBotReply(input: {
 
   switch (intent) {
     case "wizz":
-      return `Wizz reçu ${player} ! Je suis là — ${npcName}. Dis-moi ce qu'il se passe.`;
+      return `Wizz recu ${player} ! Je suis là — ${npcName}. Dis-moi ce qu'il se passe.`;
     case "emoji":
       return `Je capte l'énergie ${player}. Tu veux passer à une action concrète ?`;
     case "greeting":
@@ -467,7 +467,7 @@ export function buildRoomBotReplies(input: {
 
     switch (intent) {
       case "wizz":
-        body = `Wizz reçu ${player} ! ${fmt(pick(persona.greetings), player)}`;
+        body = `Wizz recu ${player} ! ${fmt(pick(persona.greetings), player)}`;
         break;
       case "emoji":
         body = `Je capte l'énergie ${player}. ${fmt(pick(persona.room), player)}`;
