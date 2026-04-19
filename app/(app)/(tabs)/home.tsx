@@ -2,6 +2,8 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Pressable, ScrollView, Text, View } from "react-native";
 
+import { TutorialOverlay } from "@/components/tutorial-overlay";
+
 import { getGameDirectorPlan } from "@/lib/game-director";
 import { getHousingTier } from "@/lib/housing";
 import { getLocationName, getMomentumState, getRecommendedActionMeta, getWellbeingScore } from "@/lib/selectors";
@@ -379,6 +381,7 @@ export default function HomeScreen() {
   const playerLevel         = useGameStore((s) => s.playerLevel ?? 1);
   const housingTier         = useGameStore((s) => s.housingTier);
   const checkHousingRent    = useGameStore((s) => s.checkHousingRent);
+  const tutorialDone        = useGameStore((s) => s.tutorialDone);
 
   useFocusEffect(useCallback(() => { bootstrap(); checkHousingRent(); }, [bootstrap, checkHousingRent]));
 
@@ -420,6 +423,7 @@ export default function HomeScreen() {
   }, []);
 
   return (
+    <>
     <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} showsVerticalScrollIndicator={false}>
         <DailyEventModal />
@@ -929,5 +933,8 @@ export default function HomeScreen() {
         </Animated.View>
       </ScrollView>
     </Animated.View>
+
+    {!tutorialDone && <TutorialOverlay />}
+    </>
   );
 }

@@ -52,6 +52,23 @@ function getAriaSystemContext(stats: Record<string, number>, pattern: string, mo
   return lines.join("\n");
 }
 
+function criticals(stats: Record<string, number>): string[] {
+  const c: string[] = [];
+  if (stats.energy < 20)      c.push("énergie critique");
+  if (stats.hunger < 20)      c.push("faim critique");
+  if (stats.stress > 80)      c.push("stress maximal");
+  if (stats.hygiene < 15)     c.push("hygiène très basse");
+  if (stats.mood < 15)        c.push("moral effondré");
+  if (stats.money < 50)       c.push("finances précaires");
+  if (stats.sociability < 20) c.push("isolement social");
+  return c;
+}
+
+function statBar(value: number, max = 100): string {
+  const filled = Math.round((value / max) * 10);
+  return "█".repeat(filled) + "░".repeat(10 - filled) + ` ${value}%`;
+}
+
 function getAriaResponse(
   userInput: string,
   stats: Record<string, number>,
@@ -60,36 +77,107 @@ function getAriaResponse(
 ): string {
   const input = userInput.toLowerCase();
 
+  // ── Analyse globale ───────────────────────────────────────────────────────
+  if (input.includes("analyse") || input.includes("bilan") || input.includes("profil") || input.includes("situation")) {
+    const crits = criticals(stats);
+    return [
+      `📊 Bilan de ta situation — ${new Date().toLocaleDateString("fr-FR")}`,
+      "",
+      `Énergie    ${statBar(stats.energy)}`,
+      `Stress     ${statBar(stats.stress)}`,
+      `Humeur     ${statBar(stats.mood)}`,
+      `Sociabilité ${statBar(stats.sociability)}`,
+      `Discipline  ${statBar(stats.discipline)}`,
+      `Argent      ${stats.money ?? 0} crédits`,
+      "",
+      crits.length > 0
+        ? `⚠️ Points critiques : ${crits.join(", ")}.`
+        : "✅ Aucun signal d'alarme détecté.",
+      "",
+      `Pattern : ${pattern} · Momentum : ${momentum}`,
+      `Niveau ${stats.playerLevel ?? 1} · ${stats.playerXp ?? 0} XP`,
+      "",
+      crits.length > 0
+        ? `Priorité immédiate : règle **${crits[0]}** avant tout.`
+        : "Continue sur cette trajectoire. Tu es dans le vert.",
+    ].join("\n");
+  }
+
   // ── Stress / burnout ──────────────────────────────────────────────────────
-  if (input.includes("stress") || input.includes("burnout") || input.includes("fatigué")) {
+  if (input.includes("stress") || input.includes("burnout") || input.includes("fatigué") || input.includes("épuisé")) {
     const advice = stats.stress > 70
       ? [
-          "Ton niveau de stress est critique. Dans le jeu, tu peux :",
-          "• Faire une action **Méditer** (stress -18)",
-          "• Rentrer chez toi et te **Reposer** (énergie +20)",
-          "• Éviter le travail pendant 1-2 cycles",
+          `⚠️ Stress à ${stats.stress}/100 — seuil critique dépassé.`,
           "",
-          "Dans la vraie vie, ça ressemble à quoi ? Si tu te sens surchargé, essaie :",
-          "• 10 min de respiration carrée (4-4-4-4)",
-          "• Identifier la source principale du stress",
-          "• Supprimer 1 obligation de ta to-do list pour demain",
+          "Actions jeu prioritaires :",
+          "• Méditer → stress −18",
+          "• Sieste courte → énergie +12",
+          "• Suspendre le travail 1-2 cycles",
+          "• Sortie parc → humeur +10, stress −8",
           "",
-          "Rappelle-toi : dans le jeu comme dans la vie, **personne ne performe bien sous stress chronique**.",
+          "Parallèle vie réelle :",
+          "• 10 min respiration carrée (4 sec inspir, 4 retenir, 4 expir, 4 retenir)",
+          "• Identifie la 1 source principale de stress — écris-la",
+          "• Supprime ou délègue 1 obligation demain",
+          "",
+          "Personne ne performe durablement sous stress chronique. C'est physiologique.",
         ]
       : [
-          "Ton stress est gérable. Pour rester au vert :",
-          "• Continue les actions **Méditer** ou **Lecture** régulièrement",
-          "• Planifie des sorties sociales légères",
+          `Stress à ${stats.stress}/100 — gérable.`,
           "",
-          "Conseil vie réelle : intègre un rituel de décompression quotidien de 10-15 min.",
+          "Pour rester dans le vert :",
+          "• Méditer ou Lire 1 fois par cycle",
+          "• Planifie 1 sortie sociale légère cette semaine",
+          "• Ne travaille pas 2 cycles d'affilée sans pause",
+          "",
+          "IRL : 10-15 min de décompression quotidien. Pas besoin que ce soit spectaculaire.",
         ];
     return advice.join("\n");
   }
 
-  // ── Argent / finances ─────────────────────────────────────────────────────
-  if (input.includes("argent") || input.includes("finances") || input.includes("fric") || input.includes("money")) {
+  // ── Logement / housing ────────────────────────────────────────────────────
+  if (input.includes("logement") || input.includes("appart") || input.includes("maison") || input.includes("loyer") || input.includes("housing")) {
     return [
-      `Tes finances actuelles : ${stats.money ?? 0} crédits.`,
+      "Le logement dans MyLife impacte directement tes stats de base.",
+      "",
+      "Niveaux disponibles :",
+      "• Home Suite (gratuit) — stats par défaut",
+      "• Résidence Confort (200 cr) — +5 énergie max, +5 discipline",
+      "• Appartement Stylé (500 cr) — +humeur au réveil, +réputation",
+      "• Penthouse Elite (2000 cr) — effets premium, bonus social max",
+      "",
+      "Pour monter de niveau :",
+      "1. Accumule des crédits via shifts de travail",
+      "2. Ouvre l'onglet Logement dans Profil → Upgrade",
+      "",
+      "IRL parallèle : ton environnement de vie affecte directement ton énergie quotidienne.",
+      "Même un petit rangement / amélioration de ton espace = gain de bien-être mesurable.",
+    ].join("\n");
+  }
+
+  // ── Premium / boosts ──────────────────────────────────────────────────────
+  if (input.includes("premium") || input.includes("boost") || input.includes("abonnement") || input.includes("payer")) {
+    return [
+      "Premium MyLife = progression 2× plus rapide.",
+      "",
+      "Ce que ça change concrètement :",
+      "• Boost XP ×2 sur toutes les actions",
+      "• Dates illimitées sans cooldown",
+      "• Accès résidents premium et lieux VIP",
+      "• Cosmétiques exclusifs (auras, badges, bordures)",
+      "• Analyse avancée de tes stats",
+      "",
+      `Tarifs : 4,99€/mois ou 29,99€/an (−50%).`,
+      "",
+      "C'est utile si tu joues au moins 20 min/jour.",
+      "Si t'es occasional, le gratuit couvre l'essentiel.",
+    ].join("\n");
+  }
+
+  // ── Argent / finances ─────────────────────────────────────────────────────
+  if (input.includes("argent") || input.includes("finances") || input.includes("fric") || input.includes("money") || input.includes("crédit")) {
+    return [
+      `Finances : ${stats.money ?? 0} crédits actuellement.`,
       "",
       stats.money < 200
         ? "Situation précaire. Actions recommandées :"
@@ -334,15 +422,15 @@ function getAriaResponse(
 
 // ─── Suggestions rapides ───────────────────────────────────────────────────────
 const QUICK_TOPICS = [
+  { label: "Analyse ma situation", icon: "📊" },
   { label: "Je suis stressé", icon: "😰" },
   { label: "Comment gagner de l'argent ?", icon: "💰" },
   { label: "Je me sens seul", icon: "😔" },
-  { label: "Comment progresser ?", icon: "📈" },
-  { label: "Conseils burnout", icon: "🔥" },
+  { label: "Comment progresser vite ?", icon: "📈" },
   { label: "Plan santé", icon: "💪" },
+  { label: "Mon logement", icon: "🏠" },
+  { label: "Premium, ça vaut quoi ?", icon: "⭐" },
   { label: "Études et formation", icon: "📚" },
-  { label: "Objectifs de vie", icon: "🎯" },
-  { label: "Mon niveau et XP", icon: "⚡" },
   { label: "Mes missions actives", icon: "🎯" },
 ];
 
@@ -362,10 +450,26 @@ export default function CoachScreen() {
   const missionsActive  = missionProgresses.filter((p) => p.status === "active").length;
   const talentCount     = unlockedTalents.length;
 
+  const introText = React.useMemo(() => {
+    const crits = criticals({
+      energy: stats.energy, hunger: stats.hunger, stress: stats.stress,
+      hygiene: stats.hygiene, mood: stats.mood, money: stats.money,
+      sociability: stats.sociability,
+    });
+    const name = avatar?.displayName ? `, ${avatar.displayName.split(" ")[0]}` : "";
+    if (crits.length >= 2) {
+      return `Bonjour${name}. J'analyse ta situation en temps réel.\n\n⚠️ J'ai détecté ${crits.length} signaux critiques : ${crits.join(", ")}.\n\nRègle ces points avant de te fixer des objectifs ambitieux. Pose-moi une question ou dis "analyse ma situation" pour un bilan complet.`;
+    }
+    if (crits.length === 1) {
+      return `Bonjour${name}. Une alerte détectée : **${crits[0]}**.\n\nC'est récupérable avec les bonnes actions. Dis-moi ce dont tu as besoin — je suis là.`;
+    }
+    return `Bonjour${name}. Ta situation est stable — aucun signal critique détecté.\n\nJe suis ARIA, ton coach de vie IA. Je lis tes stats en temps réel pour te donner des conseils adaptés, dans le jeu ET dans la vraie vie.\n\nPose-moi une question ou choisis un sujet.`;
+  }, [stats, avatar]);
+
   const [messages, setMessages] = useState<AriaMessage[]>([{
     id: "intro",
     from: "aria",
-    text: ARIA_INTRO,
+    text: introText,
     timestamp: new Date().toISOString(),
   }]);
   const [input, setInput]   = useState("");

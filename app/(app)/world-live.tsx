@@ -13,6 +13,7 @@ import {
 
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getNpcVisual } from "@/lib/avatar-visual";
+import { buildDirectBotReply } from "@/lib/bot-brain";
 import {
   getNpcActivityResponse, getNpcDialogue,
   getNpcEmoteReaction, PROPOSABLE_ACTIVITIES, QUICK_EMOTES,
@@ -202,6 +203,7 @@ type ChatLine = { id: string; from: "player" | "npc"; text: string };
 function NpcPanel({ npc, onClose }: { npc: NpcState; onClose: () => void }) {
   const sendInvitation = useGameStore((s) => s.sendInvitation);
   const startDirectConversation = useGameStore((s) => s.startDirectConversation);
+  const relationships = useGameStore((s) => s.relationships);
   const avatar = useGameStore((s) => s.avatar);
 
   const [chat, setChat] = useState<ChatLine[]>([{
@@ -232,7 +234,19 @@ function NpcPanel({ npc, onClose }: { npc: NpcState; onClose: () => void }) {
     addLine("player", t);
     setTimeout(() => {
       const busy = npc.action === "sleeping" || npc.energy < 20;
-      addLine("npc", getNpcDialogue(npc.id, npc.action, npc.mood, busy ? "busy" : "topic"));
+      const relScore = relationships.find((r) => r.residentId === npc.id)?.score ?? 0;
+      const reply = busy
+        ? getNpcDialogue(npc.id, npc.action, npc.mood, "busy")
+        : buildDirectBotReply({
+            npc,
+            residentId: npc.id,
+            residentName: npc.name,
+            playerName: playerName,
+            playerMessage: t,
+            relationshipScore: relScore,
+            messageCount: chat.length,
+          });
+      addLine("npc", reply);
     }, 600 + Math.random() * 500);
   }
 

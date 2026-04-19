@@ -155,15 +155,40 @@ export default function PremiumScreen() {
                 <PlanCard tier="monthly" selected={selectedTier === "monthly"} onSelect={() => setSelectedTier("monthly")} />
                 <PlanCard tier="yearly"  selected={selectedTier === "yearly"}  onSelect={() => setSelectedTier("yearly")}  />
               </View>
+              {/* Comparaison */}
+              <View style={{ backgroundColor: "rgba(255,255,255,0.03)", borderRadius: 14, padding: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.07)", gap: 6 }}>
+                {[
+                  { feature: "XP par action",       free: "×1",       premium: "×2 🚀" },
+                  { feature: "Dates",                free: "2/jour",   premium: "Illimitées" },
+                  { feature: "Coach ARIA",           free: "Basique",  premium: "Analyses avancées" },
+                  { feature: "Résidents premium",    free: "—",        premium: "✓" },
+                  { feature: "Cosmétiques exclusifs",free: "—",        premium: "✓" },
+                ].map((row) => (
+                  <View key={row.feature} style={{ flexDirection: "row", alignItems: "center", paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.04)" }}>
+                    <Text style={{ color: colors.muted, fontSize: 11, flex: 2 }}>{row.feature}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 11, flex: 1, textAlign: "center" }}>{row.free}</Text>
+                    <Text style={{ color: colors.accent, fontSize: 11, fontWeight: "800", flex: 1, textAlign: "center" }}>{row.premium}</Text>
+                  </View>
+                ))}
+                <View style={{ flexDirection: "row", paddingTop: 4 }}>
+                  <Text style={{ color: colors.muted, fontSize: 9, flex: 2 }} />
+                  <Text style={{ color: colors.muted, fontSize: 9, flex: 1, textAlign: "center" }}>Gratuit</Text>
+                  <Text style={{ color: colors.accent, fontSize: 9, fontWeight: "800", flex: 1, textAlign: "center" }}>Premium</Text>
+                </View>
+              </View>
+
               <Pressable onPress={handleSubscribe}
                 style={{ backgroundColor: colors.accent, borderRadius: 16, padding: 18,
-                  alignItems: "center", shadowColor: colors.accent, shadowOpacity: 0.4, shadowRadius: 12 }}>
+                  alignItems: "center", shadowColor: colors.accent, shadowOpacity: 0.5, shadowRadius: 16 }}>
                 <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>
-                  ⭐ S'abonner — {PREMIUM_PRICES[selectedTier].price}
+                  ⭐ Activer Premium — {PREMIUM_PRICES[selectedTier].price}
+                </Text>
+                <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 3 }}>
+                  Résultats 2× plus rapides dès aujourd'hui
                 </Text>
               </Pressable>
               <Text style={{ color: colors.muted, fontSize: 10, textAlign: "center" }}>
-                Paiement sécurisé par Stripe · Annulable à tout moment
+                Paiement sécurisé Stripe · Annulable à tout moment · Aucun engagement
               </Text>
             </View>
           )}

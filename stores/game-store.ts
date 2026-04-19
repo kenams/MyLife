@@ -242,6 +242,8 @@ type GameState = {
   completeDatePlan: (datePlanId: string) => void;
   performOuting: (config: OutingConfig) => void;
   resolveDailyEvent: (choice: "accepted" | "skipped") => void;
+  tutorialDone: boolean;
+  completeTutorial: () => void;
   claimDailyReward: () => void;
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: () => void;
@@ -317,6 +319,7 @@ function initialState() {
   const runtime = createInitialRuntime();
   return {
     hasHydrated: false,
+    tutorialDone: false,
     session: null as UserSession | null,
     npcs: seedNpcs() as NpcState[],
     rooms: DEFAULT_ROOMS.map(createDefaultRoom) as Room[],
@@ -2094,6 +2097,8 @@ export const useGameStore = create<GameState>()(
             })
           };
         }),
+      completeTutorial: () => set({ tutorialDone: true }),
+
       claimDailyReward: () =>
         set((state) => {
           const today = new Date().toDateString();
