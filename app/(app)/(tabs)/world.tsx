@@ -111,6 +111,18 @@ const LOCATION_TILES: Record<string, { x: number; y: number; w: number; h: numbe
   "cinema":     { x: 294, y: 202, w: 76,  h: 84, color: "#33465e", icon: "film"       }
 };
 
+const DISTRICT_ZONES = [
+  { key: "north-west", x: 0,   y: 0,   w: 126, h: 132, color: "#a9c99a", border: "#6f9f68", label: "Vieux Centre", sub: "depart", tone: "green" },
+  { key: "mid-class",  x: 132, y: 0,   w: 88,  h: 132, color: "#9fc8d5", border: "#5e9cb4", label: "Confort", sub: "moyen", tone: "blue" },
+  { key: "green",      x: 0,   y: 164, w: 126, h: 106, color: "#86c982", border: "#3b9959", label: "Parc Nord", sub: "social", tone: "green" },
+  { key: "business",   x: 264, y: 164, w: 116, h: 120, color: "#bccdb5", border: "#6f8c89", label: "Business", sub: "travail", tone: "blue" },
+  { key: "market",     x: 0,   y: 304, w: 150, h: 156, color: "#83bd74", border: "#478f50", label: "Marches", sub: "budget", tone: "green" },
+  { key: "social",     x: 144, y: 304, w: 136, h: 156, color: "#aea5c8", border: "#7a67a8", label: "Soirees", sub: "dates", tone: "purple" },
+  { key: "popular",    x: 0,   y: 360, w: 118, h: 100, color: "#b98975", border: "#d86d57", label: "Populaire", sub: "modeste", tone: "warm" },
+  { key: "office",     x: 132, y: 72,  w: 106, h: 92,  color: "#89b8d8", border: "#609bd0", label: "Bureaux", sub: "carriere", tone: "blue" },
+  { key: "elite",      x: 270, y: 374, w: 110, h: 86,  color: "#d8ba66", border: "#f6b94f", label: "Baie Elite", sub: "riche", tone: "gold" }
+] as const;
+
 function pctToMap(posX: number, posY: number) {
   return { x: (posX / 100) * MAP_W, y: (posY / 100) * MAP_H };
 }
@@ -715,6 +727,40 @@ function DecoBuilding({
   );
 }
 
+function UrbanBlock({ x, y, w, h, color = "#526b82", label }: { x: number; y: number; w: number; h: number; color?: string; label?: string }) {
+  const rows = h > 42 ? 3 : 2;
+  return (
+    <View pointerEvents="none" style={{
+      position: "absolute",
+      left: x * MAP_SX,
+      top: y * MAP_SY,
+      width: w * MAP_SX,
+      height: h * MAP_SY,
+      borderRadius: 8,
+      backgroundColor: "rgba(7,17,31,0.18)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.12)",
+      overflow: "hidden"
+    }}>
+      <View style={{ position: "absolute", left: 4, top: 4, width: w * MAP_SX * 0.42, bottom: 4, borderRadius: 6, backgroundColor: color }} />
+      <View style={{ position: "absolute", right: 4, top: 8, width: w * MAP_SX * 0.36, bottom: 7, borderRadius: 6, backgroundColor: "#34495e" }} />
+      <View style={{ position: "absolute", left: w * MAP_SX * 0.43, top: 11, width: w * MAP_SX * 0.15, height: h * MAP_SY * 0.34, borderRadius: 5, backgroundColor: "#d6b27c" }} />
+      {Array.from({ length: rows }).map((_, row) => (
+        <View key={row} style={{ position: "absolute", left: 10, right: 10, top: 14 + row * 12, flexDirection: "row", justifyContent: "space-between" }}>
+          {[0, 1, 2, 3].map((col) => (
+            <View key={col} style={{ width: 4, height: 4, borderRadius: 1, backgroundColor: (row + col) % 2 ? "rgba(216,244,255,0.46)" : "rgba(255,235,157,0.72)" }} />
+          ))}
+        </View>
+      ))}
+      {label && (
+        <Text numberOfLines={1} adjustsFontSizeToFit style={{ position: "absolute", left: 6, right: 6, bottom: 4, color: "#f8fafc", fontSize: 8, fontWeight: "900", textAlign: "center", textShadowColor: "rgba(0,0,0,0.65)", textShadowRadius: 2 }}>
+          {label}
+        </Text>
+      )}
+    </View>
+  );
+}
+
 function Crosswalk({ x, y, horizontal = true }: { x: number; y: number; horizontal?: boolean }) {
   return (
     <View style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, flexDirection: horizontal ? "row" : "column", gap: 2 }}>
@@ -800,6 +846,50 @@ function Road({ x, y, w, h, horizontal = true }: { x: number; y: number; w: numb
           backgroundColor: "rgba(247,203,91,0.72)"
         }}
       />
+    </View>
+  );
+}
+
+function DistrictZone({ zone }: { zone: (typeof DISTRICT_ZONES)[number] }) {
+  const accent =
+    zone.tone === "gold" ? "#f6b94f"
+    : zone.tone === "purple" ? "#c4b5fd"
+    : zone.tone === "warm" ? "#ff9f7a"
+    : zone.tone === "blue" ? "#67d8ff"
+    : "#8ee0bd";
+
+  return (
+    <View pointerEvents="none" style={{
+      position: "absolute",
+      left: zone.x * MAP_SX,
+      top: zone.y * MAP_SY,
+      width: zone.w * MAP_SX,
+      height: zone.h * MAP_SY,
+      borderRadius: 18,
+      backgroundColor: zone.color,
+      borderWidth: 2,
+      borderColor: zone.border,
+      overflow: "hidden"
+    }}>
+      <View style={{ position: "absolute", left: 0, right: 0, top: 0, height: 18 * MAP_SY, backgroundColor: "rgba(255,255,255,0.16)" }} />
+      <View style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: 20 * MAP_SX, backgroundColor: "rgba(7,17,31,0.10)" }} />
+      {[0.22, 0.48, 0.74].map((line) => (
+        <View key={line} style={{ position: "absolute", left: 10, right: 10, top: zone.h * MAP_SY * line, height: 1, backgroundColor: "rgba(255,255,255,0.13)" }} />
+      ))}
+      <View style={{
+        position: "absolute",
+        left: 8,
+        top: 8,
+        borderRadius: 10,
+        paddingHorizontal: 8,
+        paddingVertical: 4,
+        backgroundColor: "rgba(7,17,31,0.50)",
+        borderWidth: 1,
+        borderColor: accent + "66"
+      }}>
+        <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#ffffff", fontSize: 9, fontWeight: "900" }}>{zone.label}</Text>
+        <Text numberOfLines={1} style={{ color: accent, fontSize: 7, fontWeight: "900", marginTop: 1 }}>{zone.sub}</Text>
+      </View>
     </View>
   );
 }
@@ -2256,15 +2346,9 @@ export default function WorldScreen() {
         }}>
           {/* base quartiers */}
           <View style={{ position:"absolute", inset:0, backgroundColor:"#b7d0a3" }} />
-          <View style={{ position:"absolute", left:0, top:0, width:126 * MAP_SX, height:132 * MAP_SY, backgroundColor:"#abc99c" }} />
-          <View style={{ position:"absolute", left:132 * MAP_SX, top:0, width:88 * MAP_SX, height:132 * MAP_SY, backgroundColor:"#9fc8d5" }} />
-          <View style={{ position:"absolute", left:0, top:164 * MAP_SY, width:126 * MAP_SX, height:106 * MAP_SY, backgroundColor:"#86c982" }} />
-          <View style={{ position:"absolute", left:264 * MAP_SX, top:164 * MAP_SY, width:116 * MAP_SX, height:120 * MAP_SY, backgroundColor:"#bccdb5" }} />
-          <View style={{ position:"absolute", left:0, top:304 * MAP_SY, width:150 * MAP_SX, height:156 * MAP_SY, backgroundColor:"#83bd74" }} />
-          <View style={{ position:"absolute", left:144 * MAP_SX, top:304 * MAP_SY, width:136 * MAP_SX, height:156 * MAP_SY, backgroundColor:"#aea5c8" }} />
-          <View style={{ position:"absolute", left:0, top:360 * MAP_SY, width:118 * MAP_SX, height:100 * MAP_SY, borderRadius: 16, backgroundColor:"rgba(255,122,92,0.22)", borderWidth: 2, borderColor: "rgba(255,122,92,0.32)" }} />
-          <View style={{ position:"absolute", left:132 * MAP_SX, top:72 * MAP_SY, width:106 * MAP_SX, height:92 * MAP_SY, borderRadius: 16, backgroundColor:"rgba(96,165,250,0.20)", borderWidth: 2, borderColor: "rgba(96,165,250,0.30)" }} />
-          <View style={{ position:"absolute", left:270 * MAP_SX, top:374 * MAP_SY, width:110 * MAP_SX, height:86 * MAP_SY, borderRadius: 18, backgroundColor:"rgba(246,185,79,0.24)", borderWidth: 2, borderColor: "rgba(246,185,79,0.36)" }} />
+          {DISTRICT_ZONES.map((zone) => (
+            <DistrictZone key={zone.key} zone={zone} />
+          ))}
 
           {/* eau et quais */}
           <View style={{ position:"absolute", left:210 * MAP_SX, right:0, top:0, height:92 * MAP_SY, backgroundColor:"#1488a8" }} />
@@ -2337,6 +2421,18 @@ export default function WorldScreen() {
           <TransitStop x={216} y={304} icon="car-sport" label="Parking" color="#f6b94f" />
 
           <FerrisWheel x={282} y={28} size={46} />
+          <UrbanBlock x={78} y={72} w={42} h={44} color="#64748b" label="HOME" />
+          <UrbanBlock x={134} y={16} w={42} h={42} color="#6b9ab7" />
+          <UrbanBlock x={202} y={92} w={34} h={34} color="#83a7bf" />
+          <UrbanBlock x={6} y={222} w={36} h={34} color="#4f8f66" />
+          <UrbanBlock x={80} y={222} w={36} h={34} color="#4f8f66" />
+          <UrbanBlock x={152} y={214} w={72} h={44} color="#3f78a6" label="CITY" />
+          <UrbanBlock x={270} y={218} w={22} h={42} color="#77909c" />
+          <UrbanBlock x={338} y={236} w={34} h={36} color="#73808f" />
+          <UrbanBlock x={156} y={366} w={40} h={48} color="#7c5ca8" />
+          <UrbanBlock x={236} y={356} w={38} h={46} color="#8b5fc7" />
+          <UrbanBlock x={288} y={426} w={38} h={28} color="#d4a23f" />
+          <UrbanBlock x={338} y={404} w={32} h={36} color="#b88930" />
           <DecoBuilding x={8} y={20} w={72} h={44} color="#7b604e" label="INDUS" />
           <DecoBuilding x={86} y={14} w={42} h={40} color="#9a7558" />
           <DecoBuilding x={152} y={34} w={44} h={46} color="#d6b27c" />
