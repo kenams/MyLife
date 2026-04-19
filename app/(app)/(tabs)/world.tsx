@@ -23,7 +23,7 @@ const SCREEN_W = Dimensions.get("window").width;
 const SCREEN_H = Dimensions.get("window").height;
 const IS_WIDE = SCREEN_W >= 1360;
 const MAP_W = IS_WIDE
-  ? Math.min(Math.max(680, SCREEN_W - 690), 980)
+  ? Math.min(Math.max(680, SCREEN_W - 760), 1040)
   : Math.min(SCREEN_W - 24, 620);
 const MAP_H = IS_WIDE
   ? Math.min(Math.round(MAP_W * 0.82), Math.max(560, SCREEN_H - 160))
@@ -1044,6 +1044,8 @@ export default function WorldScreen() {
   const cityIntelTravelPlans = buildTravelPlans(currentLocationSlug, cityIntel.locationSlug, stats.money, playerLevel, stats.reputation, housingTier);
   const recommendedTravel = preferredTravelPlan(cityIntelTravelPlans, cityIntelDistance, cityIntel.locationSlug);
   const hasPermit = hasDrivingPermit(playerLevel, stats.reputation, housingTier);
+  const currentLocationName = worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "Ville";
+  const recommendedLocationName = worldLocations.find((l) => l.slug === cityIntel.locationSlug)?.name ?? cityIntel.locationSlug;
 
   useEffect(() => {
     return () => {
@@ -1186,6 +1188,47 @@ export default function WorldScreen() {
     }
     handleLocationAction(cityIntel.action);
   }, [cityIntel.action, cityIntel.locationSlug, currentLocationSlug, enterLocation, handleLocationAction]);
+
+  const worldStatusStrip = (
+    <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+      {[
+        { icon: "location", label: "Lieu", value: currentLocationName, color: colors.accent },
+        { icon: "sparkles", label: "Action utile", value: recommendedLocationName, color: cityIntelTone },
+        { icon: recommendedTravel?.icon ?? "walk", label: "Transport", value: `${recommendedTravel?.label ?? "A pied"} · ${recommendedTravel?.durationLabel ?? "0 min"}`, color: recommendedTravel?.color ?? "#38c793" },
+        { icon: "chatbubbles", label: "Room", value: `${currentRoomNpcs.length + currentLivePlayers.length} ici`, color: currentRoomNpcs.length + currentLivePlayers.length > 0 ? "#38c793" : colors.muted }
+      ].map((item) => (
+        <Pressable
+          key={item.label}
+          onPress={() => {
+            if (item.label === "Action utile") executeCityIntel();
+            if (item.label === "Room") router.push("/(app)/(tabs)/chat");
+          }}
+          style={{
+            flexGrow: 1,
+            minWidth: IS_WIDE ? 170 : "47%",
+            flexBasis: IS_WIDE ? 0 : "47%",
+            backgroundColor: item.color + "12",
+            borderRadius: 14,
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+            borderWidth: 1,
+            borderColor: item.color + "36",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 9
+          }}
+        >
+          <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: item.color + "20", alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name={item.icon as never} size={15} color={item.color} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: item.color, fontSize: 10, fontWeight: "900" }}>{item.label}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: colors.text, fontSize: 12, fontWeight: "900", marginTop: 1 }}>{item.value}</Text>
+          </View>
+        </Pressable>
+      ))}
+    </View>
+  );
 
   const cityIntelPanel = (
     <View style={{
@@ -1333,7 +1376,17 @@ export default function WorldScreen() {
         <Ionicons name="navigate" size={18} color={colors.accent} />
       </View>
       <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-        {worldLocations.map((loc) => {
+        {[...worldLocations]
+          .sort((a, b) => {
+            const score = (loc: typeof worldLocations[number]) =>
+              (loc.slug === currentLocationSlug ? 90 : 0) +
+              (loc.slug === cityIntel.locationSlug ? 80 : 0) +
+              ((onlineCounts[loc.slug] ?? 0) * 18) +
+              ((npcsByLoc[loc.slug]?.length ?? 0) * 8);
+            return score(b) - score(a);
+          })
+          .slice(0, IS_WIDE ? 6 : worldLocations.length)
+          .map((loc) => {
           const isHere = loc.slug === currentLocationSlug;
           const npcHere = npcsByLoc[loc.slug]?.length ?? 0;
           const onlineHere = onlineCounts[loc.slug] ?? 0;
@@ -1371,6 +1424,11 @@ export default function WorldScreen() {
           );
         })}
       </View>
+      {IS_WIDE && (
+        <Text style={{ color: colors.muted, fontSize: 10, lineHeight: 14 }}>
+          Les lieux affiches sont tries par urgence, presence et utilite. La carte reste le raccourci complet.
+        </Text>
+      )}
     </View>
   );
 
@@ -1542,6 +1600,7 @@ export default function WorldScreen() {
             </Pressable>
           </View>
         </View>
+        {worldStatusStrip}
 
         {!IS_WIDE && cityIntelPanel}
         {!IS_WIDE && transportPanel}

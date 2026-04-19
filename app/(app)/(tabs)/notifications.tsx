@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, Pressable, ScrollView, Text, View } from "react-native";
@@ -16,6 +17,36 @@ const smartPriorityColor: Record<SmartNotificationPriority, string> = {
   medium: "#60a5fa",
   low: colors.muted
 };
+
+const notificationKindMeta: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }> = {
+  needs: { icon: "pulse", color: "#ef4444", label: "Besoin" },
+  reward: { icon: "gift", color: "#38c793", label: "Gain" },
+  social: { icon: "people", color: "#60a5fa", label: "Social" },
+  work: { icon: "briefcase", color: "#f6b94f", label: "Travail" },
+  tip: { icon: "bulb", color: "#8b7cff", label: "Conseil" }
+};
+
+function SignalMetric({ label, value, color, icon }: { label: string; value: string; color: string; icon: keyof typeof Ionicons.glyphMap }) {
+  return (
+    <View style={{
+      flex: 1,
+      minWidth: 92,
+      backgroundColor: color + "12",
+      borderRadius: 14,
+      paddingHorizontal: 11,
+      paddingVertical: 10,
+      borderWidth: 1,
+      borderColor: color + "35",
+      gap: 6
+    }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+        <Ionicons name={icon as never} size={15} color={color} />
+        <Text style={{ color, fontSize: 15, fontWeight: "900" }}>{value}</Text>
+      </View>
+      <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: colors.textSoft, fontSize: 10, fontWeight: "800" }}>{label}</Text>
+    </View>
+  );
+}
 
 function DailyTaskRow({ emoji, label, done, urgency, detail, onPress }: {
   emoji: string; label: string; done: boolean;
@@ -73,6 +104,7 @@ export default function QuetesTab() {
   const playerXp          = useGameStore((s) => s.playerXp ?? 0);
   const claimMission      = useGameStore((s) => s.claimMission);
   const notifications     = useGameStore((s) => s.notifications);
+  const markRead          = useGameStore((s) => s.markNotificationRead);
   const markAllRead       = useGameStore((s) => s.markAllNotificationsRead);
   const stats             = useGameStore((s) => s.stats);
   const avatar            = useGameStore((s) => s.avatar);
@@ -89,6 +121,9 @@ export default function QuetesTab() {
   const xpInLevel       = playerXp % XP_PER_LEVEL;
   const xpPct           = (xpInLevel / XP_PER_LEVEL) * 100;
   const smartNotifs     = buildSmartNotifications({ avatar, stats, relationships, residents: starterResidents });
+  const topSmartSignal  = smartNotifs[0] ?? null;
+  const criticalSmart   = smartNotifs.filter((n) => n.priority === "critical").length;
+  const highSmart       = smartNotifs.filter((n) => n.priority === "high").length;
 
   // Tâches obligatoires quotidiennes
   const hoursSinceEat  = stats.lastMealAt
@@ -184,7 +219,52 @@ export default function QuetesTab() {
           </View>
         </View>
 
-        <View style={{ padding: 20, gap: 20 }}>
+        <View style={{ padding: 16, gap: 16 }}>
+
+          {/* Synthese prioritaire */}
+          <View style={{ gap: 10 }}>
+            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
+              <SignalMetric label="Critiques" value={`${criticalCnt + criticalSmart}`} color="#ef4444" icon="warning" />
+              <SignalMetric label="A traiter" value={`${highSmart + claimable.length}`} color="#f6b94f" icon="flash" />
+              <SignalMetric label="Non lues" value={`${unreadNotifs.length}`} color="#60a5fa" icon="notifications" />
+            </View>
+
+            {topSmartSignal ? (
+              <Pressable
+                onPress={() => router.push(topSmartSignal.route as any)}
+                style={{
+                  backgroundColor: smartPriorityColor[topSmartSignal.priority] + "12",
+                  borderRadius: 18,
+                  padding: 14,
+                  borderWidth: 1.5,
+                  borderColor: smartPriorityColor[topSmartSignal.priority] + "42",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12
+                }}
+              >
+                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: smartPriorityColor[topSmartSignal.priority] + "20", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name={topSmartSignal.priority === "critical" ? "alert-circle" : "navigate-circle"} size={24} color={smartPriorityColor[topSmartSignal.priority]} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: smartPriorityColor[topSmartSignal.priority], fontSize: 11, fontWeight: "900" }}>PRIORITE MAINTENANT</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 2 }}>{topSmartSignal.title}</Text>
+                  <Text numberOfLines={2} style={{ color: colors.textSoft, fontSize: 11, lineHeight: 15, marginTop: 2 }}>{topSmartSignal.body}</Text>
+                </View>
+                <View style={{ backgroundColor: smartPriorityColor[topSmartSignal.priority], borderRadius: 11, paddingHorizontal: 10, paddingVertical: 8 }}>
+                  <Text style={{ color: "#07111f", fontSize: 10, fontWeight: "900" }}>{topSmartSignal.actionLabel}</Text>
+                </View>
+              </Pressable>
+            ) : (
+              <View style={{ backgroundColor: "#38c79310", borderRadius: 18, padding: 14, borderWidth: 1, borderColor: "#38c79335", flexDirection: "row", alignItems: "center", gap: 12 }}>
+                <Ionicons name="checkmark-circle" size={28} color="#38c793" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: "#38c793", fontSize: 14, fontWeight: "900" }}>Tout est stable</Text>
+                  <Text style={{ color: colors.textSoft, fontSize: 11, marginTop: 2 }}>Aucune urgence intelligente pour le moment.</Text>
+                </View>
+              </View>
+            )}
+          </View>
 
           {/* Notifications intelligentes */}
           <View style={{ gap: 10 }}>
@@ -196,7 +276,7 @@ export default function QuetesTab() {
                 {smartNotifs.length} signal{smartNotifs.length > 1 ? "s" : ""}
               </Text>
             </View>
-            {smartNotifs.slice(0, 4).map((n) => {
+            {smartNotifs.slice(0, 3).map((n) => {
               const priorityColor = smartPriorityColor[n.priority];
               return (
                 <Pressable
@@ -205,23 +285,21 @@ export default function QuetesTab() {
                   style={{
                     backgroundColor: priorityColor + "10",
                     borderRadius: 15,
-                    padding: 13,
+                    padding: 12,
                     borderWidth: 1.5,
                     borderColor: priorityColor + "35",
                     flexDirection: "row",
                     alignItems: "center",
                     gap: 12
                   }}>
-                  <View style={{ width: 42, height: 42, borderRadius: 21,
+                  <View style={{ width: 38, height: 38, borderRadius: 19,
                     backgroundColor: priorityColor + "20", alignItems: "center", justifyContent: "center",
                     borderWidth: 1, borderColor: priorityColor + "45" }}>
-                    <Text style={{ color: priorityColor, fontWeight: "900", fontSize: 12 }}>
-                      {n.priority === "critical" ? "!" : n.priority === "high" ? "!!" : "i"}
-                    </Text>
+                    <Ionicons name={n.priority === "critical" ? "alert" : n.kind === "social" ? "heart" : "flash"} size={17} color={priorityColor} />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>{n.title}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 11, marginTop: 2 }}>{n.body}</Text>
+                    <Text numberOfLines={1} style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>{n.title}</Text>
+                    <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 }}>{n.body}</Text>
                   </View>
                   <View style={{ backgroundColor: priorityColor + "18", borderRadius: 9,
                     paddingHorizontal: 9, paddingVertical: 5, borderWidth: 1, borderColor: priorityColor + "35" }}>
@@ -337,15 +415,22 @@ export default function QuetesTab() {
                 </Pressable>
               </View>
               {unreadNotifs.slice(0, 4).map((n) => {
-                const kindColor = n.kind === "needs" ? "#ef4444" : n.kind === "reward" ? "#38c793" : "#f6b94f";
+                const meta = notificationKindMeta[n.kind] ?? notificationKindMeta.tip;
+                const kindColor = meta.color;
                 return (
                   <View key={n.id} style={{ backgroundColor: kindColor + "0e", borderRadius: 12, padding: 12,
-                    borderWidth: 1, borderColor: kindColor + "25", flexDirection: "row", gap: 10 }}>
-                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: kindColor, marginTop: 4 }} />
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{n.title}</Text>
-                      <Text style={{ color: colors.muted, fontSize: 11, marginTop: 2 }}>{n.body}</Text>
+                    borderWidth: 1, borderColor: kindColor + "25", flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
+                    <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: kindColor + "18", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: kindColor + "35" }}>
+                      <Ionicons name={meta.icon as never} size={14} color={kindColor} />
                     </View>
+                    <View style={{ flex: 1 }}>
+                      <Text numberOfLines={1} style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>{n.title}</Text>
+                      <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 }}>{n.body}</Text>
+                      <Text style={{ color: kindColor, fontSize: 9, fontWeight: "900", marginTop: 5 }}>{meta.label}</Text>
+                    </View>
+                    <Pressable onPress={() => markRead(n.id)} style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center" }}>
+                      <Ionicons name="checkmark" size={14} color={colors.textSoft} />
+                    </Pressable>
                   </View>
                 );
               })}
