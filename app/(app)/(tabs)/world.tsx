@@ -33,6 +33,34 @@ const MAP_BASE_H = 460;
 const MAP_SX = MAP_W / MAP_BASE_W;
 const MAP_SY = MAP_H / MAP_BASE_H;
 
+type TravelModeId = "walk" | "bus" | "car";
+
+type TravelPlan = {
+  mode: TravelModeId;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  cost: number;
+  energyCost: number;
+  durationMs: number;
+  durationLabel: string;
+  available: boolean;
+  reason: string;
+};
+
+type TravelNotice = {
+  from: string;
+  to: string;
+  at: number;
+  mode: TravelModeId;
+  modeLabel: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+  cost: number;
+  durationLabel: string;
+  durationMs: number;
+};
+
 const LOCATION_TILES: Record<string, { x: number; y: number; w: number; h: number; color: string; icon: string }> = {
   "home":       { x: 22,  y: 50,  w: 92,  h: 80, color: "#245c8f", icon: "home"       },
   "residence-populaire": { x: 18,  y: 390, w: 88,  h: 58, color: "#8a4f3d", icon: "business" },
@@ -67,6 +95,77 @@ function tileCenter(slug: string) {
   return { x: box.x + box.w / 2, y: box.y + box.h / 2 };
 }
 
+function routeDistance(fromSlug: string, toSlug: string) {
+  const from = tileCenter(fromSlug);
+  const to = tileCenter(toSlug);
+  if (!from || !to) return 0;
+  return Math.round(Math.abs(to.x - from.x) + Math.abs(to.y - from.y));
+}
+
+function hasDrivingPermit(playerLevel: number, reputation: number, housingTier: string) {
+  return playerLevel >= 4 || reputation >= 55 || ["loft", "penthouse", "villa", "manoir"].includes(housingTier);
+}
+
+function buildTravelPlans(fromSlug: string, toSlug: string, money: number, playerLevel: number, reputation: number, housingTier: string): TravelPlan[] {
+  const distance = routeDistance(fromSlug, toSlug);
+  const permit = hasDrivingPermit(playerLevel, reputation, housingTier);
+  const busCost = Math.max(2, Math.round(distance / 155));
+  const carCost = Math.max(8, Math.round(distance / 82));
+  const walkMinutes = Math.max(8, Math.round(distance / 8));
+  const busMinutes = Math.max(5, Math.round(distance / 15) + 3);
+  const carMinutes = Math.max(3, Math.round(distance / 23) + 2);
+
+  return [
+    {
+      mode: "walk",
+      label: "A pied",
+      icon: "walk",
+      color: "#38c793",
+      cost: 0,
+      energyCost: distance > 230 ? 4 : 2,
+      durationMs: Math.min(2400, Math.max(950, distance * 5)),
+      durationLabel: `${walkMinutes} min`,
+      available: true,
+      reason: "gratuit"
+    },
+    {
+      mode: "bus",
+      label: "Bus",
+      icon: "bus",
+      color: "#60a5fa",
+      cost: busCost,
+      energyCost: 1,
+      durationMs: Math.min(1900, Math.max(800, distance * 3.4)),
+      durationLabel: `${busMinutes} min`,
+      available: money >= busCost,
+      reason: money >= busCost ? `-${busCost} cr` : `${busCost} cr requis`
+    },
+    {
+      mode: "car",
+      label: "Voiture",
+      icon: "car-sport",
+      color: "#f6b94f",
+      cost: carCost,
+      energyCost: 1,
+      durationMs: Math.min(1500, Math.max(650, distance * 2.4)),
+      durationLabel: `${carMinutes} min`,
+      available: permit && money >= carCost,
+      reason: !permit ? "permis requis" : money >= carCost ? `-${carCost} cr` : `${carCost} cr requis`
+    }
+  ];
+}
+
+function preferredTravelPlan(plans: TravelPlan[], distance: number, toSlug: string) {
+  const car = plans.find((plan) => plan.mode === "car" && plan.available);
+  const bus = plans.find((plan) => plan.mode === "bus" && plan.available);
+  const walk = plans.find((plan) => plan.mode === "walk") ?? plans[0];
+
+  if (toSlug === "gym") return car ?? bus ?? walk;
+  if (car && distance > 230) return car;
+  if (bus && distance > 160) return bus;
+  return walk;
+}
+
 function RouteGuide({ fromSlug, toSlug, color = "#f6b94f" }: { fromSlug: string; toSlug: string; color?: string }) {
   if (fromSlug === toSlug) return null;
   const from = tileCenter(fromSlug);
@@ -89,6 +188,61 @@ function RouteGuide({ fromSlug, toSlug, color = "#f6b94f" }: { fromSlug: string;
       <View style={{ position: "absolute", left: from.x - 6, top: from.y - 6, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.accent, borderWidth: 2, borderColor: "#07111f" }} />
       <View style={{ position: "absolute", left: cornerX - 8, top: cornerY - 8, width: 16, height: 16, borderRadius: 8, backgroundColor: "#07111f", borderWidth: 2, borderColor: color }} />
       <View style={{ position: "absolute", left: to.x - 8, top: to.y - 8, width: 16, height: 16, borderRadius: 8, backgroundColor: color, borderWidth: 2, borderColor: "#07111f" }} />
+    </View>
+  );
+}
+
+function LiveTravelMarker({ notice }: { notice: TravelNotice }) {
+  const from = tileCenter(notice.from);
+  const to = tileCenter(notice.to);
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    progress.setValue(0);
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: notice.durationMs,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: false
+    }).start();
+  }, [notice.at, notice.durationMs, progress]);
+
+  if (!from || !to) return null;
+
+  const corner = { x: to.x, y: from.y };
+  const left = progress.interpolate({ inputRange: [0, 0.58, 1], outputRange: [from.x - 14, corner.x - 14, to.x - 14] });
+  const top = progress.interpolate({ inputRange: [0, 0.58, 1], outputRange: [from.y - 14, corner.y - 14, to.y - 14] });
+
+  return (
+    <Animated.View pointerEvents="none" style={{
+      position: "absolute",
+      left,
+      top,
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: notice.color,
+      borderWidth: 2,
+      borderColor: "#07111f",
+      alignItems: "center",
+      justifyContent: "center",
+      shadowColor: notice.color,
+      shadowOpacity: 0.65,
+      shadowRadius: 8,
+      elevation: 8
+    }}>
+      <Ionicons name={notice.icon as never} size={15} color="#07111f" />
+    </Animated.View>
+  );
+}
+
+function TransitStop({ x, y, icon, label, color }: { x: number; y: number; icon: string; label: string; color: string }) {
+  return (
+    <View pointerEvents="none" style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, alignItems: "center", gap: 2 }}>
+      <View style={{ width: 23, height: 23, borderRadius: 8, backgroundColor: "#07111f", borderWidth: 1, borderColor: color, alignItems: "center", justifyContent: "center" }}>
+        <Ionicons name={icon as never} size={13} color={color} />
+      </View>
+      <Text style={{ color, fontSize: 8, fontWeight: "900", textShadowColor: "rgba(0,0,0,0.55)", textShadowRadius: 2 }}>{label}</Text>
     </View>
   );
 }
@@ -837,6 +991,7 @@ export default function WorldScreen() {
   const dailyGoals          = useGameStore((s) => s.dailyGoals);
   const relationships       = useGameStore((s) => s.relationships);
   const housingTier         = useGameStore((s) => s.housingTier);
+  const playerLevel         = useGameStore((s) => s.playerLevel);
 
   const { members: realLivePlayers } = useWorldPresence();
   const [simulatedPlayers, setSimulatedPlayers] = useState<WorldPresenceMember[]>([]);
@@ -845,7 +1000,8 @@ export default function WorldScreen() {
   const [selectedNpc, setSelectedNpc] = useState<NpcState | null>(null);
   const [activeRoomNpcId, setActiveRoomNpcId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState("");
-  const [travelNotice, setTravelNotice] = useState<{ from: string; to: string; at: number } | null>(null);
+  const [travelNotice, setTravelNotice] = useState<TravelNotice | null>(null);
+  const travelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const playerVisual = avatar ? getAvatarVisual(avatar) : null;
   const playerAction: AvatarAction =
@@ -884,6 +1040,16 @@ export default function WorldScreen() {
   const visibleRoomMessages = hasLiveLocationChat ? locationChat.messages : activeConversation?.messages ?? [];
   const cityIntel = buildCityIntel({ stats, currentLocationSlug, npcs, livePlayers, relationships, housingTier });
   const cityIntelTone = cityIntelColor[cityIntel.urgency];
+  const cityIntelDistance = routeDistance(currentLocationSlug, cityIntel.locationSlug);
+  const cityIntelTravelPlans = buildTravelPlans(currentLocationSlug, cityIntel.locationSlug, stats.money, playerLevel, stats.reputation, housingTier);
+  const recommendedTravel = preferredTravelPlan(cityIntelTravelPlans, cityIntelDistance, cityIntel.locationSlug);
+  const hasPermit = hasDrivingPermit(playerLevel, stats.reputation, housingTier);
+
+  useEffect(() => {
+    return () => {
+      if (travelTimerRef.current) clearTimeout(travelTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (currentRoomNpcs.length === 0) {
@@ -901,19 +1067,47 @@ export default function WorldScreen() {
     startDirectConversation(activeRoomNpc.id, activeRoomNpc.name);
   }, [activeRoomNpc?.id]);
 
-  const enterLocation = useCallback((slug: string) => {
-    if (slug !== currentLocationSlug) {
-      setTravelNotice({ from: currentLocationSlug, to: slug, at: Date.now() });
-      setTimeout(() => {
-        setTravelNotice((notice) => (notice?.to === slug ? null : notice));
-      }, 1400);
+  const enterLocation = useCallback((slug: string, preferredMode?: TravelModeId) => {
+    if (slug === currentLocationSlug) {
+      const residents = npcsByLoc[slug] ?? [];
+      setActiveRoomNpcId(residents[0]?.id ?? null);
+      setSelectedNpc(null);
+      setChatDraft("");
+      return;
     }
-    travelTo(slug);
-    const residents = npcsByLoc[slug] ?? [];
-    setActiveRoomNpcId(residents[0]?.id ?? null);
+
+    const distance = routeDistance(currentLocationSlug, slug);
+    const plans = buildTravelPlans(currentLocationSlug, slug, stats.money, playerLevel, stats.reputation, housingTier);
+    const requestedPlan = preferredMode ? plans.find((plan) => plan.mode === preferredMode && plan.available) : null;
+    const plan = requestedPlan ?? preferredTravelPlan(plans, distance, slug);
+    if (!plan) return;
+
+    if (travelTimerRef.current) clearTimeout(travelTimerRef.current);
+    const notice: TravelNotice = {
+      from: currentLocationSlug,
+      to: slug,
+      at: Date.now(),
+      mode: plan.mode,
+      modeLabel: plan.label,
+      icon: plan.icon,
+      color: plan.color,
+      cost: plan.cost,
+      durationLabel: plan.durationLabel,
+      durationMs: plan.durationMs
+    };
+
+    setTravelNotice(notice);
     setSelectedNpc(null);
     setChatDraft("");
-  }, [currentLocationSlug, npcsByLoc, travelTo]);
+
+    travelTimerRef.current = setTimeout(() => {
+      travelTo(slug, { cost: plan.cost, modeLabel: plan.label, energyCost: plan.energyCost });
+      const residents = npcsByLoc[slug] ?? [];
+      setActiveRoomNpcId(residents[0]?.id ?? null);
+      setTravelNotice((current) => (current?.at === notice.at ? null : current));
+      travelTimerRef.current = null;
+    }, plan.durationMs);
+  }, [currentLocationSlug, housingTier, npcsByLoc, playerLevel, stats.money, stats.reputation, travelTo]);
 
   const sendRoomMessage = useCallback(() => {
     const cleanDraft = chatDraft.trim();
@@ -1027,6 +1221,76 @@ export default function WorldScreen() {
           </Text>
         </Pressable>
       </View>
+    </View>
+  );
+
+  const transportPanel = (
+    <View style={{
+      backgroundColor: "rgba(255,255,255,0.05)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.09)",
+      borderRadius: 16,
+      padding: 12,
+      gap: 10
+    }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>Trajet live</Text>
+          <Text numberOfLines={1} style={{ color: colors.textSoft, fontSize: 11, marginTop: 2 }}>
+            Vers {worldLocations.find((l) => l.slug === cityIntel.locationSlug)?.name ?? cityIntel.locationSlug}
+          </Text>
+        </View>
+        <View style={{ backgroundColor: hasPermit ? "#38c79318" : "#f6b94f18", borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6, borderWidth: 1, borderColor: hasPermit ? "#38c79344" : "#f6b94f44" }}>
+          <Text style={{ color: hasPermit ? "#38c793" : "#f6b94f", fontSize: 10, fontWeight: "900" }}>
+            {hasPermit ? "Permis OK" : "Sans permis"}
+          </Text>
+        </View>
+      </View>
+
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        {cityIntelTravelPlans.map((plan) => {
+          const active = recommendedTravel?.mode === plan.mode;
+          return (
+            <Pressable
+              key={plan.mode}
+              onPress={() => plan.available && enterLocation(cityIntel.locationSlug, plan.mode)}
+              disabled={!plan.available || cityIntel.locationSlug === currentLocationSlug}
+              style={{
+                flex: 1,
+                minHeight: 76,
+                borderRadius: 14,
+                padding: 9,
+                backgroundColor: active ? plan.color + "18" : "rgba(255,255,255,0.045)",
+                borderWidth: 1,
+                borderColor: active ? plan.color + "65" : "rgba(255,255,255,0.08)",
+                opacity: plan.available ? 1 : 0.48,
+                gap: 6
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Ionicons name={plan.icon as never} size={18} color={plan.available ? plan.color : colors.muted} />
+                {active && <Text style={{ color: plan.color, fontSize: 9, fontWeight: "900" }}>AUTO</Text>}
+              </View>
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: plan.available ? colors.text : colors.muted, fontSize: 12, fontWeight: "900" }}>{plan.label}</Text>
+              <Text numberOfLines={1} style={{ color: plan.available ? plan.color : colors.muted, fontSize: 10, fontWeight: "800" }}>
+                {plan.durationLabel} · {plan.reason}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+
+      {travelNotice && (
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: travelNotice.color + "12", borderRadius: 12, padding: 9, borderWidth: 1, borderColor: travelNotice.color + "38" }}>
+          <Ionicons name={travelNotice.icon as never} size={16} color={travelNotice.color} />
+          <Text numberOfLines={1} style={{ flex: 1, color: colors.text, fontSize: 11, fontWeight: "800" }}>
+            En route : {travelNotice.modeLabel} · {travelNotice.durationLabel}
+          </Text>
+          <Text style={{ color: travelNotice.color, fontSize: 10, fontWeight: "900" }}>
+            {travelNotice.cost > 0 ? `-${travelNotice.cost} cr` : "gratuit"}
+          </Text>
+        </View>
+      )}
     </View>
   );
 
@@ -1280,6 +1544,7 @@ export default function WorldScreen() {
         </View>
 
         {!IS_WIDE && cityIntelPanel}
+        {!IS_WIDE && transportPanel}
         {!IS_WIDE && districtNavPanel}
 
         {/* Carte 2D + chat de lieu */}
@@ -1343,6 +1608,7 @@ export default function WorldScreen() {
             toSlug={travelNotice?.to ?? cityIntel.locationSlug}
             color={travelNotice ? colors.accent : cityIntelTone}
           />
+          {travelNotice && <LiveTravelMarker notice={travelNotice} />}
 
           {/* rond-point et place centrale */}
           <View style={{ position:"absolute", left:152 * MAP_SX, top:270 * MAP_SY, width:82 * MAP_SX, height:82 * MAP_SY, borderRadius:42 * MAP_SX, backgroundColor:"#20282f", borderWidth: 2, borderColor: "rgba(255,255,255,0.18)", alignItems:"center", justifyContent:"center" }}>
@@ -1359,6 +1625,9 @@ export default function WorldScreen() {
           <MapLabel x={14} y={442} text="Quartier pauvre" />
           <MapLabel x={142} y={74} text="Moyen riche" tone="blue" />
           <MapLabel x={286} y={432} text="Quartier riche" tone="light" />
+          <TransitStop x={106} y={114} icon="bus" label="Bus" color="#60a5fa" />
+          <TransitStop x={268} y={268} icon="bus" label="Bus" color="#60a5fa" />
+          <TransitStop x={216} y={304} icon="car-sport" label="Parking" color="#f6b94f" />
 
           <FerrisWheel x={282} y={28} size={46} />
           <DecoBuilding x={8} y={20} w={72} h={44} color="#7b604e" label="INDUS" />
@@ -1460,6 +1729,7 @@ export default function WorldScreen() {
             </View>
             <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
               <MapBadge icon="📍" label="lieu actuel" value={worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "Ville"} color={colors.accent} />
+              <MapBadge icon="🚌" label="transport" value={travelNotice ? travelNotice.modeLabel : recommendedTravel?.label ?? "A pied"} color={travelNotice?.color ?? recommendedTravel?.color ?? "#60a5fa"} />
               <MapBadge icon="👥" label="résidents" value={`${npcs.length}`} color="#f6b94f" />
               <MapBadge icon="🟢" label="en ligne" value={`${livePlayers.length}`} color="#38c793" />
             </View>
@@ -1479,6 +1749,8 @@ export default function WorldScreen() {
             {[
               { dot: colors.accent, label: "Tu es ici" },
               { dot: "#f6b94f", label: "Action" },
+              { dot: "#60a5fa", label: "Bus" },
+              { dot: "#f6b94f", label: "Voiture" },
               { dot: "#38c793", label: "Joueur live" },
               { dot: "#60a5fa", label: "Resident" }
             ].map((item) => (
@@ -1505,11 +1777,11 @@ export default function WorldScreen() {
               alignItems: "center",
               gap: 10
             }}>
-              <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }}>
-                <Ionicons name="navigate" size={16} color="#07111f" />
+              <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: travelNotice.color, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name={travelNotice.icon as never} size={16} color="#07111f" />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.accent, fontSize: 11, fontWeight: "900" }}>DEPLACEMENT</Text>
+                <Text style={{ color: travelNotice.color, fontSize: 11, fontWeight: "900" }}>DEPLACEMENT · {travelNotice.modeLabel} · {travelNotice.durationLabel}</Text>
                 <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#ffffff", fontSize: 13, fontWeight: "900" }}>
                   {worldLocations.find((l) => l.slug === travelNotice.from)?.name ?? travelNotice.from}
                   {" -> "}
@@ -1658,6 +1930,7 @@ export default function WorldScreen() {
           {IS_WIDE && (
             <View style={{ flex: 1, minWidth: 300, maxWidth: 520, gap: 12 }}>
               {cityIntelPanel}
+              {transportPanel}
               {districtNavPanel}
               {travelMenu}
               {dailyMissionPanel}

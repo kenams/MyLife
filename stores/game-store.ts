@@ -101,7 +101,7 @@ type GameState = {
   editAvatar: (avatar: AvatarProfile) => void;
   bootstrap: () => void;
   performAction: (action: LifeActionId) => void;
-  travelTo: (locationSlug: string) => void;
+  travelTo: (locationSlug: string, options?: { cost?: number; modeLabel?: string; energyCost?: number }) => void;
   sendMessage: (conversationId: string, body: string) => void;
   startDirectConversation: (residentId: string, residentName: string) => void;
   sendInvitation: (residentId: string, activitySlug: string) => void;
@@ -1494,14 +1494,17 @@ export const useGameStore = create<GameState>()(
       unlockTalent: (talentId) => set((state) => ({
         unlockedTalents: [...(state.unlockedTalents ?? []), talentId],
       })),
-      travelTo: (locationSlug) =>
+      travelTo: (locationSlug, options) =>
         set((state) => {
           const location = locations.find((item) => item.slug === locationSlug) ?? locations[0];
+          const transportCost = Math.max(0, Math.round(options?.cost ?? 0));
+          const energyCost = Math.max(1, Math.round(options?.energyCost ?? 2));
           const nextStats = normalizeStats({
             ...state.stats,
             mood: state.stats.mood + Math.max(1, Math.round(location.socialEnergy / 22)),
             sociability: state.stats.sociability + Math.max(1, Math.round(location.socialEnergy / 18)),
-            energy: state.stats.energy - 2,
+            energy: state.stats.energy - energyCost,
+            money: state.stats.money - transportCost,
             lastDecayAt: nowIso()
           });
 
@@ -1538,7 +1541,7 @@ export const useGameStore = create<GameState>()(
               id: `travel-${Date.now()}`,
               kind: "social",
               title: `Tu es maintenant a ${location.name}`,
-              body: location.summary,
+              body: `${options?.modeLabel ? `Trajet en ${options.modeLabel}. ` : ""}${transportCost > 0 ? `Transport -${transportCost} cr. ` : ""}${location.summary}`,
               createdAt: nowIso(),
               read: false
             }),
