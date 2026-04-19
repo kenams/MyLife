@@ -11,7 +11,7 @@ import { buildCityIntel, type CityIntelUrgency } from "@/lib/city-intelligence";
 import { cityName } from "@/lib/game-data";
 import { LOCATION_COORDS, tickAllNpcs } from "@/lib/npc-brain";
 import { getNpcStatusLine, getNpcMoodEmoji } from "@/lib/npc-ai";
-import { getResidentialDistrictForLocation } from "@/lib/residential-districts";
+import { getResidentialDistrictForLocation, RESIDENTIAL_DISTRICTS } from "@/lib/residential-districts";
 import { colors } from "@/lib/theme";
 import type { LifeActionId, NpcState, WorldPresenceMember } from "@/lib/types";
 import { useGameStore, worldLocations } from "@/stores/game-store";
@@ -22,8 +22,12 @@ import { useWorldPresence } from "@/hooks/use-world-presence";
 const SCREEN_W = Dimensions.get("window").width;
 const SCREEN_H = Dimensions.get("window").height;
 const IS_WIDE = SCREEN_W >= 1360;
-const MAP_W = Math.min(SCREEN_W - 24, IS_WIDE ? Math.min(Math.max(660, SCREEN_W * 0.5), 860) : 620);
-const MAP_H = IS_WIDE ? Math.min(Math.round(MAP_W * 0.82), Math.max(540, SCREEN_H - 190)) : Math.round(MAP_W * 1.04);
+const MAP_W = IS_WIDE
+  ? Math.min(Math.max(680, SCREEN_W - 690), 980)
+  : Math.min(SCREEN_W - 24, 620);
+const MAP_H = IS_WIDE
+  ? Math.min(Math.round(MAP_W * 0.82), Math.max(560, SCREEN_H - 160))
+  : Math.round(MAP_W * 0.98);
 const MAP_BASE_W = 380;
 const MAP_BASE_H = 460;
 const MAP_SX = MAP_W / MAP_BASE_W;
@@ -236,7 +240,8 @@ function Road({ x, y, w, h, horizontal = true }: { x: number; y: number; w: numb
         top: y * MAP_SY,
         width: w * MAP_SX,
         height: h * MAP_SY,
-        backgroundColor: "#263039",
+        borderRadius: Math.max(2, Math.min(w * MAP_SX, h * MAP_SY) * 0.08),
+        backgroundColor: "#202a33",
         borderWidth: 1,
         borderColor: "rgba(255,255,255,0.08)",
         shadowColor: "#000",
@@ -245,6 +250,30 @@ function Road({ x, y, w, h, horizontal = true }: { x: number; y: number; w: numb
         elevation: 1
       }}
     >
+      <View
+        style={{
+          position: "absolute",
+          left: horizontal ? 0 : "12%",
+          right: horizontal ? 0 : undefined,
+          top: horizontal ? "12%" : 0,
+          bottom: horizontal ? undefined : 0,
+          width: horizontal ? undefined : 1,
+          height: horizontal ? 1 : undefined,
+          backgroundColor: "rgba(255,255,255,0.13)"
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          left: horizontal ? 0 : "84%",
+          right: horizontal ? 0 : undefined,
+          top: horizontal ? "84%" : 0,
+          bottom: horizontal ? undefined : 0,
+          width: horizontal ? undefined : 1,
+          height: horizontal ? 1 : undefined,
+          backgroundColor: "rgba(255,255,255,0.13)"
+        }}
+      />
       <View
         style={{
           position: "absolute",
@@ -322,6 +351,17 @@ const cityIntelColor: Record<CityIntelUrgency, string> = {
   medium: "#60a5fa",
   low: "#38c793"
 };
+
+const districtNav = [
+  { label: "Centre", slug: "cafe", color: colors.accent },
+  ...RESIDENTIAL_DISTRICTS.map((district) => ({
+    label: district.label,
+    slug: district.locationSlug,
+    color: district.color
+  })),
+  { label: "Parc", slug: "park", color: "#38c793" },
+  { label: "Travail", slug: "office", color: "#60a5fa" }
+];
 
 const INTERIORS: Record<string, { title: string; tone: string; actions: string[] }> = {
   home: {
@@ -543,9 +583,9 @@ function LiveNpc({ npc, onPress }: { npc: NpcState; onPress: () => void }) {
           <Text style={{ color: "#07111f", fontSize: 6, fontWeight: "900" }}>Nv{npc.level}</Text>
         </Animated.View>
         {/* Nom + action */}
-        <View style={{ backgroundColor: "rgba(0,0,0,0.72)", borderRadius: 5, paddingHorizontal: 3, flexDirection: "row", alignItems: "center", gap: 1 }}>
-          <Text style={{ fontSize: 6 }}>{actionIcon}</Text>
-          <Text style={{ color: "#fff", fontSize: 7, fontWeight: "700" }}>{npc.name.split(" ")[0]}</Text>
+        <View style={{ backgroundColor: "rgba(5,10,18,0.86)", borderRadius: 7, paddingHorizontal: 5, paddingVertical: 2, flexDirection: "row", alignItems: "center", gap: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" }}>
+          <Text style={{ fontSize: 8 }}>{actionIcon}</Text>
+          <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>{npc.name.split(" ")[0]}</Text>
         </View>
       </Pressable>
     </Animated.View>
@@ -554,11 +594,13 @@ function LiveNpc({ npc, onPress }: { npc: NpcState; onPress: () => void }) {
 
 // ─── Tuile de lieu ────────────────────────────────────────────────────────────
 function LocationTile({
-  slug, tile, label, isHere, isRecommended, npcCount, onlineCount, onPress
+  slug, tile, label, metaLabel, metaColor, isHere, isRecommended, npcCount, onlineCount, onPress
 }: {
   slug: string;
   tile: (typeof LOCATION_TILES)[string];
   label: string;
+  metaLabel: string;
+  metaColor: string;
   isHere: boolean;
   isRecommended: boolean;
   npcCount: number;
@@ -569,17 +611,17 @@ function LocationTile({
   const box = scaleTile(tile);
 
   useEffect(() => {
-    if (isHere) {
+    if (isHere || isRecommended) {
       Animated.loop(
         Animated.sequence([
           Animated.timing(glow, { toValue: 1, duration: 800, useNativeDriver: true }),
-          Animated.timing(glow, { toValue: 0.6, duration: 800, useNativeDriver: true })
+          Animated.timing(glow, { toValue: isHere ? 0.78 : 0.86, duration: 800, useNativeDriver: true })
         ])
       ).start();
     } else {
-      glow.setValue(0.6);
+      glow.setValue(1);
     }
-  }, [isHere]);
+  }, [isHere, isRecommended]);
 
   const buildingHeight = Math.max(9, box.h * 0.12);
 
@@ -603,12 +645,12 @@ function LocationTile({
         opacity: glow,
         overflow: "hidden",
         shadowColor: tile.color,
-        shadowOpacity: isHere ? 0.85 : 0.42,
-        shadowRadius: isHere ? 14 : 6,
-        elevation: isHere ? 6 : 2,
+        shadowOpacity: isHere || isRecommended ? 0.9 : 0.5,
+        shadowRadius: isHere || isRecommended ? 16 : 7,
+        elevation: isHere || isRecommended ? 7 : 3,
       }}>
         <View style={{ position:"absolute", top:0, left:0, right:0, bottom:0, backgroundColor: tile.color }} />
-        <View style={{ position:"absolute", top:0, left:0, right:0, height: Math.max(16, box.h * 0.22), backgroundColor:"rgba(255,255,255,0.18)" }} />
+        <View style={{ position:"absolute", top:0, left:0, right:0, height: Math.max(18, box.h * 0.24), backgroundColor:"rgba(255,255,255,0.22)" }} />
         <View style={{ position:"absolute", top:4, left:5, right:5, height:Math.max(8, box.h * 0.10), borderRadius:5, backgroundColor:"rgba(255,255,255,0.24)" }} />
         <View style={{ position:"absolute", right:0, top:0, bottom:0, width:Math.max(9, box.w * 0.12), backgroundColor:"rgba(0,0,0,0.20)" }} />
         <View style={{ position:"absolute", bottom:0, left:0, right:0, height:buildingHeight, backgroundColor:"rgba(0,0,0,0.28)" }} />
@@ -645,9 +687,12 @@ function LocationTile({
               </View>
             )}
           </View>
-          <View style={{ backgroundColor: "rgba(5,10,18,0.82)", borderRadius: 10, paddingHorizontal: 7, paddingVertical: 4, borderWidth: 1, borderColor: isHere ? colors.accent : "rgba(255,255,255,0.22)" }}>
-            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color:"#fff", fontSize:13, fontWeight:"900", textShadowColor:"rgba(0,0,0,0.75)", textShadowOffset:{width:0,height:1}, textShadowRadius:2 }}>
+          <View style={{ backgroundColor: "rgba(5,10,18,0.88)", borderRadius: 11, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: isHere ? colors.accent : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)" }}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color:"#fff", fontSize:14, fontWeight:"900", textShadowColor:"rgba(0,0,0,0.75)", textShadowOffset:{width:0,height:1}, textShadowRadius:2 }}>
               {label}
+            </Text>
+            <Text numberOfLines={1} style={{ color: metaColor, fontSize: 9, fontWeight: "900", marginTop: 1 }}>
+              {metaLabel}
             </Text>
             {isHere && (
               <Text style={{ color:"#8ee0bd", fontSize:9, fontWeight:"700" }}>📍 Tu es ici</Text>
@@ -861,6 +906,31 @@ export default function WorldScreen() {
         </Pressable>
       </View>
     </View>
+  );
+
+  const districtNavPanel = (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+      {districtNav.map((item) => {
+        const active = currentLocationSlug === item.slug;
+        return (
+          <Pressable
+            key={item.slug}
+            onPress={() => enterLocation(item.slug)}
+            style={{
+              minWidth: 88,
+              paddingHorizontal: 11,
+              paddingVertical: 9,
+              borderRadius: 14,
+              backgroundColor: item.color + (active ? "24" : "12"),
+              borderWidth: active ? 2 : 1,
+              borderColor: item.color + (active ? "77" : "35"),
+              alignItems: "center"
+            }}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: item.color, fontSize: 11, fontWeight: "900" }}>{item.label}</Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
   );
 
   const travelMenu = (
@@ -1088,6 +1158,7 @@ export default function WorldScreen() {
         </View>
 
         {!IS_WIDE && cityIntelPanel}
+        {!IS_WIDE && districtNavPanel}
 
         {/* Carte 2D + chat de lieu */}
         <View style={{ width: "100%", flexDirection: IS_WIDE ? "row" : "column", gap: 12, alignItems: IS_WIDE ? "stretch" : "center" }}>
@@ -1106,15 +1177,15 @@ export default function WorldScreen() {
         }}>
           {/* base quartiers */}
           <View style={{ position:"absolute", inset:0, backgroundColor:"#b7d0a3" }} />
-          <View style={{ position:"absolute", left:0, top:0, width:126 * MAP_SX, height:132 * MAP_SY, backgroundColor:"#a6c69c" }} />
-          <View style={{ position:"absolute", left:132 * MAP_SX, top:0, width:88 * MAP_SX, height:132 * MAP_SY, backgroundColor:"#9fc1d0" }} />
-          <View style={{ position:"absolute", left:0, top:164 * MAP_SY, width:126 * MAP_SX, height:106 * MAP_SY, backgroundColor:"#8fc688" }} />
-          <View style={{ position:"absolute", left:264 * MAP_SX, top:164 * MAP_SY, width:116 * MAP_SX, height:120 * MAP_SY, backgroundColor:"#b8cbb4" }} />
-          <View style={{ position:"absolute", left:0, top:304 * MAP_SY, width:150 * MAP_SX, height:156 * MAP_SY, backgroundColor:"#87bd78" }} />
-          <View style={{ position:"absolute", left:144 * MAP_SX, top:304 * MAP_SY, width:136 * MAP_SX, height:156 * MAP_SY, backgroundColor:"#a69dbe" }} />
-          <View style={{ position:"absolute", left:0, top:360 * MAP_SY, width:118 * MAP_SX, height:100 * MAP_SY, backgroundColor:"rgba(255,122,92,0.18)", borderWidth: 1, borderColor: "rgba(255,122,92,0.18)" }} />
-          <View style={{ position:"absolute", left:132 * MAP_SX, top:72 * MAP_SY, width:106 * MAP_SX, height:92 * MAP_SY, backgroundColor:"rgba(96,165,250,0.16)", borderWidth: 1, borderColor: "rgba(96,165,250,0.18)" }} />
-          <View style={{ position:"absolute", left:270 * MAP_SX, top:374 * MAP_SY, width:110 * MAP_SX, height:86 * MAP_SY, backgroundColor:"rgba(246,185,79,0.18)", borderWidth: 1, borderColor: "rgba(246,185,79,0.22)" }} />
+          <View style={{ position:"absolute", left:0, top:0, width:126 * MAP_SX, height:132 * MAP_SY, backgroundColor:"#abc99c" }} />
+          <View style={{ position:"absolute", left:132 * MAP_SX, top:0, width:88 * MAP_SX, height:132 * MAP_SY, backgroundColor:"#9fc8d5" }} />
+          <View style={{ position:"absolute", left:0, top:164 * MAP_SY, width:126 * MAP_SX, height:106 * MAP_SY, backgroundColor:"#86c982" }} />
+          <View style={{ position:"absolute", left:264 * MAP_SX, top:164 * MAP_SY, width:116 * MAP_SX, height:120 * MAP_SY, backgroundColor:"#bccdb5" }} />
+          <View style={{ position:"absolute", left:0, top:304 * MAP_SY, width:150 * MAP_SX, height:156 * MAP_SY, backgroundColor:"#83bd74" }} />
+          <View style={{ position:"absolute", left:144 * MAP_SX, top:304 * MAP_SY, width:136 * MAP_SX, height:156 * MAP_SY, backgroundColor:"#aea5c8" }} />
+          <View style={{ position:"absolute", left:0, top:360 * MAP_SY, width:118 * MAP_SX, height:100 * MAP_SY, borderRadius: 16, backgroundColor:"rgba(255,122,92,0.22)", borderWidth: 2, borderColor: "rgba(255,122,92,0.32)" }} />
+          <View style={{ position:"absolute", left:132 * MAP_SX, top:72 * MAP_SY, width:106 * MAP_SX, height:92 * MAP_SY, borderRadius: 16, backgroundColor:"rgba(96,165,250,0.20)", borderWidth: 2, borderColor: "rgba(96,165,250,0.30)" }} />
+          <View style={{ position:"absolute", left:270 * MAP_SX, top:374 * MAP_SY, width:110 * MAP_SX, height:86 * MAP_SY, borderRadius: 18, backgroundColor:"rgba(246,185,79,0.24)", borderWidth: 2, borderColor: "rgba(246,185,79,0.36)" }} />
 
           {/* eau et quais */}
           <View style={{ position:"absolute", left:210 * MAP_SX, right:0, top:0, height:92 * MAP_SY, backgroundColor:"#1488a8" }} />
@@ -1189,19 +1260,25 @@ export default function WorldScreen() {
           <MovingCar y={400} color="#f97316" dir={1} speed={10800} delay={1800} />
 
           {/* Tuiles */}
-          {Object.entries(LOCATION_TILES).map(([slug, tile]) => (
-            <LocationTile
-              key={slug}
-              slug={slug}
-              tile={tile}
-              label={worldLocations.find((item) => item.slug === slug)?.name ?? slug}
-              isHere={currentLocationSlug === slug}
-              isRecommended={cityIntel.locationSlug === slug}
-              npcCount={npcsByLoc[slug]?.length ?? 0}
-              onlineCount={onlineCounts[slug] ?? 0}
-              onPress={() => enterLocation(slug)}
-            />
-          ))}
+          {Object.entries(LOCATION_TILES).map(([slug, tile]) => {
+            const loc = worldLocations.find((item) => item.slug === slug);
+            const residential = getResidentialDistrictForLocation(slug);
+            return (
+              <LocationTile
+                key={slug}
+                slug={slug}
+                tile={tile}
+                label={loc?.name ?? slug}
+                metaLabel={residential?.label ?? loc?.costHint ?? "ville"}
+                metaColor={residential?.color ?? "rgba(226,232,240,0.82)"}
+                isHere={currentLocationSlug === slug}
+                isRecommended={cityIntel.locationSlug === slug}
+                npcCount={npcsByLoc[slug]?.length ?? 0}
+                onlineCount={onlineCounts[slug] ?? 0}
+                onPress={() => enterLocation(slug)}
+              />
+            );
+          })}
 
           {/* NPCs animés */}
           {npcs.map((npc) => (
@@ -1249,9 +1326,9 @@ export default function WorldScreen() {
               borderWidth: 1,
               borderColor: "rgba(255,255,255,0.18)"
             }}>
-              <Text style={{ color: "#ffffff", fontSize: 14, fontWeight: "900" }}>Ville interactive</Text>
+              <Text style={{ color: "#ffffff", fontSize: 14, fontWeight: "900" }}>{cityName}</Text>
               <Text style={{ color: "rgba(226,232,240,0.78)", fontSize: 10, marginTop: 2 }}>
-                Clique un immeuble pour entrer
+                {worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "Ville"}
               </Text>
             </View>
             <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -1274,8 +1351,9 @@ export default function WorldScreen() {
           }}>
             {[
               { dot: colors.accent, label: "Tu es ici" },
+              { dot: "#f6b94f", label: "Action" },
               { dot: "#38c793", label: "Joueur live" },
-              { dot: "#f6b94f", label: "Résident" }
+              { dot: "#60a5fa", label: "Resident" }
             ].map((item) => (
               <View key={item.label} style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
                 <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: item.dot }} />
@@ -1420,6 +1498,7 @@ export default function WorldScreen() {
           {IS_WIDE && (
             <View style={{ flex: 1, minWidth: 300, maxWidth: 520, gap: 12 }}>
               {cityIntelPanel}
+              {districtNavPanel}
               {travelMenu}
               {dailyMissionPanel}
               {locationInterior}
