@@ -1067,13 +1067,14 @@ function LiveNpc({ npc, onPress }: { npc: NpcState; onPress: () => void }) {
 
 // ─── Tuile de lieu ────────────────────────────────────────────────────────────
 function LocationTile({
-  slug, tile, label, metaLabel, metaColor, isHere, isRecommended, isSelected, npcCount, onlineCount, onPress
+  slug, tile, label, metaLabel, metaColor, roomCode, isHere, isRecommended, isSelected, npcCount, onlineCount, onPress
 }: {
   slug: string;
   tile: (typeof LOCATION_TILES)[string];
   label: string;
   metaLabel: string;
   metaColor: string;
+  roomCode?: string;
   isHere: boolean;
   isRecommended: boolean;
   isSelected: boolean;
@@ -1146,9 +1147,9 @@ function LocationTile({
             <View style={{ backgroundColor: isHomeSuite ? "rgba(216,244,255,0.24)" : "rgba(0,0,0,0.46)", borderRadius:12, padding:isHomeSuite ? 7 : 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.32)" }}>
               <Ionicons name={tile.icon as never} size={isHomeSuite ? 23 : 19} color="#fff" />
             </View>
-            {(isHomeSuite || isRecommended || isSelected) && (
+            {(isHomeSuite || isRecommended || isSelected || roomCode) && (
               <View style={{ backgroundColor: isSelected ? "#67d8ff" : "#f6b94f", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" }}>
-                <Text style={{ color:"#07111f", fontSize: 9, fontWeight: "900" }}>{isSelected ? "ENTRER" : isHomeSuite ? "HOME" : "GO"}</Text>
+                <Text style={{ color:"#07111f", fontSize: 9, fontWeight: "900" }}>{isSelected ? "ENTRER" : isHomeSuite ? "HOME" : roomCode ? `#${roomCode}` : "GO"}</Text>
               </View>
             )}
             {(npcCount > 0 || onlineCount > 0) && (
@@ -1167,7 +1168,7 @@ function LocationTile({
               {metaLabel}
             </Text>
             {isHere && (
-              <Text style={{ color:"#8ee0bd", fontSize:9, fontWeight:"700" }}>📍 Tu es ici</Text>
+              <Text style={{ color:"#8ee0bd", fontSize:isHomeSuite ? 11 : 9, fontWeight:"900" }}>ICI · ROOM #{roomCode ?? "LIVE"}</Text>
             )}
             {!isHere && isRecommended && (
               <Text style={{ color:"#ffe4a3", fontSize:9, fontWeight:"900" }}>Action conseillee</Text>
@@ -1267,6 +1268,8 @@ export default function WorldScreen() {
   const selectedNpcCount = npcsByLoc[selectedLocationSlug]?.length ?? 0;
   const selectedOnlineCount = onlineCounts[selectedLocationSlug] ?? 0;
   const selectedDistrict = getResidentialDistrictForLocation(selectedLocationSlug);
+  const currentRoomCode = LOCATION_ROOM_CODES[currentLocationSlug] ?? "LOUNGE";
+  const selectedRoomCode = LOCATION_ROOM_CODES[selectedLocationSlug] ?? "LOUNGE";
   const routeTargetSlug = roomEntryNotice?.locationSlug ?? travelNotice?.to ?? (selectedLocationSlug !== currentLocationSlug ? selectedLocationSlug : cityIntel.locationSlug);
   const routeColor = roomEntryNotice ? "#38c793" : travelNotice?.color ?? (selectedLocationSlug !== currentLocationSlug ? selectedRecommendedTravel?.color ?? "#67d8ff" : cityIntelTone);
   const quickRoomMessages = WORLD_CHAT_SHORTCUTS.map((item) => {
@@ -2314,6 +2317,7 @@ export default function WorldScreen() {
                 label={loc?.name ?? slug}
                 metaLabel={residential?.label ?? loc?.costHint ?? "ville"}
                 metaColor={residential?.color ?? "rgba(226,232,240,0.82)"}
+                roomCode={LOCATION_ROOM_CODES[slug]}
                 isHere={currentLocationSlug === slug}
                 isRecommended={cityIntel.locationSlug === slug}
                 isSelected={selectedLocationSlug === slug && currentLocationSlug !== slug}
@@ -2353,10 +2357,11 @@ export default function WorldScreen() {
             if (!tile) return null;
             const box = scaleTile(tile);
             return (
-              <View style={{ position: "absolute", left: box.x + box.w / 2 - 16, top: box.y + 8 }}>
+              <View style={{ position: "absolute", left: box.x + box.w / 2 - 22, top: box.y + 6, alignItems: "center", zIndex: 40 }}>
+                <View style={{ position: "absolute", top: -8, width: 56, height: 56, borderRadius: 28, backgroundColor: "rgba(56,199,147,0.18)", borderWidth: 2, borderColor: "rgba(56,199,147,0.55)" }} />
                 <AvatarSprite visual={playerVisual} action={playerAction} size="xs" />
-                <View style={{ backgroundColor: colors.accent, borderRadius: 6, paddingHorizontal: 4 }}>
-                  <Text style={{ color: "#07111f", fontSize: 8, fontWeight: "900" }}>Toi</Text>
+                <View style={{ backgroundColor: colors.accent, borderRadius: 9, paddingHorizontal: 7, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.45)" }}>
+                  <Text style={{ color: "#07111f", fontSize: 9, fontWeight: "900" }}>VOUS</Text>
                 </View>
               </View>
             );
@@ -2385,6 +2390,46 @@ export default function WorldScreen() {
               <MapBadge icon="🟢" label="en ligne" value={`${livePlayers.length}`} color="#38c793" />
             </View>
           </View>
+
+          {!roomEntryNotice && (
+            <Pressable
+              onPress={() => beginRoomEntry(currentLocationSlug)}
+              style={{
+                position: "absolute",
+                left: 12,
+                top: IS_WIDE ? 168 : 150,
+                maxWidth: Math.min(330, MAP_W - 24),
+                borderRadius: 18,
+                padding: 12,
+                backgroundColor: "rgba(5,10,18,0.93)",
+                borderWidth: 1.5,
+                borderColor: "rgba(56,199,147,0.58)",
+                shadowColor: "#38c793",
+                shadowOpacity: 0.26,
+                shadowRadius: 16,
+                elevation: 14,
+                gap: 9
+              }}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: "rgba(56,199,147,0.18)", borderWidth: 1, borderColor: "rgba(56,199,147,0.45)", alignItems: "center", justifyContent: "center" }}>
+                  <Ionicons name="navigate" size={20} color="#8ee0bd" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: "#8ee0bd", fontSize: 10, fontWeight: "900", letterSpacing: 1 }}>VOUS ETES ICI</Text>
+                  <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#ffffff", fontSize: 16, fontWeight: "900", marginTop: 1 }}>
+                    {currentLocationName}
+                  </Text>
+                  <Text numberOfLines={1} style={{ color: "rgba(226,232,240,0.76)", fontSize: 11, marginTop: 2 }}>
+                    Room #{currentRoomCode} · {peopleHereCount} présent{peopleHereCount > 1 ? "s" : ""}
+                  </Text>
+                </View>
+                <View style={{ borderRadius: 12, paddingHorizontal: 10, paddingVertical: 8, backgroundColor: colors.accent }}>
+                  <Text style={{ color: "#07111f", fontSize: 11, fontWeight: "900" }}>CHAT</Text>
+                </View>
+              </View>
+            </Pressable>
+          )}
 
           <View pointerEvents="none" style={{
             position: "absolute",
@@ -2505,7 +2550,7 @@ export default function WorldScreen() {
                 <Text style={{ color: colors.muted, fontSize: 12 }}>
                   {worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "room"}
                   {" · "}
-                  {locationChat.connected || activeRoomNpc ? "connecte" : "pret"}
+                  Room #{currentRoomCode} · {locationChat.connected || activeRoomNpc ? "connecte" : "pret"}
                 </Text>
               </View>
               <View style={{
@@ -2539,7 +2584,7 @@ export default function WorldScreen() {
                     {selectedLocationName}
                   </Text>
                   <Text numberOfLines={1} style={{ color: selectedDistrict?.color ?? colors.muted, fontSize: 10, fontWeight: "900", marginTop: 2 }}>
-                    {selectedLocationSlug === currentLocationSlug ? "Tu es ici" : `${selectedRecommendedTravel?.label ?? "A pied"} · ${selectedRecommendedTravel?.durationLabel ?? "trajet"}`}
+                    Room #{selectedRoomCode} · {selectedLocationSlug === currentLocationSlug ? "position actuelle" : `${selectedRecommendedTravel?.label ?? "A pied"} · ${selectedRecommendedTravel?.durationLabel ?? "trajet"}`}
                   </Text>
                 </View>
                 <View style={{ alignItems: "flex-end" }}>
@@ -2572,7 +2617,7 @@ export default function WorldScreen() {
                 >
                   <Ionicons name={(selectedLocationSlug === currentLocationSlug ? primaryLocationAction?.icon ?? "flash" : selectedRecommendedTravel?.icon ?? "navigate") as never} size={16} color="#07111f" />
                   <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#07111f", fontSize: 12, fontWeight: "900" }}>
-                    {roomEntryNotice ? "Entrée..." : travelNotice ? "En trajet" : selectedLocationSlug === currentLocationSlug ? "Entrer room" : "Entrer"}
+                    {roomEntryNotice ? "Entrée..." : travelNotice ? "En trajet" : selectedLocationSlug === currentLocationSlug ? "Entrer chat" : "Entrer room"}
                   </Text>
                 </Pressable>
                 <Pressable
