@@ -1081,6 +1081,9 @@ export default function WorldScreen() {
     if (item.startsWith("Bonjour")) return `Bonjour, c'est ${avatar?.displayName ?? "moi"}. Je suis a ${currentLocationName}.`;
     return item;
   });
+  const currentLocationActions = LOCATION_ACTIONS[currentLocationSlug] ?? LOCATION_ACTIONS.cafe;
+  const primaryLocationAction = currentLocationActions[0];
+  const peopleHereCount = currentRoomNpcs.length + currentLivePlayers.length;
 
   useEffect(() => {
     return () => {
@@ -1234,6 +1237,19 @@ export default function WorldScreen() {
     }
     handleLocationAction(cityIntel.action);
   }, [cityIntel.action, cityIntel.locationSlug, currentLocationSlug, enterLocation, handleLocationAction]);
+
+  const speakHereNow = useCallback(() => {
+    if (activeRoomNpc) {
+      setSelectedNpc(activeRoomNpc);
+      postLocationMessage(`Bonjour ${activeRoomNpc.name.split(" ")[0]}, c'est ${avatar?.displayName ?? "moi"}. Tu es dispo ?`);
+      return;
+    }
+    if (currentLivePlayers.length > 0) {
+      postLocationMessage(`Bonjour, c'est ${avatar?.displayName ?? "moi"}. Qui est dispo ici ?`);
+      return;
+    }
+    seedLiveTestPlayers();
+  }, [activeRoomNpc, avatar?.displayName, currentLivePlayers.length, postLocationMessage, seedLiveTestPlayers]);
 
   const worldStatusStrip = (
     <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
@@ -1693,6 +1709,114 @@ export default function WorldScreen() {
     </View>
   );
 
+  const quickPlayPanel = (
+    <View style={{
+      backgroundColor: "rgba(56,199,147,0.075)",
+      borderWidth: 1.5,
+      borderColor: "rgba(56,199,147,0.28)",
+      borderRadius: 18,
+      padding: 12,
+      gap: 11
+    }}>
+      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "900" }}>JOUER MAINTENANT</Text>
+          <Text numberOfLines={1} style={{ color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 2 }}>
+            Boucle rapide de la ville
+          </Text>
+        </View>
+        <View style={{ backgroundColor: colors.accent + "18", borderRadius: 12, paddingHorizontal: 9, paddingVertical: 6, borderWidth: 1, borderColor: colors.accent + "40" }}>
+          <Text style={{ color: colors.accent, fontSize: 10, fontWeight: "900" }}>FOCUS</Text>
+        </View>
+      </View>
+
+      <View style={{ gap: 8 }}>
+        <Pressable
+          onPress={() => {
+            if (selectedLocationSlug !== currentLocationSlug) {
+              enterLocation(selectedLocationSlug, selectedRecommendedTravel?.mode);
+              return;
+            }
+            executeCityIntel();
+          }}
+          style={{
+            borderRadius: 14,
+            padding: 11,
+            backgroundColor: selectedLocationSlug !== currentLocationSlug ? "#67d8ff18" : cityIntelTone + "18",
+            borderWidth: 1,
+            borderColor: selectedLocationSlug !== currentLocationSlug ? "#67d8ff55" : cityIntelTone + "55",
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 10
+          }}
+        >
+          <View style={{ width: 34, height: 34, borderRadius: 12, backgroundColor: selectedLocationSlug !== currentLocationSlug ? "#67d8ff24" : cityIntelTone + "24", alignItems: "center", justifyContent: "center" }}>
+            <Ionicons name={(selectedLocationSlug !== currentLocationSlug ? selectedRecommendedTravel?.icon ?? "navigate" : "flash") as never} size={17} color={selectedLocationSlug !== currentLocationSlug ? "#67d8ff" : cityIntelTone} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: colors.text, fontSize: 13, fontWeight: "900" }}>
+              {selectedLocationSlug !== currentLocationSlug ? `Aller a ${selectedLocationName}` : cityIntel.locationSlug === currentLocationSlug ? cityIntel.actionLabel : `Aller a ${recommendedLocationName}`}
+            </Text>
+            <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 10, fontWeight: "800", marginTop: 2 }}>
+              {selectedLocationSlug !== currentLocationSlug
+                ? `${selectedRecommendedTravel?.label ?? "Trajet"} · ${selectedRecommendedTravel?.durationLabel ?? "rapide"}`
+                : cityIntel.reason}
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={selectedLocationSlug !== currentLocationSlug ? "#67d8ff" : cityIntelTone} />
+        </Pressable>
+
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          <Pressable
+            onPress={speakHereNow}
+            style={{
+              flex: 1,
+              minHeight: 74,
+              borderRadius: 14,
+              padding: 10,
+              backgroundColor: peopleHereCount > 0 ? "rgba(56,199,147,0.13)" : "rgba(246,185,79,0.12)",
+              borderWidth: 1,
+              borderColor: peopleHereCount > 0 ? "rgba(56,199,147,0.38)" : "rgba(246,185,79,0.38)",
+              gap: 7
+            }}
+          >
+            <Ionicons name={peopleHereCount > 0 ? "chatbubbles" : "person-add"} size={18} color={peopleHereCount > 0 ? "#38c793" : "#f6b94f"} />
+            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: colors.text, fontSize: 12, fontWeight: "900" }}>
+              {peopleHereCount > 0 ? "Parler ici" : "Peupler"}
+            </Text>
+            <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 10, fontWeight: "800" }}>
+              {peopleHereCount > 0 ? `${peopleHereCount} present` : "test live"}
+            </Text>
+          </Pressable>
+
+          {primaryLocationAction && (
+            <Pressable
+              onPress={() => handleLocationAction(primaryLocationAction.action)}
+              style={{
+                flex: 1,
+                minHeight: 74,
+                borderRadius: 14,
+                padding: 10,
+                backgroundColor: "rgba(139,124,255,0.13)",
+                borderWidth: 1,
+                borderColor: "rgba(139,124,255,0.38)",
+                gap: 7
+              }}
+            >
+              <Ionicons name={primaryLocationAction.icon as never} size={18} color={colors.accent} />
+              <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: colors.text, fontSize: 12, fontWeight: "900" }}>
+                {primaryLocationAction.label}
+              </Text>
+              <Text numberOfLines={1} style={{ color: colors.muted, fontSize: 10, fontWeight: "800" }}>
+                {currentLocationName}
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
   const selectedNpcFocusPanel = selectedNpc ? (
     <View style={{
       backgroundColor: "rgba(255,255,255,0.06)",
@@ -1776,6 +1900,7 @@ export default function WorldScreen() {
         {!IS_WIDE && cityIntelPanel}
         {!IS_WIDE && transportPanel}
         {!IS_WIDE && districtNavPanel}
+        {!IS_WIDE && quickPlayPanel}
 
         {/* Carte 2D + chat de lieu */}
         <View style={{ width: "100%", flexDirection: IS_WIDE ? "row" : "column", gap: 12, alignItems: IS_WIDE ? "stretch" : "center" }}>
@@ -2206,9 +2331,19 @@ export default function WorldScreen() {
                 </View>
               </>
             ) : (
-              <View style={{ flex: 1, minHeight: 120, alignItems: "center", justifyContent: "center", gap: 8 }}>
+              <View style={{ flex: 1, minHeight: 120, alignItems: "center", justifyContent: "center", gap: 10 }}>
                 <Ionicons name="person-outline" size={28} color={colors.muted} />
                 <Muted>Personne ici pour le moment.</Muted>
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <Pressable onPress={seedLiveTestPlayers} style={{ borderRadius: 11, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: "#f6b94f", flexDirection: "row", alignItems: "center", gap: 5 }}>
+                    <Ionicons name="person-add" size={14} color="#07111f" />
+                    <Text style={{ color: "#07111f", fontSize: 11, fontWeight: "900" }}>Peupler</Text>
+                  </Pressable>
+                  <Pressable onPress={() => router.push("/(app)/rooms")} style={{ borderRadius: 11, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: "rgba(255,255,255,0.08)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)", flexDirection: "row", alignItems: "center", gap: 5 }}>
+                    <Ionicons name="people" size={14} color={colors.textSoft} />
+                    <Text style={{ color: colors.textSoft, fontSize: 11, fontWeight: "900" }}>Rooms</Text>
+                  </Pressable>
+                </View>
               </View>
             )}
           </View>
@@ -2220,6 +2355,7 @@ export default function WorldScreen() {
               showsVerticalScrollIndicator={false}
               nestedScrollEnabled
             >
+              {quickPlayPanel}
               {selectedNpcFocusPanel}
               {cityIntelPanel}
               {transportPanel}
