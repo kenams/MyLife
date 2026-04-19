@@ -1,6 +1,8 @@
 import type { NpcState, RoomMessage } from "@/lib/types";
 
 export type BotIntent =
+  | "wizz"
+  | "emoji"
   | "greeting"
   | "identity"
   | "invite"
@@ -93,6 +95,8 @@ const FALLBACK_PERSONA: BotPersona = {
 
 export function detectBotIntent(message: string): BotIntent {
   const text = message.toLowerCase();
+  if (text.includes("[[wizz]]") || /\bwizz\b/.test(text)) return "wizz";
+  if (/[😀😂😍🔥👍👀💯✨☕🎮💬❤️]/u.test(message)) return "emoji";
   if (/\b(salut|bonjour|hello|hey|yo|coucou|wesh)\b/.test(text)) return "greeting";
   if (/\b(mon nom|je m'appelle|tu me connais|qui suis-je|reconnais)\b/.test(text)) return "identity";
   if (/\b(rejoins|invite|room|groupe|viens|dispo)\b/.test(text)) return "invite";
@@ -132,6 +136,10 @@ export function buildDirectBotReply(input: {
   const mood = input.npc ? `humeur ${input.npc.mood}%, energie ${input.npc.energy}%` : "etat inconnu";
 
   switch (intent) {
+    case "wizz":
+      return `Wizz recu ${player}. Je suis la. ${affinity}, donc tu peux me parler direct.`;
+    case "emoji":
+      return `Je vois l'emoji ${player}. Garde cette energie et dis-moi ce que tu veux faire maintenant.`;
     case "greeting":
       return `${persona.greeting} ${player}. C'est ${npcName}. ${affinity}, donc je te reponds franchement.`;
     case "identity":
@@ -176,7 +184,9 @@ export function buildRoomBotReplies(input: {
   return available.map((npc, index) => {
     const persona = personaFor(npc.id);
     const base =
-      intent === "greeting" ? `${persona.greeting} ${input.playerName}, je suis dans la room.`
+      intent === "wizz" ? `Wizz recu ${input.playerName}. Je suis present dans ${input.roomName}.`
+      : intent === "emoji" ? `${input.playerName}, je capte l'ambiance. On transforme ca en action ?`
+      : intent === "greeting" ? `${persona.greeting} ${input.playerName}, je suis dans la room.`
       : intent === "invite" ? `${persona.room} Je peux rester ici si le groupe bouge.`
       : intent === "activity" ? persona.activity
       : intent === "wellbeing" ? persona.wellbeing

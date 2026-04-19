@@ -35,6 +35,8 @@ describe("bot-brain", () => {
     expect(detectBotIntent("viens dans ma room")).toBe("invite");
     expect(detectBotIntent("je suis fatigue et stresse")).toBe("wellbeing");
     expect(detectBotIntent("on va au cafe ?")).toBe("activity");
+    expect(detectBotIntent("[[WIZZ]] Wizz ! tu es la ?")).toBe("wizz");
+    expect(detectBotIntent("ok 🔥")).toBe("emoji");
   });
 
   it("recognizes the player name in direct replies", () => {
@@ -65,5 +67,20 @@ describe("bot-brain", () => {
     expect(replies).toHaveLength(2);
     expect(replies[0].authorName).toBe("Ava");
     expect(replies[0].kind).toBe("message");
+  });
+
+  it("answers wizz messages instantly", () => {
+    const reply = buildDirectBotReply({
+      npc: npc("ava", "Ava"),
+      residentId: "ava",
+      residentName: "Ava",
+      playerName: "Kenan",
+      playerMessage: "[[WIZZ]] Wizz ! tu es la ?",
+      relationshipScore: 40,
+      messageCount: 1
+    });
+
+    expect(reply).toContain("Wizz recu");
+    expect(reply).toContain("Kenan");
   });
 });

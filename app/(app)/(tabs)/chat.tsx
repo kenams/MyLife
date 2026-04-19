@@ -15,6 +15,15 @@ import { useGameStore } from "@/stores/game-store";
 type Tab = "contacts" | "rooms" | "lounge";
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
+const WIZZ_TOKEN = "[[WIZZ]]";
+const EMOJI_SHORTCUTS = ["😀", "😂", "😍", "🔥", "👍", "👀", "💯", "✨", "☕", "🎮", "💬", "❤️"];
+const MSN_NUDGES = [
+  "Tu es la ?",
+  "Reponds quand tu peux.",
+  "Je viens d'arriver.",
+  "On se capte dans une room ?"
+];
+
 function relColor(score: number) {
   if (score >= 60) return colors.accent;
   if (score >= 35) return colors.gold;
@@ -99,10 +108,10 @@ function Quick({ items, pick }: { items: string[]; pick: (text: string) => void 
   );
 }
 
-function Composer({ value, change, send, macro }: { value: string; change: (t: string) => void; send: () => void; macro: (t: string) => void }) {
+function Composer({ value, change, send, macro, wizz }: { value: string; change: (t: string) => void; send: () => void; macro: (t: string) => void; wizz: () => void }) {
+  const [emojiOpen, setEmojiOpen] = useState(false);
   const buttons: { icon: IconName; text: string; color: string }[] = [
-    { icon: "happy", text: ":)", color: colors.gold },
-    { icon: "flash", text: "Wizz ! Tu es la ?", color: colors.accent },
+    { icon: "happy", text: "😀", color: colors.gold },
     { icon: "mic", text: "Message vocal rapide.", color: colors.teal },
     { icon: "image", text: "Je partage une image mentale du moment.", color: colors.purple },
     { icon: "game-controller", text: "On lance une activite ensemble ?", color: colors.pink }
@@ -111,12 +120,35 @@ function Composer({ value, change, send, macro }: { value: string; change: (t: s
     <View style={s.composer}>
       <View style={s.formatLine}>
         <Text style={s.bigA}>A</Text>
+        <Pressable onPress={() => setEmojiOpen((open) => !open)} style={[s.macro, { backgroundColor: colors.gold + "18", borderColor: colors.gold + "35" }]}>
+          <Ionicons name="happy" size={18} color={colors.gold} />
+        </Pressable>
+        <Pressable onPress={wizz} style={[s.wizzBtn, { backgroundColor: colors.accent + "20", borderColor: colors.accent + "60" }]}>
+          <Ionicons name="flash" size={18} color={colors.accent} />
+          <Text style={s.wizzBtnText}>Wizz</Text>
+        </Pressable>
         {buttons.map((b) => (
           <Pressable key={b.icon} onPress={() => macro(b.text)} style={[s.macro, { backgroundColor: b.color + "18", borderColor: b.color + "35" }]}>
             <Ionicons name={b.icon} size={18} color={b.color} />
           </Pressable>
         ))}
       </View>
+      {emojiOpen && (
+        <View style={s.emojiTray}>
+          {EMOJI_SHORTCUTS.map((emoji) => (
+            <Pressable key={emoji} onPress={() => change(`${value}${emoji}`)} style={s.emojiBtn}>
+              <Text style={s.emojiText}>{emoji}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.nudgeBar} contentContainerStyle={s.nudgeBody}>
+        {MSN_NUDGES.map((text) => (
+          <Pressable key={text} onPress={() => macro(text)} style={s.nudgeChip}>
+            <Text style={s.nudgeText}>{text}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
       <View style={s.inputLine}>
         <TextInput value={value} onChangeText={change} onSubmitEditing={send} placeholder="Ecrire un message..." placeholderTextColor={colors.muted} returnKeyType="send" multiline style={s.input} />
         <Pressable onPress={send} style={s.send}><Ionicons name="send" size={15} color="#05211a" /><Text style={s.sendText}>Send</Text></Pressable>
@@ -126,17 +158,41 @@ function Composer({ value, change, send, macro }: { value: string; change: (t: s
 }
 
 function Bubble({ body, time, me, author, npc }: { body: string; time: string; me: boolean; author?: string; npc?: NpcState | null }) {
+  const wizz = body.includes(WIZZ_TOKEN) || /^wizz/i.test(body.trim());
+  const cleanBody = body.replace(WIZZ_TOKEN, "").trim() || "Wizz !";
+  const shake = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!wizz) return;
+    shake.setValue(0);
+    Animated.sequence([
+      Animated.timing(shake, { toValue: 1, duration: 55, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -1, duration: 55, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 1, duration: 55, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: -1, duration: 55, useNativeDriver: true }),
+      Animated.timing(shake, { toValue: 0, duration: 55, useNativeDriver: true })
+    ]).start();
+  }, [shake, wizz]);
+
+  const translateX = shake.interpolate({ inputRange: [-1, 1], outputRange: [-8, 8] });
+
   return (
-    <View style={[s.msgRow, me && { flexDirection: "row-reverse" }]}>
+    <Animated.View style={[s.msgRow, me && { flexDirection: "row-reverse" }, wizz && { transform: [{ translateX }] }]}>
       {!me && (npc ? <NpcFace npc={npc} size={32} /> : <View style={s.anon}><Ionicons name="person" size={16} color={colors.textSoft} /></View>)}
       <View style={s.bubbleCol}>
         {!me && author && <Text style={s.author}>{author}</Text>}
-        <View style={[s.bubble, me ? s.bubbleMe : s.bubbleOther]}>
-          <Text style={[s.bubbleText, me && { color: "#06243a" }]}>{body}</Text>
+        <View style={[s.bubble, me ? s.bubbleMe : s.bubbleOther, wizz && s.wizzBubble]}>
+          {wizz && (
+            <View style={s.wizzHeader}>
+              <Ionicons name="flash" size={15} color="#07111f" />
+              <Text style={s.wizzLabel}>WIZZ</Text>
+            </View>
+          )}
+          <Text style={[s.bubbleText, me && { color: "#06243a" }, wizz && s.wizzText]}>{cleanBody}</Text>
           <Text style={[s.time, me && { color: "#365870", textAlign: "right" }]}>{time}</Text>
         </View>
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -190,6 +246,7 @@ function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcSta
 
   function post(text: string) { const clean = text.trim(); if (clean) sendMessage(conv.id, clean); }
   function send() { post(input); setInput(""); }
+  function sendWizz() { post(`${WIZZ_TOKEN} Wizz ! ${name.split(" ")[0]}, tu es la ?`); }
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
@@ -198,6 +255,7 @@ function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcSta
           { label: "Inviter", icon: "person-add", active: true, onPress: () => post("Tu veux me rejoindre dans une room live ?") },
           { label: "Fichiers", icon: "folder-open", onPress: () => post("Je t'envoie une idee a tester plus tard.") },
           { label: "Video", icon: "videocam", onPress: () => post("On lance un appel video quand tu es dispo ?") },
+          { label: "Wizz", icon: "flash", active: true, onPress: sendWizz },
           { label: "Vocal", icon: "mic", onPress: () => post("Message vocal rapide : je suis connecte.") },
           { label: "Activites", icon: "sparkles", onPress: () => post("On lance une activite ensemble ?") },
           { label: "Jeux", icon: "game-controller", onPress: () => post("Petit defi social : on teste une sortie ?") }
@@ -218,8 +276,8 @@ function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcSta
             return <Bubble key={m.id} body={m.body} time={new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} me={isMe} author={isMe ? me : name} npc={isMe ? null : npc} />;
           })}
         </ScrollView>
-        <Quick items={[`Salut ${name.split(" ")[0]}, c'est ${me}. Tu es dispo ?`, "Tu fais quoi en ce moment ?", "On se retrouve dans une room live ?", "Je t'invite pour un cafe."]} pick={post} />
-        <Composer value={input} change={setInput} send={send} macro={post} />
+        <Quick items={[`Salut ${name.split(" ")[0]}, c'est ${me}. Tu es dispo ?`, "Tu fais quoi en ce moment ? 😀", "On se retrouve dans une room live ? 🔥", "Je t'invite pour un cafe ☕"]} pick={post} />
+        <Composer value={input} change={setInput} send={send} macro={post} wizz={sendWizz} />
       </Win>
     </KeyboardAvoidingView>
   );
@@ -246,6 +304,7 @@ function RoomView({ id, name, back }: { id: string; name: string; back: () => vo
 
   function post(text: string) { const clean = text.trim(); if (clean) sendRoomMessage(id, clean); }
   function send() { post(input); setInput(""); }
+  function sendWizz() { post(`${WIZZ_TOKEN} Wizz collectif ! Qui est la ?`); }
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
@@ -253,6 +312,7 @@ function RoomView({ id, name, back }: { id: string; name: string; back: () => vo
         <Tools actions={[
           { label: "Inviter", icon: "person-add", active: true, onPress: () => room?.kind === "private" ? setInvite((v) => !v) : post("Qui veut rejoindre une room privee avec moi ?") },
           { label: "Code", icon: "key", onPress: () => room?.code && post(`Code room: ${room.code}`) },
+          { label: "Wizz", icon: "flash", active: true, onPress: sendWizz },
           { label: "Vocal", icon: "mic", onPress: () => post("Message vocal de groupe : je suis connecte.") },
           { label: "Live", icon: "radio", onPress: () => post("Live check : qui est present maintenant ?") },
           { label: "Activites", icon: "sparkles", onPress: () => post("On lance une activite de groupe ?") },
@@ -277,8 +337,8 @@ function RoomView({ id, name, back }: { id: string; name: string; back: () => vo
             return <Bubble key={m.id} body={m.body} time={new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} me={isMe} author={m.authorName} npc={npc} />;
           })}
         </ScrollView>
-        <Quick items={["Salut la room, qui est dispo ?", "Je viens d'arriver, on discute ?", "On lance une activite de groupe ?", "Qui est dans ce lieu en live ?"]} pick={post} />
-        <Composer value={input} change={setInput} send={send} macro={post} />
+        <Quick items={["Salut la room, qui est dispo ? 😀", "Je viens d'arriver, on discute ?", "On lance une activite de groupe ? 🎮", "Qui est dans ce lieu en live ? 👀"]} pick={post} />
+        <Composer value={input} change={setInput} send={send} macro={post} wizz={sendWizz} />
       </Win>
     </KeyboardAvoidingView>
   );
@@ -491,6 +551,15 @@ const s = StyleSheet.create({
   formatLine: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
   bigA: { color: "#d7ecff", fontSize: 18, fontWeight: "900" },
   macro: { width: 34, height: 34, borderRadius: 9, alignItems: "center", justifyContent: "center", borderWidth: 1 },
+  wizzBtn: { height: 34, borderRadius: 11, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", borderWidth: 1, flexDirection: "row", gap: 5 },
+  wizzBtnText: { color: colors.accent, fontSize: 11, fontWeight: "900" },
+  emojiTray: { flexDirection: "row", flexWrap: "wrap", gap: 7, paddingHorizontal: 12, paddingBottom: 8 },
+  emojiBtn: { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: "#ffffff14", borderWidth: 1, borderColor: "#ffffff20" },
+  emojiText: { fontSize: 18 },
+  nudgeBar: { borderTopWidth: 1, borderTopColor: "#ffffff10" },
+  nudgeBody: { gap: 8, paddingHorizontal: 12, paddingBottom: 8 },
+  nudgeChip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 13, backgroundColor: "#ffffff0d", borderWidth: 1, borderColor: "#ffffff18" },
+  nudgeText: { color: colors.textSoft, fontSize: 11, fontWeight: "800" },
   inputLine: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 12, paddingBottom: 10 },
   input: { flex: 1, minHeight: 44, maxHeight: 110, backgroundColor: "#f7fbff", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, color: "#09203a", fontSize: 14, borderWidth: 1, borderColor: "#9ed9ff" },
   send: { width: 78, height: 44, borderRadius: 12, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
@@ -503,6 +572,10 @@ const s = StyleSheet.create({
   bubble: { paddingHorizontal: 13, paddingVertical: 10, borderRadius: 16, borderWidth: 1 },
   bubbleMe: { backgroundColor: "#dff4ff", borderColor: "#9ed9ff", borderBottomRightRadius: 5 },
   bubbleOther: { backgroundColor: "#0f2136", borderColor: "#ffffff14", borderBottomLeftRadius: 5 },
+  wizzBubble: { backgroundColor: "#f6b94f", borderColor: "#fff0a8", shadowColor: "#f6b94f", shadowOpacity: 0.5, shadowRadius: 10, elevation: 6 },
+  wizzHeader: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 },
+  wizzLabel: { color: "#07111f", fontSize: 10, fontWeight: "900" },
+  wizzText: { color: "#07111f", fontWeight: "900" },
   bubbleText: { color: colors.text, fontSize: 14, lineHeight: 20 },
   time: { color: colors.muted, fontSize: 9, marginTop: 5 },
   roomTitle: { color: colors.textSoft, fontSize: 12, fontWeight: "800", paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#eaf6ff10" },
