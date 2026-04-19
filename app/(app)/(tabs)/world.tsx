@@ -26,7 +26,7 @@ const MAP_W = IS_WIDE
   ? Math.min(Math.max(680, SCREEN_W - 760), 1040)
   : Math.min(SCREEN_W - 24, 620);
 const MAP_H = IS_WIDE
-  ? Math.min(Math.round(MAP_W * 0.82), Math.max(560, SCREEN_H - 160))
+  ? Math.min(Math.round(MAP_W * 0.72), Math.max(520, SCREEN_H - 220))
   : Math.round(MAP_W * 0.98);
 const MAP_BASE_W = 380;
 const MAP_BASE_H = 460;
@@ -1693,8 +1693,59 @@ export default function WorldScreen() {
     </View>
   );
 
+  const selectedNpcFocusPanel = selectedNpc ? (
+    <View style={{
+      backgroundColor: "rgba(255,255,255,0.06)",
+      borderWidth: 1,
+      borderColor: "rgba(255,255,255,0.1)",
+      borderRadius: 16,
+      padding: 12,
+      gap: 10
+    }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        <AvatarSprite visual={getNpcVisual(selectedNpc.id)} action={selectedNpc.action} size="sm" />
+        <View style={{ flex: 1, gap: 3 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>{selectedNpc.name}</Text>
+            <Text style={{ fontSize: 13 }}>{getNpcMoodEmoji(selectedNpc.mood)}</Text>
+          </View>
+          <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 11, lineHeight: 16 }}>{getNpcStatusLine(selectedNpc)}</Text>
+        </View>
+        <Pressable onPress={() => setSelectedNpc(null)} style={{ width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.08)" }}>
+          <Ionicons name="close" size={16} color={colors.textSoft} />
+        </Pressable>
+      </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        {[
+          { label: "Niv", value: selectedNpc.level, color: "#f6b94f" },
+          { label: "Mood", value: selectedNpc.mood, color: "#38c793" },
+          { label: "Cr", value: selectedNpc.money, color: "#60a5fa" }
+        ].map((item) => (
+          <View key={item.label} style={{ flex: 1, borderRadius: 11, padding: 8, backgroundColor: item.color + "12", borderWidth: 1, borderColor: item.color + "30", alignItems: "center" }}>
+            <Text style={{ color: item.color, fontSize: 13, fontWeight: "900" }}>{item.value}</Text>
+            <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "800" }}>{item.label}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        <Pressable
+          onPress={() => { setSelectedNpc(null); router.push("/(app)/(tabs)/chat"); }}
+          style={{ flex: 1, borderRadius: 12, paddingVertical: 10, alignItems: "center", backgroundColor: colors.accent }}
+        >
+          <Text style={{ color: "#07111f", fontSize: 12, fontWeight: "900" }}>Message</Text>
+        </Pressable>
+        <Pressable
+          onPress={() => { setSelectedNpc(null); router.push("/(app)/outings"); }}
+          style={{ flex: 1, borderRadius: 12, paddingVertical: 10, alignItems: "center", backgroundColor: "#f6b94f22", borderWidth: 1, borderColor: "#f6b94f55" }}
+        >
+          <Text style={{ color: "#f6b94f", fontSize: 12, fontWeight: "900" }}>Inviter</Text>
+        </Pressable>
+      </View>
+    </View>
+  ) : null;
+
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: "#07111f" }} showsVerticalScrollIndicator={false}>
+    <ScrollView style={{ flex: 1, backgroundColor: "#07111f" }} showsVerticalScrollIndicator={false} scrollEnabled={!IS_WIDE}>
       <View style={{ padding: 16, gap: 20, paddingBottom: 40 }}>
 
         {/* Header */}
@@ -1981,7 +2032,8 @@ export default function WorldScreen() {
 
           <View style={{
             width: IS_WIDE ? 310 : MAP_W,
-            minHeight: IS_WIDE ? MAP_H : 210,
+            height: IS_WIDE ? MAP_H : undefined,
+            minHeight: IS_WIDE ? undefined : 210,
             backgroundColor: "rgba(255,255,255,0.055)",
             borderWidth: 1,
             borderColor: hasLiveLocationChat || activeRoomNpc ? "rgba(56,199,147,0.35)" : "rgba(255,255,255,0.08)",
@@ -2048,7 +2100,12 @@ export default function WorldScreen() {
                   ))}
                 </ScrollView>
 
-                <ScrollView style={{ maxHeight: IS_WIDE ? MAP_H - 190 : 120 }} contentContainerStyle={{ gap: 8 }}>
+                <ScrollView
+                  style={IS_WIDE ? { flex: 1 } : { maxHeight: 120 }}
+                  contentContainerStyle={{ gap: 8, paddingRight: 2 }}
+                  nestedScrollEnabled
+                  showsVerticalScrollIndicator={false}
+                >
                   {visibleRoomMessages.slice(-6).map((message) => {
                     const mine = message.authorId === "self" || message.authorId === session?.email;
                     const isWizz = message.body.includes(WORLD_WIZZ_TOKEN) || /^wizz/i.test(message.body.trim());
@@ -2085,7 +2142,7 @@ export default function WorldScreen() {
                   })}
                 </ScrollView>
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} nestedScrollEnabled contentContainerStyle={{ gap: 8 }}>
                   <Pressable
                     onPress={sendRoomWizz}
                     style={{
@@ -2157,7 +2214,13 @@ export default function WorldScreen() {
           </View>
 
           {IS_WIDE && (
-            <View style={{ flex: 1, minWidth: 300, maxWidth: 520, gap: 12 }}>
+            <ScrollView
+              style={{ flex: 1, minWidth: 300, maxWidth: 520, maxHeight: MAP_H }}
+              contentContainerStyle={{ gap: 12, paddingRight: 4, paddingBottom: 4 }}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+            >
+              {selectedNpcFocusPanel}
               {cityIntelPanel}
               {transportPanel}
               {districtNavPanel}
@@ -2166,12 +2229,12 @@ export default function WorldScreen() {
               {locationInterior}
               {residentsHere}
               {liveTestPanel}
-            </View>
+            </ScrollView>
           )}
         </View>
 
         {/* Panel NPC */}
-        {selectedNpc && (
+        {!IS_WIDE && selectedNpc && (
           <Card>
             {/* Header NPC */}
             <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
