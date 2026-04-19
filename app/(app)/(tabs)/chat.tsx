@@ -17,6 +17,7 @@ type IconName = ComponentProps<typeof Ionicons>["name"];
 
 const WIZZ_TOKEN = "[[WIZZ]]";
 const EMOJI_SHORTCUTS = ["😀", "😂", "😍", "🔥", "👍", "👀", "💯", "✨", "☕", "🎮", "💬", "❤️"];
+const REACTION_SHORTCUTS = ["❤️", "😂", "👍", "🔥"];
 const MSN_NUDGES = [
   "Tu es la ?",
   "Reponds quand tu peux.",
@@ -157,10 +158,27 @@ function Composer({ value, change, send, macro, wizz }: { value: string; change:
   );
 }
 
-function Bubble({ body, time, me, author, npc }: { body: string; time: string; me: boolean; author?: string; npc?: NpcState | null }) {
+function Bubble({
+  body,
+  time,
+  me,
+  author,
+  npc,
+  reaction,
+  onReact
+}: {
+  body: string;
+  time: string;
+  me: boolean;
+  author?: string;
+  npc?: NpcState | null;
+  reaction?: string;
+  onReact?: (emoji: string) => void;
+}) {
   const wizz = body.includes(WIZZ_TOKEN) || /^wizz/i.test(body.trim());
   const cleanBody = body.replace(WIZZ_TOKEN, "").trim() || "Wizz !";
   const shake = useRef(new Animated.Value(0)).current;
+  const [reactOpen, setReactOpen] = useState(false);
 
   useEffect(() => {
     if (!wizz) return;
@@ -181,7 +199,7 @@ function Bubble({ body, time, me, author, npc }: { body: string; time: string; m
       {!me && (npc ? <NpcFace npc={npc} size={32} /> : <View style={s.anon}><Ionicons name="person" size={16} color={colors.textSoft} /></View>)}
       <View style={s.bubbleCol}>
         {!me && author && <Text style={s.author}>{author}</Text>}
-        <View style={[s.bubble, me ? s.bubbleMe : s.bubbleOther, wizz && s.wizzBubble]}>
+        <Pressable onPress={() => setReactOpen((open) => !open)} onLongPress={() => setReactOpen(true)} style={[s.bubble, me ? s.bubbleMe : s.bubbleOther, wizz && s.wizzBubble]}>
           {wizz && (
             <View style={s.wizzHeader}>
               <Ionicons name="flash" size={15} color="#07111f" />
@@ -190,9 +208,57 @@ function Bubble({ body, time, me, author, npc }: { body: string; time: string; m
           )}
           <Text style={[s.bubbleText, me && { color: "#06243a" }, wizz && s.wizzText]}>{cleanBody}</Text>
           <Text style={[s.time, me && { color: "#365870", textAlign: "right" }]}>{time}</Text>
-        </View>
+        </Pressable>
+        {(reactOpen || reaction) && (
+          <View style={[s.reactionLine, me && { justifyContent: "flex-end" }]}>
+            {REACTION_SHORTCUTS.map((emoji) => (
+              <Pressable
+                key={emoji}
+                onPress={() => {
+                  onReact?.(reaction === emoji ? "" : emoji);
+                  setReactOpen(false);
+                }}
+                style={[s.reactionBtn, reaction === emoji && s.reactionBtnActive]}
+              >
+                <Text style={s.reactionText}>{emoji}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        {reaction && (
+          <View style={[s.reactionBadge, me && { alignSelf: "flex-end" }]}>
+            <Text style={s.reactionText}>{reaction}</Text>
+          </View>
+        )}
+        {me && <Text style={[s.delivery, { textAlign: "right" }]}>envoye</Text>}
       </View>
     </Animated.View>
+  );
+}
+
+function TypingIndicator({ name }: { name: string }) {
+  const pulse = useRef(new Animated.Value(0.45)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 520, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 520, useNativeDriver: true })
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+
+  return (
+    <View style={s.typingRow}>
+      <Animated.View style={[s.typingBubble, { opacity: pulse }]}>
+        <View style={s.typingDots}>
+          {[0, 1, 2].map((dot) => <View key={dot} style={s.typingDot} />)}
+        </View>
+        <Text style={s.typingText}>{name} ecrit...</Text>
+      </Animated.View>
+    </View>
   );
 }
 
@@ -235,7 +301,10 @@ function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcSta
   const avatar = useGameStore((x) => x.avatar);
   const session = useGameStore((x) => x.session);
   const [input, setInput] = useState("");
+  const [typing, setTyping] = useState(false);
+  const [reactions, setReactions] = useState<Record<string, string>>({});
   const scroll = useRef<ScrollView>(null);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const info = npc ? starterResidents.find((r) => r.id === npc.id) : null;
   const name = info?.name ?? conv.title;
   const me = avatar?.displayName ?? "Moi";
@@ -243,8 +312,21 @@ function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcSta
 
   useEffect(() => { markConversationRead(conv.id); setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 80); }, [conv.id, markConversationRead]);
   useEffect(() => { scroll.current?.scrollToEnd({ animated: true }); }, [conv.messages.length]);
+  useEffect(() => () => { if (typingTimer.current) clearTimeout(typingTimer.current); }, []);
 
-  function post(text: string) { const clean = text.trim(); if (clean) sendMessage(conv.id, clean); }
+  function startTyping(ms = 1000) {
+    if (!conv.peerId) return;
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    setTyping(true);
+    typingTimer.current = setTimeout(() => setTyping(false), ms);
+  }
+
+  function post(text: string) {
+    const clean = text.trim();
+    if (!clean) return;
+    sendMessage(conv.id, clean);
+    startTyping(clean.includes(WIZZ_TOKEN) ? 520 : 1050);
+  }
   function send() { post(input); setInput(""); }
   function sendWizz() { post(`${WIZZ_TOKEN} Wizz ! ${name.split(" ")[0]}, tu es la ?`); }
 
@@ -273,8 +355,20 @@ function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcSta
           {conv.messages.map((m) => {
             const isMe = m.authorId === myId || ["player", "user", "self", "local"].includes(m.authorId);
             if (m.kind === "system") return <Text key={m.id} style={s.system}>{m.body}</Text>;
-            return <Bubble key={m.id} body={m.body} time={new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} me={isMe} author={isMe ? me : name} npc={isMe ? null : npc} />;
+            return (
+              <Bubble
+                key={m.id}
+                body={m.body}
+                time={new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                me={isMe}
+                author={isMe ? me : name}
+                npc={isMe ? null : npc}
+                reaction={reactions[m.id]}
+                onReact={(emoji) => setReactions((current) => ({ ...current, [m.id]: emoji }))}
+              />
+            );
           })}
+          {typing && <TypingIndicator name={name.split(" ")[0]} />}
         </ScrollView>
         <Quick items={[`Salut ${name.split(" ")[0]}, c'est ${me}. Tu es dispo ?`, "Tu fais quoi en ce moment ? 😀", "On se retrouve dans une room live ? 🔥", "Je t'invite pour un cafe ☕"]} pick={post} />
         <Composer value={input} change={setInput} send={send} macro={post} wizz={sendWizz} />
@@ -297,12 +391,28 @@ function RoomView({ id, name, back }: { id: string; name: string; back: () => vo
   const myId = session?.email ?? "local";
   const [input, setInput] = useState("");
   const [invite, setInvite] = useState(false);
+  const [typing, setTyping] = useState(false);
+  const [reactions, setReactions] = useState<Record<string, string>>({});
   const scroll = useRef<ScrollView>(null);
+  const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => { setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 80); }, []);
   useEffect(() => { scroll.current?.scrollToEnd({ animated: true }); }, [messages.length]);
+  useEffect(() => () => { if (typingTimer.current) clearTimeout(typingTimer.current); }, []);
 
-  function post(text: string) { const clean = text.trim(); if (clean) sendRoomMessage(id, clean); }
+  function startTyping(ms = 1100) {
+    if (online.length === 0) return;
+    if (typingTimer.current) clearTimeout(typingTimer.current);
+    setTyping(true);
+    typingTimer.current = setTimeout(() => setTyping(false), ms);
+  }
+
+  function post(text: string) {
+    const clean = text.trim();
+    if (!clean) return;
+    sendRoomMessage(id, clean);
+    startTyping(clean.includes(WIZZ_TOKEN) ? 600 : 1200);
+  }
   function send() { post(input); setInput(""); }
   function sendWizz() { post(`${WIZZ_TOKEN} Wizz collectif ! Qui est la ?`); }
 
@@ -334,8 +444,20 @@ function RoomView({ id, name, back }: { id: string; name: string; back: () => vo
             const isMe = m.authorId === myId || m.authorId === "local" || m.authorName === me;
             const npc = npcs.find((n) => n.id === m.authorId) ?? null;
             if (m.kind === "system") return <Text key={m.id} style={s.systemGold}>{m.body}</Text>;
-            return <Bubble key={m.id} body={m.body} time={new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })} me={isMe} author={m.authorName} npc={npc} />;
+            return (
+              <Bubble
+                key={m.id}
+                body={m.body}
+                time={new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+                me={isMe}
+                author={m.authorName}
+                npc={npc}
+                reaction={reactions[m.id]}
+                onReact={(emoji) => setReactions((current) => ({ ...current, [m.id]: emoji }))}
+              />
+            );
           })}
+          {typing && <TypingIndicator name={online[0]?.name.split(" ")[0] ?? "La room"} />}
         </ScrollView>
         <Quick items={["Salut la room, qui est dispo ? 😀", "Je viens d'arriver, on discute ?", "On lance une activite de groupe ? 🎮", "Qui est dans ce lieu en live ? 👀"]} pick={post} />
         <Composer value={input} change={setInput} send={send} macro={post} wizz={sendWizz} />
@@ -578,6 +700,17 @@ const s = StyleSheet.create({
   wizzText: { color: "#07111f", fontWeight: "900" },
   bubbleText: { color: colors.text, fontSize: 14, lineHeight: 20 },
   time: { color: colors.muted, fontSize: 9, marginTop: 5 },
+  delivery: { color: colors.muted, fontSize: 9, marginTop: 2, paddingHorizontal: 6 },
+  reactionLine: { flexDirection: "row", gap: 5, marginTop: 5 },
+  reactionBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: "#ffffff10", borderWidth: 1, borderColor: "#ffffff22", alignItems: "center", justifyContent: "center" },
+  reactionBtnActive: { backgroundColor: colors.accent + "20", borderColor: colors.accent + "65" },
+  reactionBadge: { marginTop: -4, minWidth: 30, height: 24, borderRadius: 12, backgroundColor: "#ffffffee", borderWidth: 1, borderColor: "#9ed9ff", alignItems: "center", justifyContent: "center", paddingHorizontal: 7, alignSelf: "flex-start" },
+  reactionText: { fontSize: 14 },
+  typingRow: { flexDirection: "row", alignItems: "center", marginTop: 2 },
+  typingBubble: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: "#0f2136", borderWidth: 1, borderColor: "#ffffff14", alignSelf: "flex-start" },
+  typingDots: { flexDirection: "row", gap: 3 },
+  typingDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.accent },
+  typingText: { color: colors.textSoft, fontSize: 11, fontWeight: "800" },
   roomTitle: { color: colors.textSoft, fontSize: 12, fontWeight: "800", paddingHorizontal: 14, paddingVertical: 10, backgroundColor: "#eaf6ff10" },
   system: { color: colors.muted, fontSize: 11, textAlign: "center" },
   systemGold: { color: colors.gold, fontSize: 11, textAlign: "center" },
