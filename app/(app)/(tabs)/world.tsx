@@ -2047,6 +2047,59 @@ export default function WorldScreen() {
             </Pressable>
           </View>
         </View>
+        {/* ── Hero : Neo Paris Live ── */}
+        <Pressable
+          onPress={() => router.push("/(app)/world-live")}
+          style={{
+            borderRadius: 20,
+            overflow: "hidden",
+            backgroundColor: "#0a0620",
+            borderWidth: 1,
+            borderColor: "#8b7cff40",
+          }}
+        >
+          <View style={{ padding: 16, gap: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <View style={{
+                width: 48, height: 48, borderRadius: 14,
+                backgroundColor: "#8b7cff22",
+                borderWidth: 1, borderColor: "#8b7cff55",
+                alignItems: "center", justifyContent: "center",
+              }}>
+                <Text style={{ fontSize: 24 }}>🏙️</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>Neo Paris — Carte Live</Text>
+                <Text style={{ color: colors.muted, fontSize: 11 }}>
+                  {npcs.filter((n) => n.presenceOnline).length} résidents en ligne · carte 2D plein écran
+                </Text>
+              </View>
+              <View style={{
+                backgroundColor: "#8b7cff",
+                borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6,
+              }}>
+                <Text style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}>Ouvrir</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {[
+                { label: "En ligne", value: `${npcs.filter((n) => n.presenceOnline).length}`, color: "#38c793" },
+                { label: "Bonne humeur", value: `${npcs.filter((n) => n.mood > 60).length}`, color: "#f6b94f" },
+                { label: "Résidents", value: `${npcs.length}`, color: "#60a5fa" },
+              ].map((item) => (
+                <View key={item.label} style={{
+                  flex: 1, backgroundColor: item.color + "10",
+                  borderRadius: 10, paddingVertical: 8, alignItems: "center",
+                  borderWidth: 1, borderColor: item.color + "30",
+                }}>
+                  <Text style={{ color: item.color, fontWeight: "900", fontSize: 16 }}>{item.value}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 9 }}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </Pressable>
+
         {worldStatusStrip}
 
         {!IS_WIDE && cityIntelPanel}

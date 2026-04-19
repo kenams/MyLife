@@ -219,6 +219,7 @@ export default function DiscoverScreen() {
   const stats = useGameStore((s) => s.stats);
   const relationships = useGameStore((s) => s.relationships);
   const startDirectConversation = useGameStore((s) => s.startDirectConversation);
+  const likeResident = useGameStore((s) => s.likeResident);
   const sendInvitation = useGameStore((s) => s.sendInvitation);
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -262,6 +263,8 @@ export default function DiscoverScreen() {
       sendInvitation(resident.id, "coffee-meetup");
     } else if (matched) {
       startDirectConversation(resident.id, resident.name);
+    } else if (decision === "like") {
+      likeResident(resident.id);
     }
 
     setDecisions((current) => ({ ...current, [resident.id]: decision }));

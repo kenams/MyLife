@@ -513,3 +513,20 @@ export function buildRoomBotReplies(input: {
     };
   });
 }
+
+// ─── Lounge spontané ─────────────────────────────────────────────────────────
+export function buildNpcLoungeMessage(npc: NpcState): string {
+  const persona = personaFor(npc.id);
+  const lowEnergy = npc.energy < 25;
+  const highMood   = npc.mood > 70;
+
+  if (lowEnergy) return pick(persona.lowEnergy).replace(/\{player\}/g, "");
+  if (highMood)  return pick(persona.highMood).replace(/\{player\}/g, "").trimEnd();
+
+  const pool = [
+    ...persona.room,
+    ...persona.activities,
+    ...persona.wellbeing,
+  ];
+  return pick(pool).replace(/\{player\}/g, "").trimEnd();
+}

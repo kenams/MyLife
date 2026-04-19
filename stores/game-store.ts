@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 
-import { buildDirectBotReply, buildRoomBotReplies } from "@/lib/bot-brain";
+import { buildDirectBotReply, buildNpcLoungeMessage, buildRoomBotReplies } from "@/lib/bot-brain";
 import { applyActionToMissions, claimMissionReward } from "@/lib/missions";
 import { seedNpcs, tickAllNpcs } from "@/lib/npc-brain";
 import { generateNpcEvents } from "@/lib/npc-ai";
@@ -104,6 +104,7 @@ type GameState = {
   travelTo: (locationSlug: string, options?: { cost?: number; modeLabel?: string; energyCost?: number }) => void;
   sendMessage: (conversationId: string, body: string) => void;
   startDirectConversation: (residentId: string, residentName: string) => void;
+  likeResident: (residentId: string) => void;
   sendInvitation: (residentId: string, activitySlug: string) => void;
   respondInvitation: (invitationId: string, status: "accepted" | "declined") => void;
   proposeDate: (residentId: string, residentName: string, venueKind: DateVenueKind) => void;
@@ -1732,6 +1733,14 @@ export const useGameStore = create<GameState>()(
             })
           };
         }),
+      likeResident: (residentId) =>
+        set((state) => {
+          const resident = starterResidents.find((item) => item.id === residentId);
+          if (!resident) return state;
+          return {
+            relationships: updateRelationshipScore(state.relationships, residentId, 3, state.stats, resident.reputation),
+          };
+        }),
       respondInvitation: (invitationId, status) =>
         set((state) => {
           const invitation = state.invitations.find((item) => item.id === invitationId);
@@ -2585,16 +2594,7 @@ export const useGameStore = create<GameState>()(
           const onlineNpcs = finalNpcs.filter((n) => n.presenceOnline);
           if (onlineNpcs.length > 0 && Math.random() < 0.6) {
             const npc = onlineNpcs[Math.floor(Math.random() * onlineNpcs.length)];
-            const LOUNGE_MSGS: Record<string, string[]> = {
-              ava:   ["Bonne journée à tous 😊", "Quelqu'un au café ce soir ?", "C'est calme ici aujourd'hui ✨"],
-              malik: ["Yo 🔥", "La city est vivante aujourd'hui", "Quelqu'un a des plans ?"],
-              noa:   ["Salut tout le monde 👋", "On est bien là 💪", "Qui veut trainer ?"],
-              leila: ["Belle journée 🌿", "Calme et positif ici", "Respire, profite ✨"],
-              yan:   ["Grind mode 💼", "Bonne séance au bureau", "Focus today."],
-              sana:  ["Séance de sport check ✅", "Qui vient au parc ?", "Energy level 100 💪"],
-            };
-            const pool = LOUNGE_MSGS[npc.id] ?? ["..."];
-            const body = pool[Math.floor(Math.random() * pool.length)];
+            const body = buildNpcLoungeMessage(npc);
             newLoungeMessages = [...newLoungeMessages, {
               id: `lounge-npc-${now}-${npc.id}`,
               authorId: npc.id,
