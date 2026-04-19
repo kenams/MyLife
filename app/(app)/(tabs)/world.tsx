@@ -22,9 +22,10 @@ const SCREEN_W = Dimensions.get("window").width;
 const SCREEN_H = Dimensions.get("window").height;
 const IS_WIDE = SCREEN_W >= 1360;
 // Carte principale + chat lateral : la map garde une largeur reelle et lisible.
-const WORLD_CHAT_W = IS_WIDE ? Math.min(390, Math.max(350, Math.round(SCREEN_W * 0.2))) : SCREEN_W;
+const WORLD_CHAT_W = IS_WIDE ? Math.min(440, Math.max(390, Math.round(SCREEN_W * 0.23))) : SCREEN_W;
+const WORLD_CHAT_H = IS_WIDE ? SCREEN_H : Math.min(340, Math.max(280, Math.round(SCREEN_H * 0.36)));
 const MAP_W = IS_WIDE ? Math.max(780, SCREEN_W - WORLD_CHAT_W) : SCREEN_W;
-const MAP_H = IS_WIDE ? SCREEN_H : Math.max(560, Math.round(SCREEN_H * 0.68));
+const MAP_H = IS_WIDE ? SCREEN_H : Math.max(420, SCREEN_H - WORLD_CHAT_H);
 const MAP_BASE_W = 380;
 const MAP_BASE_H = 460;
 const MAP_SX = MAP_W / MAP_BASE_W;
@@ -2352,9 +2353,9 @@ export default function WorldScreen() {
 
           <View style={{
             width: WORLD_CHAT_W,
-            height: IS_WIDE ? MAP_H : Math.max(280, SCREEN_H - MAP_H),
+            height: WORLD_CHAT_H,
             minHeight: IS_WIDE ? undefined : 260,
-            backgroundColor: "#0b1422",
+            backgroundColor: "#081527",
             borderLeftWidth: IS_WIDE ? 1 : 0,
             borderTopWidth: IS_WIDE ? 0 : 1,
             borderRightWidth: 0,
@@ -2364,17 +2365,35 @@ export default function WorldScreen() {
             paddingHorizontal: IS_WIDE ? 14 : 12,
             paddingBottom: IS_WIDE ? 14 : 12,
             paddingTop: IS_WIDE ? 104 : 12,
-            gap: 10
+            gap: 10,
+            zIndex: 30,
+            shadowColor: "#38c793",
+            shadowOpacity: 0.16,
+            shadowRadius: 18,
+            elevation: 12
           }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>Chat de lieu</Text>
+                <Text style={{ color: "#8ee0bd", fontSize: 11, fontWeight: "900", letterSpacing: 1 }}>MSN LIVE ROOM</Text>
+                <Text style={{ color: colors.text, fontSize: 16, fontWeight: "900", marginTop: 1 }}>Chat de lieu</Text>
                 <Text style={{ color: colors.muted, fontSize: 12 }}>
                   {worldLocations.find((l) => l.slug === currentLocationSlug)?.name ?? "room"}
-                  {hasLiveLocationChat ? ` · live ${locationChat.connected ? "connecté" : "connexion"}` : ""}
+                  {" · "}
+                  {locationChat.connected || activeRoomNpc ? "connecte" : "pret"}
                 </Text>
               </View>
-              <Ionicons name="chatbubbles" size={22} color={hasLiveLocationChat || activeRoomNpc ? "#38c793" : colors.muted} />
+              <View style={{
+                width: 42,
+                height: 42,
+                borderRadius: 14,
+                backgroundColor: "rgba(56,199,147,0.16)",
+                borderWidth: 1,
+                borderColor: "rgba(56,199,147,0.38)",
+                alignItems: "center",
+                justifyContent: "center"
+              }}>
+                <Ionicons name="chatbubbles" size={22} color="#38c793" />
+              </View>
             </View>
 
             <View style={{
@@ -2486,13 +2505,13 @@ export default function WorldScreen() {
                         paddingHorizontal: 8,
                         paddingVertical: 6,
                         borderRadius: 12,
-                        backgroundColor: activeRoomNpc.id === npc.id ? "rgba(56,199,147,0.18)" : "rgba(255,255,255,0.06)",
+                        backgroundColor: activeRoomNpc?.id === npc.id ? "rgba(56,199,147,0.18)" : "rgba(255,255,255,0.06)",
                         borderWidth: 1,
-                        borderColor: activeRoomNpc.id === npc.id ? "#38c793" : "rgba(255,255,255,0.08)"
+                        borderColor: activeRoomNpc?.id === npc.id ? "#38c793" : "rgba(255,255,255,0.08)"
                       }}
                     >
                       <AvatarSprite visual={getNpcVisual(npc.id)} action={npc.action} size="xs" />
-                      <Text style={{ color: activeRoomNpc.id === npc.id ? "#8ee0bd" : colors.text, fontSize: 11, fontWeight: "800" }}>
+                      <Text style={{ color: activeRoomNpc?.id === npc.id ? "#8ee0bd" : colors.text, fontSize: 11, fontWeight: "800" }}>
                         {npc.name.split(" ")[0]}
                       </Text>
                     </Pressable>
@@ -2605,9 +2624,10 @@ export default function WorldScreen() {
                 </View>
               </>
             ) : (
-              <View style={{ flex: 1, minHeight: 120, alignItems: "center", justifyContent: "center", gap: 10 }}>
-                <Ionicons name="person-outline" size={28} color={colors.muted} />
-                <Text style={{ color: colors.muted, fontSize: 12 }}>Personne ici pour le moment.</Text>
+              <View style={{ flex: 1, minHeight: 120, alignItems: "center", justifyContent: "center", gap: 10, backgroundColor: "rgba(255,255,255,0.035)", borderRadius: 16, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", padding: 14 }}>
+                <Ionicons name="chatbubble-ellipses" size={30} color="#8ee0bd" />
+                <Text style={{ color: colors.text, fontSize: 14, fontWeight: "900" }}>Chat prêt</Text>
+                <Text style={{ color: colors.muted, fontSize: 12, textAlign: "center", lineHeight: 17 }}>Personne ici pour le moment. Peuple la room ou ouvre les rooms live.</Text>
                 <View style={{ flexDirection: "row", gap: 8 }}>
                   <Pressable onPress={seedLiveTestPlayers} style={{ borderRadius: 11, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: "#f6b94f", flexDirection: "row", alignItems: "center", gap: 5 }}>
                     <Ionicons name="person-add" size={14} color="#07111f" />

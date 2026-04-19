@@ -370,7 +370,7 @@ export default function RoomScreen() {
             data={allMessages}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
-              <Bubble msg={item} isMe={item.authorId === session?.email} />
+              <Bubble msg={item} isMe={item.authorId === session?.email || item.authorId === "local"} />
             )}
             contentContainerStyle={{ paddingVertical: 12, paddingBottom: 4 }}
             showsVerticalScrollIndicator={false}

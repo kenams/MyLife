@@ -2639,7 +2639,21 @@ export const useGameStore = create<GameState>()(
           createdAt:   nowIso(),
           isActive:    true
         };
-        set((s) => ({ rooms: [room, ...s.rooms].slice(0, 50) }));
+        set((s) => ({
+          rooms: [room, ...s.rooms].slice(0, 50),
+          joinedRooms: s.joinedRooms.includes(room.id) ? s.joinedRooms : [...s.joinedRooms, room.id],
+          roomMessages: {
+            ...s.roomMessages,
+            [room.id]: s.roomMessages[room.id] ?? [{
+              id: `sys-create-${Date.now()}`,
+              authorId: "system",
+              authorName: "Système",
+              body: `Room "${name}" créée — partage le code ${code} pour inviter.`,
+              createdAt: nowIso(),
+              kind: "system" as const,
+            }]
+          }
+        }));
         return room;
       },
       joinRoom: (code) => {
@@ -2662,13 +2676,30 @@ export const useGameStore = create<GameState>()(
             createdAt:   new Date().toISOString(),
             isActive:    true
           };
-          set((s) => ({ rooms: [room!, ...s.rooms.filter((r) => r.id !== "room-test-live")] }));
+          set((s) => ({
+            rooms: [room!, ...s.rooms.filter((r) => r.id !== "room-test-live")],
+            joinedRooms: s.joinedRooms.includes("room-test-live") ? s.joinedRooms : [...s.joinedRooms, "room-test-live"]
+          }));
         }
         if (!room) return null;
         set((s) => ({
           rooms: s.rooms.map((r) =>
-            r.id === room.id ? { ...r, memberCount: Math.min(r.memberCount + 1, r.maxMembers) } : r
-          )
+            r.id === room.id
+              ? { ...r, memberCount: s.joinedRooms.includes(r.id) ? r.memberCount : Math.min(r.memberCount + 1, r.maxMembers) }
+              : r
+          ),
+          joinedRooms: s.joinedRooms.includes(room.id) ? s.joinedRooms : [...s.joinedRooms, room.id],
+          roomMessages: {
+            ...s.roomMessages,
+            [room.id]: s.roomMessages[room.id] ?? [{
+              id: `sys-join-${Date.now()}`,
+              authorId: "system",
+              authorName: "Système",
+              body: `Tu as rejoint "${room.name}".`,
+              createdAt: nowIso(),
+              kind: "system" as const,
+            }]
+          }
         }));
         return room;
       },
@@ -2832,7 +2863,11 @@ export const useGameStore = create<GameState>()(
             i.id === inviteId ? { ...i, status } : i
           ),
           joinedRooms: status === "accepted"
-            ? [...s.joinedRooms, s.roomInvites.find((i) => i.id === inviteId)?.roomId ?? ""]
+            ? (() => {
+                const roomId = s.roomInvites.find((i) => i.id === inviteId)?.roomId;
+                if (!roomId || s.joinedRooms.includes(roomId)) return s.joinedRooms;
+                return [...s.joinedRooms, roomId];
+              })()
             : s.joinedRooms,
         }));
       },

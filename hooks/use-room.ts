@@ -19,6 +19,8 @@ export function useRoom(roomId: string | null) {
   const session  = useGameStore((s) => s.session);
   const avatar   = useGameStore((s) => s.avatar);
   const stats    = useGameStore((s) => s.stats);
+  const localMessages = useGameStore((s) => roomId ? s.roomMessages[roomId] ?? [] : []);
+  const sendLocalRoomMessage = useGameStore((s) => s.sendRoomMessage);
 
   const [messages, setMessages]   = useState<RoomMessage[]>([]);
   const [members, setMembers]     = useState<RoomMember[]>([]);
@@ -34,7 +36,19 @@ export function useRoom(roomId: string | null) {
   }
 
   useEffect(() => {
-    if (!roomId || !session || !avatar) return;
+    if (!roomId) return;
+
+    if (!session || !avatar) {
+      setConnected(true);
+      setMembers([{
+        userId: "local",
+        avatarName: avatar?.displayName ?? "Moi",
+        action: "chatting",
+        joinedAt: new Date().toISOString(),
+        isOnline: true
+      }]);
+      return;
+    }
 
     // Mode local : pas de Supabase
     if (!isSupabaseConfigured || !supabase) {
@@ -128,10 +142,30 @@ export function useRoom(roomId: string | null) {
       setConnected(false);
       setMembers([]);
     };
-  }, [roomId, session?.email]);
+  }, [roomId, session?.email, avatar?.displayName]);
 
   const sendMessage = async (body: string, kind: RoomMessage["kind"] = "message") => {
-    if (!body.trim() || !session || !avatar) return;
+    if (!body.trim() || !roomId) return;
+
+    if (kind === "emote") {
+      const emote: RoomMessage = {
+        id: `emote-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+        authorId: session?.email ?? "local",
+        authorName: avatar?.displayName ?? "Moi",
+        body: body.trim(),
+        createdAt: new Date().toISOString(),
+        kind
+      };
+      setMessages((prev) => [...prev, emote].slice(-200));
+      if (isSupabaseConfigured && supabase && channelRef.current) {
+        await channelRef.current.send({ type: "broadcast", event: "message", payload: emote });
+      }
+      return;
+    }
+
+    sendLocalRoomMessage(roomId, body);
+
+    if (!session || !avatar) return;
 
     const msg: RoomMessage = {
       id:         `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`,
@@ -142,9 +176,6 @@ export function useRoom(roomId: string | null) {
       kind
     };
 
-    // Afficher immédiatement (optimistic)
-    setMessages((prev) => [...prev, msg].slice(-200));
-
     // Broadcast aux autres
     if (isSupabaseConfigured && supabase && channelRef.current) {
       await channelRef.current.send({ type: "broadcast", event: "message", payload: msg });
@@ -153,5 +184,10 @@ export function useRoom(roomId: string | null) {
 
   const sendEmote = (emote: string) => sendMessage(emote, "emote");
 
-  return { messages, members, connected, sendMessage, sendEmote };
+  const mergedMessages = [...localMessages, ...messages]
+    .filter((message, index, all) => all.findIndex((item) => item.id === message.id) === index)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+    .slice(-200);
+
+  return { messages: mergedMessages, members, connected, sendMessage, sendEmote };
 }

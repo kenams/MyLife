@@ -190,6 +190,11 @@ export default function RoomsScreen() {
     router.push(`/(app)/room/${room.id}`);
   };
 
+  const openRoom = (room: Room) => {
+    const joined = room.code ? joinRoom(room.code) : room;
+    router.push(`/(app)/room/${joined?.id ?? room.id}`);
+  };
+
   const publicRooms = rooms.filter((r) => r.kind === "public"  && r.isActive);
   const privateRooms = rooms.filter((r) => r.kind === "private" && r.isActive);
   const eventRooms  = rooms.filter((r) => r.kind === "event"   && r.isActive);
@@ -280,10 +285,8 @@ export default function RoomsScreen() {
                 onPress={() => {
                   setTab("join");
                   setJoinCode("LIVE");
-                  setTimeout(() => {
-                    const room = joinRoom("LIVE");
-                    if (room) router.push(`/(app)/room/${room.id}`);
-                  }, 100);
+                  const room = joinRoom("LIVE");
+                  if (room) router.push(`/(app)/room/${room.id}`);
                 }}
                 style={{
                   backgroundColor: "rgba(56,199,147,0.1)", borderRadius: 18, padding: 16,
@@ -309,7 +312,7 @@ export default function RoomsScreen() {
                     ROOMS PUBLIQUES
                   </Text>
                   {publicRooms.map((r) => (
-                    <RoomCard key={r.id} room={r} onJoin={() => router.push(`/(app)/room/${r.id}`)} />
+                    <RoomCard key={r.id} room={r} onJoin={() => openRoom(r)} />
                   ))}
                 </>
               )}
@@ -319,7 +322,7 @@ export default function RoomsScreen() {
                     ROOMS PRIVÉES
                   </Text>
                   {privateRooms.map((r) => (
-                    <RoomCard key={r.id} room={r} onJoin={() => router.push(`/(app)/room/${r.id}`)} />
+                    <RoomCard key={r.id} room={r} onJoin={() => openRoom(r)} />
                   ))}
                 </>
               )}
@@ -329,7 +332,7 @@ export default function RoomsScreen() {
                     ÉVÉNEMENTS
                   </Text>
                   {eventRooms.map((r) => (
-                    <RoomCard key={r.id} room={r} onJoin={() => router.push(`/(app)/room/${r.id}`)} />
+                    <RoomCard key={r.id} room={r} onJoin={() => openRoom(r)} />
                   ))}
                 </>
               )}
@@ -341,7 +344,11 @@ export default function RoomsScreen() {
         {tab === "join" && (
           <View style={{ gap: 16 }}>
             <Pressable
-              onPress={() => { setJoinCode("LIVE"); setTimeout(handleJoin, 100); }}
+              onPress={() => {
+                setJoinCode("LIVE");
+                const room = joinRoom("LIVE");
+                if (room) router.push(`/(app)/room/${room.id}`);
+              }}
               style={{ backgroundColor: "rgba(56,199,147,0.1)", borderRadius: 20, padding: 18,
                 borderWidth: 1.5, borderColor: "#38c79340",
                 flexDirection: "row", alignItems: "center", gap: 14 }}
