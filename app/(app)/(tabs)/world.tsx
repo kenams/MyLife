@@ -351,6 +351,58 @@ function RoomEntryOverlay({ notice }: { notice: RoomEntryNotice }) {
   );
 }
 
+function RoomEntryTargetPulse({ notice }: { notice: RoomEntryNotice }) {
+  const pulse = useRef(new Animated.Value(0)).current;
+  const tile = LOCATION_TILES[notice.locationSlug];
+
+  useEffect(() => {
+    pulse.setValue(0);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }),
+        Animated.timing(pulse, { toValue: 0, duration: 900, easing: Easing.in(Easing.cubic), useNativeDriver: false })
+      ])
+    ).start();
+  }, [notice.at, pulse]);
+
+  if (!tile) return null;
+
+  const box = scaleTile(tile);
+  const scale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.14] });
+  const opacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.92, 0.35] });
+
+  return (
+    <Animated.View pointerEvents="none" style={{
+      position: "absolute",
+      left: box.x - 10,
+      top: box.y - 10,
+      width: box.w + 20,
+      height: box.h + 20,
+      borderRadius: 22,
+      borderWidth: 3,
+      borderColor: "#38c793",
+      backgroundColor: "rgba(56,199,147,0.10)",
+      opacity,
+      transform: [{ scale }],
+      zIndex: 32
+    }}>
+      <View style={{
+        position: "absolute",
+        top: -30,
+        alignSelf: "center",
+        borderRadius: 12,
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        backgroundColor: "#38c793",
+        borderWidth: 1,
+        borderColor: "rgba(255,255,255,0.5)"
+      }}>
+        <Text style={{ color: "#07111f", fontSize: 10, fontWeight: "900" }}>ENTREE EN COURS</Text>
+      </View>
+    </Animated.View>
+  );
+}
+
 function TransitStop({ x, y, icon, label, color }: { x: number; y: number; icon: string; label: string; color: string }) {
   return (
     <View pointerEvents="none" style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, alignItems: "center", gap: 2 }}>
@@ -1067,7 +1119,7 @@ function LiveNpc({ npc, onPress }: { npc: NpcState; onPress: () => void }) {
 
 // ─── Tuile de lieu ────────────────────────────────────────────────────────────
 function LocationTile({
-  slug, tile, label, metaLabel, metaColor, roomCode, isHere, isRecommended, isSelected, npcCount, onlineCount, onPress
+  slug, tile, label, metaLabel, metaColor, roomCode, isHere, isRecommended, isSelected, isEntering, npcCount, onlineCount, onPress
 }: {
   slug: string;
   tile: (typeof LOCATION_TILES)[string];
@@ -1078,6 +1130,7 @@ function LocationTile({
   isHere: boolean;
   isRecommended: boolean;
   isSelected: boolean;
+  isEntering: boolean;
   npcCount: number;
   onlineCount: number;
   onPress: () => void;
@@ -1087,22 +1140,22 @@ function LocationTile({
   const isHomeSuite = slug === "home";
 
   useEffect(() => {
-    if (isHere || isRecommended) {
+    if (isHere || isRecommended || isEntering) {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(glow, { toValue: 1, duration: 800, useNativeDriver: true }),
-          Animated.timing(glow, { toValue: isHere ? 0.78 : 0.86, duration: 800, useNativeDriver: true })
+          Animated.timing(glow, { toValue: 1, duration: isEntering ? 520 : 800, useNativeDriver: true }),
+          Animated.timing(glow, { toValue: isEntering ? 0.64 : isHere ? 0.78 : 0.86, duration: isEntering ? 520 : 800, useNativeDriver: true })
         ])
       ).start();
     } else {
       glow.setValue(1);
     }
-  }, [isHere, isRecommended]);
+  }, [isHere, isRecommended, isEntering]);
 
   const buildingHeight = Math.max(isHomeSuite ? 15 : 9, box.h * (isHomeSuite ? 0.18 : 0.12));
 
   return (
-    <Pressable onPress={onPress} style={{ position: "absolute", left: box.x, top: box.y, width: box.w, height: box.h + buildingHeight + 8, zIndex: isHere || isSelected || isHomeSuite ? 12 : 2 }}>
+    <Pressable onPress={onPress} style={{ position: "absolute", left: box.x, top: box.y, width: box.w, height: box.h + buildingHeight + 8, zIndex: isEntering ? 34 : isHere || isSelected || isHomeSuite ? 12 : 2 }}>
       <View style={{
         position: "absolute",
         left: 4,
@@ -1116,14 +1169,14 @@ function LocationTile({
       <Animated.View style={{
         width: "100%", height: box.h,
         borderRadius: isHomeSuite ? 18 : 14,
-        borderWidth: isHomeSuite || isHere || isRecommended || isSelected ? 3 : 1.5,
-        borderColor: isHere ? colors.accent : isSelected ? "#67d8ff" : isHomeSuite ? "#d8f4ff" : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)",
+        borderWidth: isEntering || isHomeSuite || isHere || isRecommended || isSelected ? 3 : 1.5,
+        borderColor: isEntering ? "#38c793" : isHere ? colors.accent : isSelected ? "#67d8ff" : isHomeSuite ? "#d8f4ff" : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)",
         opacity: glow,
         overflow: "hidden",
         shadowColor: tile.color,
-        shadowOpacity: isHomeSuite || isHere || isRecommended ? 0.95 : 0.5,
-        shadowRadius: isHomeSuite || isHere || isRecommended ? 18 : 7,
-        elevation: isHomeSuite || isHere || isRecommended ? 10 : 3,
+        shadowOpacity: isEntering || isHomeSuite || isHere || isRecommended ? 0.95 : 0.5,
+        shadowRadius: isEntering || isHomeSuite || isHere || isRecommended ? 18 : 7,
+        elevation: isEntering || isHomeSuite || isHere || isRecommended ? 10 : 3,
       }}>
         <View style={{ position:"absolute", top:0, left:0, right:0, bottom:0, backgroundColor: tile.color }} />
         <View style={{ position:"absolute", top:0, left:0, right:0, height: Math.max(18, box.h * 0.24), backgroundColor:"rgba(255,255,255,0.22)" }} />
@@ -1147,9 +1200,9 @@ function LocationTile({
             <View style={{ backgroundColor: isHomeSuite ? "rgba(216,244,255,0.24)" : "rgba(0,0,0,0.46)", borderRadius:12, padding:isHomeSuite ? 7 : 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.32)" }}>
               <Ionicons name={tile.icon as never} size={isHomeSuite ? 23 : 19} color="#fff" />
             </View>
-            {(isHomeSuite || isRecommended || isSelected || roomCode) && (
-              <View style={{ backgroundColor: isSelected ? "#67d8ff" : "#f6b94f", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" }}>
-                <Text style={{ color:"#07111f", fontSize: 9, fontWeight: "900" }}>{isSelected ? "ENTRER" : isHomeSuite ? "HOME" : roomCode ? `#${roomCode}` : "GO"}</Text>
+            {(isHomeSuite || isRecommended || isSelected || roomCode || isEntering) && (
+              <View style={{ backgroundColor: isEntering ? "#38c793" : isSelected ? "#67d8ff" : "#f6b94f", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" }}>
+                <Text style={{ color:"#07111f", fontSize: 9, fontWeight: "900" }}>{isEntering ? "LIVE" : isSelected ? "ENTRER" : isHomeSuite ? "HOME" : roomCode ? `#${roomCode}` : "GO"}</Text>
               </View>
             )}
             {(npcCount > 0 || onlineCount > 0) && (
@@ -1175,6 +1228,9 @@ function LocationTile({
             )}
             {!isHere && isSelected && (
               <Text style={{ color:"#bfeeff", fontSize:9, fontWeight:"900" }}>Selection</Text>
+            )}
+            {isEntering && (
+              <Text style={{ color:"#8ee0bd", fontSize:9, fontWeight:"900" }}>Connexion room...</Text>
             )}
           </View>
         </View>
@@ -1279,6 +1335,13 @@ export default function WorldScreen() {
   const currentLocationActions = LOCATION_ACTIONS[currentLocationSlug] ?? LOCATION_ACTIONS.cafe;
   const primaryLocationAction = currentLocationActions[0];
   const peopleHereCount = currentRoomNpcs.length + currentLivePlayers.length;
+  const currentRoomParticipantNames = [
+    ...currentLivePlayers.map((player) => player.avatarName.split(" ")[0]),
+    ...currentRoomNpcs.map((npc) => npc.name.split(" ")[0])
+  ].slice(0, 4);
+  const currentRoomStatus = peopleHereCount > 0
+    ? `${peopleHereCount} present${peopleHereCount > 1 ? "s" : ""}`
+    : "room calme";
   const quickFlowSteps = [
     { label: "Choisir", active: selectedLocationSlug !== currentLocationSlug && !travelNotice, done: !!travelNotice || selectedLocationSlug === currentLocationSlug },
     { label: "Trajet", active: !!travelNotice, done: !!arrivalNotice && !travelNotice },
@@ -1808,8 +1871,8 @@ export default function WorldScreen() {
           ))}
         </View>
       ) : (
-        <Pressable onPress={() => router.push("/(app)/(tabs)/chat")} style={{ borderRadius: 12, paddingVertical: 10, alignItems: "center", backgroundColor: colors.accent }}>
-          <Text style={{ color: "#07111f", fontSize: 12, fontWeight: "900" }}>Ouvrir le chat du lieu</Text>
+        <Pressable onPress={() => beginRoomEntry(selectedLocationSlug)} disabled={!!roomEntryNotice} style={{ borderRadius: 12, paddingVertical: 10, alignItems: "center", backgroundColor: colors.accent, opacity: roomEntryNotice ? 0.55 : 1 }}>
+          <Text style={{ color: "#07111f", fontSize: 12, fontWeight: "900" }}>Entrer dans la room</Text>
         </Pressable>
       )}
     </View>
@@ -2248,6 +2311,7 @@ export default function WorldScreen() {
             color={routeColor}
           />
           {travelNotice && <LiveTravelMarker notice={travelNotice} />}
+          {roomEntryNotice && <RoomEntryTargetPulse notice={roomEntryNotice} />}
           {roomEntryNotice && <RoomEntryOverlay notice={roomEntryNotice} />}
 
           {/* rond-point et place centrale */}
@@ -2321,6 +2385,7 @@ export default function WorldScreen() {
                 isHere={currentLocationSlug === slug}
                 isRecommended={cityIntel.locationSlug === slug}
                 isSelected={selectedLocationSlug === slug && currentLocationSlug !== slug}
+                isEntering={roomEntryNotice?.locationSlug === slug}
                 npcCount={npcsByLoc[slug]?.length ?? 0}
                 onlineCount={onlineCounts[slug] ?? 0}
                 onPress={() => {
@@ -2565,6 +2630,31 @@ export default function WorldScreen() {
               }}>
                 <Ionicons name="chatbubbles" size={22} color="#38c793" />
               </View>
+            </View>
+
+            <View style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              paddingHorizontal: 10,
+              paddingVertical: 8,
+              borderRadius: 14,
+              backgroundColor: peopleHereCount > 0 ? "rgba(56,199,147,0.12)" : "rgba(255,255,255,0.055)",
+              borderWidth: 1,
+              borderColor: peopleHereCount > 0 ? "rgba(56,199,147,0.34)" : "rgba(255,255,255,0.10)"
+            }}>
+              <View style={{ width: 9, height: 9, borderRadius: 5, backgroundColor: peopleHereCount > 0 ? "#38c793" : "#f6b94f" }} />
+              <Text numberOfLines={1} style={{ flex: 1, color: colors.textSoft, fontSize: 11, fontWeight: "800" }}>
+                Room #{currentRoomCode} · {currentRoomStatus}
+                {currentRoomParticipantNames.length > 0 ? ` · ${currentRoomParticipantNames.join(", ")}` : ""}
+              </Text>
+              <Pressable
+                onPress={() => beginRoomEntry(currentLocationSlug)}
+                disabled={!!roomEntryNotice}
+                style={{ borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5, backgroundColor: colors.accent, opacity: roomEntryNotice ? 0.55 : 1 }}
+              >
+                <Text style={{ color: "#07111f", fontSize: 10, fontWeight: "900" }}>ENTRER</Text>
+              </Pressable>
             </View>
 
             <View style={{
