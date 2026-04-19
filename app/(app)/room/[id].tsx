@@ -29,10 +29,16 @@ const EMOTES = ["👋","🔥","💪","😄","✨","🤝","😂","❤️","🎯",
 const NPC_AUTO: Record<string, string[]> = {
   ava:   ["Salut tout le monde 👋", "Super ambiance ici !", "Vous faites quoi ce soir ?",
           "J'adore cet endroit 😊", "Quelqu'un veut un café ?", "La vibe est bonne ici ✨"],
+  malik: ["Je passe en coup de vent. Objectif du jour ?", "On reste focus ici.", "Quelqu'un veut bosser sérieusement ?",
+          "Bonne room pour avancer.", "Je suis là, on parle concret."],
   noa:   ["Yo les gens 🔥", "C'est chill ici.", "Quelqu'un a des plans ?",
           "J'viens d'arriver, quoi de neuf ?", "On est bien là 💪", "La team est là !"],
   leila: ["Bonne énergie ce soir !", "Salut la room 🌿", "Qui veut faire une marche après ?",
-          "Respirez, profitez 😄", "Belle soirée à tous ✨", "Le calme avant la fête 🎉"]
+          "Respirez, profitez 😄", "Belle soirée à tous ✨", "Le calme avant la fête 🎉"],
+  yan:   ["Je regarde l'ambiance.", "Quelqu'un veut tester un plan simple ?", "Je suis connecté.",
+          "Ça discute bien ici.", "On peut organiser un truc."],
+  sana:  ["Hello la room.", "J'aime bien ce lieu.", "Qui est dispo pour discuter ?",
+          "Je suis partante pour une activité calme.", "On garde une bonne énergie."]
 };
 
 function getRandomNpcMsg(npcId: string): string {
@@ -40,7 +46,14 @@ function getRandomNpcMsg(npcId: string): string {
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-const NPC_NAMES: Record<string, string> = { ava: "Ava Laurent", noa: "Noa Kiran", leila: "Leila Benali" };
+const NPC_NAMES: Record<string, string> = {
+  ava: "Ava Laurent",
+  malik: "Malik Diallo",
+  noa: "Noa Kiran",
+  leila: "Leila Benali",
+  yan: "Yan Moreau",
+  sana: "Sana Vidal"
+};
 
 type ViewMode = "chat" | "map";
 
@@ -158,6 +171,7 @@ export default function RoomScreen() {
   const rooms     = useGameStore((s) => s.rooms);
   const session   = useGameStore((s) => s.session);
   const leaveRoom = useGameStore((s) => s.leaveRoom);
+  const npcs      = useGameStore((s) => s.npcs);
 
   const room = rooms.find((r) => r.id === id);
   const { messages, members, connected, sendMessage, sendEmote } = useRoom(id ?? null);
@@ -205,17 +219,21 @@ export default function RoomScreen() {
 
   useEffect(() => {
     if (!room) return;
-    const npcIds = ["ava", "noa", "leila"];
+    const npcIds = npcs
+      .filter((npc) => npc.locationSlug === room.locationSlug || (id === "room-test-live" && ["ava", "noa", "leila"].includes(npc.id)))
+      .map((npc) => npc.id);
+    const activeNpcIds = (npcIds.length > 0 ? npcIds : ["ava", "noa", "leila"]).slice(0, 3);
     const timers: ReturnType<typeof setTimeout>[] = [];
-    npcIds.forEach((npcId, i) => {
-      const t = setTimeout(() => injectNpcMessage(npcId, NPC_NAMES[npcId], getRandomNpcMsg(npcId)), 2000 + i * 1500);
+    activeNpcIds.forEach((npcId, i) => {
+      const npcName = npcs.find((npc) => npc.id === npcId)?.name ?? NPC_NAMES[npcId] ?? "Résident";
+      const t = setTimeout(() => injectNpcMessage(npcId, npcName, getRandomNpcMsg(npcId)), 2000 + i * 1500);
       timers.push(t);
-      const interval = setInterval(() => injectNpcMessage(npcId, NPC_NAMES[npcId], getRandomNpcMsg(npcId)),
+      const interval = setInterval(() => injectNpcMessage(npcId, npcName, getRandomNpcMsg(npcId)),
         20000 + i * 8000 + Math.random() * 10000);
       timers.push(interval as unknown as ReturnType<typeof setTimeout>);
     });
     return () => timers.forEach(clearTimeout);
-  }, [room?.id]);
+  }, [room?.id, room?.locationSlug, id, npcs]);
 
   const allMessages = [...messages, ...localNpcMsgs].sort(
     (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
@@ -250,14 +268,18 @@ export default function RoomScreen() {
     );
   }
 
-  const displayMembers = id === "room-test-live"
-    ? [
-        ...members,
-        { userId: "npc-ava",   avatarName: "Ava Laurent",  action: "chatting" as const, joinedAt: room.createdAt, isOnline: true },
-        { userId: "npc-noa",   avatarName: "Noa Kiran",    action: "idle"     as const, joinedAt: room.createdAt, isOnline: true },
-        { userId: "npc-leila", avatarName: "Leila Benali", action: "chatting" as const, joinedAt: room.createdAt, isOnline: true },
-      ].filter((m, i, arr) => arr.findIndex((x) => x.userId === m.userId) === i)
-    : members;
+  const roomNpcMembers = npcs
+    .filter((npc) => npc.locationSlug === room.locationSlug || (id === "room-test-live" && ["ava", "noa", "leila"].includes(npc.id)))
+    .slice(0, 5)
+    .map((npc) => ({
+      userId: `npc-${npc.id}`,
+      avatarName: npc.name,
+      action: npc.action,
+      joinedAt: room.createdAt,
+      isOnline: npc.presenceOnline
+    }));
+  const displayMembers = [...members, ...roomNpcMembers]
+    .filter((m, i, arr) => arr.findIndex((x) => x.userId === m.userId) === i);
 
   return (
     <Animated.View style={{ flex: 1, transform: [{ scale: scaleAnim }], opacity: opacityAnim }}>

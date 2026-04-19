@@ -65,6 +65,15 @@ type ArrivalNotice = {
   at: number;
 };
 
+type RoomEntryNotice = {
+  code: string;
+  locationSlug: string;
+  locationName: string;
+  roomName: string;
+  at: number;
+  durationMs: number;
+};
+
 const WORLD_WIZZ_TOKEN = "[[WIZZ]]";
 const WORLD_CHAT_SHORTCUTS = [
   "Bonjour, je suis la.",
@@ -73,8 +82,23 @@ const WORLD_CHAT_SHORTCUTS = [
   "On se retrouve dans cette room ?"
 ];
 
+const ROOM_ENTRY_DURATION_MS = 10_000;
+const LOCATION_ROOM_CODES: Record<string, string> = {
+  home: "HOME",
+  "residence-populaire": "HOME",
+  "residence-confort": "HOME",
+  "residence-luxe": "HOME",
+  cafe: "LIVE",
+  gym: "GYM",
+  cinema: "CINE",
+  office: "WORK",
+  park: "PARK",
+  market: "SHOP",
+  restaurant: "FOOD"
+};
+
 const LOCATION_TILES: Record<string, { x: number; y: number; w: number; h: number; color: string; icon: string }> = {
-  "home":       { x: 22,  y: 50,  w: 92,  h: 80, color: "#245c8f", icon: "home"       },
+  "home":       { x: 16,  y: 42,  w: 114, h: 94, color: "#2478d4", icon: "home"       },
   "residence-populaire": { x: 18,  y: 390, w: 88,  h: 58, color: "#8a4f3d", icon: "business" },
   "residence-confort":   { x: 150, y: 86,  w: 78,  h: 72, color: "#4f7c9d", icon: "business" },
   "residence-luxe":      { x: 286, y: 390, w: 78,  h: 58, color: "#b98b3d", icon: "diamond"  },
@@ -266,6 +290,63 @@ function TravelProgressBar({ notice, color = notice.color }: { notice: TravelNot
   return (
     <View style={{ height: 5, borderRadius: 999, backgroundColor: "rgba(255,255,255,0.10)", overflow: "hidden" }}>
       <Animated.View style={{ width, height: 5, borderRadius: 999, backgroundColor: color }} />
+    </View>
+  );
+}
+
+function RoomEntryOverlay({ notice }: { notice: RoomEntryNotice }) {
+  const progress = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    progress.setValue(0);
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: notice.durationMs,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: false
+    }).start();
+  }, [notice.at, notice.durationMs, progress]);
+
+  const width = progress.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+
+  return (
+    <View pointerEvents="none" style={{
+      position: "absolute",
+      left: 18,
+      right: 18,
+      top: IS_WIDE ? 170 : 154,
+      borderRadius: 20,
+      padding: 14,
+      backgroundColor: "rgba(5,10,18,0.94)",
+      borderWidth: 1,
+      borderColor: "rgba(56,199,147,0.55)",
+      shadowColor: "#38c793",
+      shadowOpacity: 0.38,
+      shadowRadius: 18,
+      elevation: 16,
+      gap: 10
+    }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <View style={{ width: 44, height: 44, borderRadius: 16, backgroundColor: "rgba(56,199,147,0.18)", borderWidth: 1, borderColor: "rgba(56,199,147,0.45)", alignItems: "center", justifyContent: "center" }}>
+          <Ionicons name="enter" size={23} color="#8ee0bd" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: "#8ee0bd", fontSize: 11, fontWeight: "900", letterSpacing: 1 }}>ENTREE ROOM</Text>
+          <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#ffffff", fontSize: 17, fontWeight: "900", marginTop: 2 }}>
+            {notice.roomName}
+          </Text>
+          <Text numberOfLines={1} style={{ color: "rgba(226,232,240,0.74)", fontSize: 11, marginTop: 2 }}>
+            Accès à {notice.locationName} · préparation du chat live
+          </Text>
+        </View>
+        <Text style={{ color: "#f6b94f", fontSize: 12, fontWeight: "900" }}>10s</Text>
+      </View>
+      <View style={{ height: 7, borderRadius: 999, overflow: "hidden", backgroundColor: "rgba(255,255,255,0.10)" }}>
+        <Animated.View style={{ width, height: 7, borderRadius: 999, backgroundColor: "#38c793" }} />
+      </View>
+      <Text style={{ color: "rgba(226,232,240,0.72)", fontSize: 11, fontWeight: "700" }}>
+        Tu arrives dans la room, les membres et le chat vont s'ouvrir automatiquement.
+      </Text>
     </View>
   );
 }
@@ -1002,6 +1083,7 @@ function LocationTile({
 }) {
   const glow = useRef(new Animated.Value(0.6)).current;
   const box = scaleTile(tile);
+  const isHomeSuite = slug === "home";
 
   useEffect(() => {
     if (isHere || isRecommended) {
@@ -1016,10 +1098,10 @@ function LocationTile({
     }
   }, [isHere, isRecommended]);
 
-  const buildingHeight = Math.max(9, box.h * 0.12);
+  const buildingHeight = Math.max(isHomeSuite ? 15 : 9, box.h * (isHomeSuite ? 0.18 : 0.12));
 
   return (
-    <Pressable onPress={onPress} style={{ position: "absolute", left: box.x, top: box.y, width: box.w, height: box.h + buildingHeight + 8 }}>
+    <Pressable onPress={onPress} style={{ position: "absolute", left: box.x, top: box.y, width: box.w, height: box.h + buildingHeight + 8, zIndex: isHere || isSelected || isHomeSuite ? 12 : 2 }}>
       <View style={{
         position: "absolute",
         left: 4,
@@ -1032,15 +1114,15 @@ function LocationTile({
       }} />
       <Animated.View style={{
         width: "100%", height: box.h,
-        borderRadius: 14,
-        borderWidth: isHere || isRecommended || isSelected ? 3 : 1.5,
-        borderColor: isHere ? colors.accent : isSelected ? "#67d8ff" : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)",
+        borderRadius: isHomeSuite ? 18 : 14,
+        borderWidth: isHomeSuite || isHere || isRecommended || isSelected ? 3 : 1.5,
+        borderColor: isHere ? colors.accent : isSelected ? "#67d8ff" : isHomeSuite ? "#d8f4ff" : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)",
         opacity: glow,
         overflow: "hidden",
         shadowColor: tile.color,
-        shadowOpacity: isHere || isRecommended ? 0.9 : 0.5,
-        shadowRadius: isHere || isRecommended ? 16 : 7,
-        elevation: isHere || isRecommended ? 7 : 3,
+        shadowOpacity: isHomeSuite || isHere || isRecommended ? 0.95 : 0.5,
+        shadowRadius: isHomeSuite || isHere || isRecommended ? 18 : 7,
+        elevation: isHomeSuite || isHere || isRecommended ? 10 : 3,
       }}>
         <View style={{ position:"absolute", top:0, left:0, right:0, bottom:0, backgroundColor: tile.color }} />
         <View style={{ position:"absolute", top:0, left:0, right:0, height: Math.max(18, box.h * 0.24), backgroundColor:"rgba(255,255,255,0.22)" }} />
@@ -1056,14 +1138,17 @@ function LocationTile({
         ))}
         <LocationDetail slug={slug} w={box.w} h={box.h} />
 
-        <View style={{ flex:1, padding: 8, justifyContent:"space-between" }}>
+        {isHomeSuite && (
+          <View style={{ position: "absolute", left: 8, top: 8, right: 8, height: 22, borderRadius: 10, backgroundColor: "rgba(216,244,255,0.24)", borderWidth: 1, borderColor: "rgba(255,255,255,0.36)" }} />
+        )}
+        <View style={{ flex:1, padding: isHomeSuite ? 10 : 8, justifyContent:"space-between" }}>
           <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center" }}>
-            <View style={{ backgroundColor:"rgba(0,0,0,0.46)", borderRadius:11, padding:5, borderWidth: 1, borderColor: "rgba(255,255,255,0.22)" }}>
-              <Ionicons name={tile.icon as never} size={19} color="#fff" />
+            <View style={{ backgroundColor: isHomeSuite ? "rgba(216,244,255,0.24)" : "rgba(0,0,0,0.46)", borderRadius:12, padding:isHomeSuite ? 7 : 5, borderWidth: 1, borderColor: "rgba(255,255,255,0.32)" }}>
+              <Ionicons name={tile.icon as never} size={isHomeSuite ? 23 : 19} color="#fff" />
             </View>
-            {(isRecommended || isSelected) && (
+            {(isHomeSuite || isRecommended || isSelected) && (
               <View style={{ backgroundColor: isSelected ? "#67d8ff" : "#f6b94f", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" }}>
-                <Text style={{ color:"#07111f", fontSize: 9, fontWeight: "900" }}>{isSelected ? "VOIR" : "GO"}</Text>
+                <Text style={{ color:"#07111f", fontSize: 9, fontWeight: "900" }}>{isSelected ? "ENTRER" : isHomeSuite ? "HOME" : "GO"}</Text>
               </View>
             )}
             {(npcCount > 0 || onlineCount > 0) && (
@@ -1074,11 +1159,11 @@ function LocationTile({
               </View>
             )}
           </View>
-          <View style={{ backgroundColor: "rgba(5,10,18,0.88)", borderRadius: 11, paddingHorizontal: 8, paddingVertical: 5, borderWidth: 1, borderColor: isHere ? colors.accent : isSelected ? "#67d8ff" : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)" }}>
-            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color:"#fff", fontSize:14, fontWeight:"900", textShadowColor:"rgba(0,0,0,0.75)", textShadowOffset:{width:0,height:1}, textShadowRadius:2 }}>
+          <View style={{ backgroundColor: isHomeSuite ? "rgba(5,10,18,0.94)" : "rgba(5,10,18,0.88)", borderRadius: 11, paddingHorizontal: 9, paddingVertical: isHomeSuite ? 7 : 5, borderWidth: 1, borderColor: isHere ? colors.accent : isSelected ? "#67d8ff" : isHomeSuite ? "rgba(216,244,255,0.55)" : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)" }}>
+            <Text numberOfLines={1} adjustsFontSizeToFit style={{ color:"#fff", fontSize:isHomeSuite ? 17 : 14, fontWeight:"900", textShadowColor:"rgba(0,0,0,0.75)", textShadowOffset:{width:0,height:1}, textShadowRadius:2 }}>
               {label}
             </Text>
-            <Text numberOfLines={1} style={{ color: metaColor, fontSize: 9, fontWeight: "900", marginTop: 1 }}>
+            <Text numberOfLines={1} style={{ color: isHomeSuite ? "#d8f4ff" : metaColor, fontSize: isHomeSuite ? 10 : 9, fontWeight: "900", marginTop: 1 }}>
               {metaLabel}
             </Text>
             {isHere && (
@@ -1104,6 +1189,7 @@ export default function WorldScreen() {
   const stats               = useGameStore((s) => s.stats);
   const currentLocationSlug = useGameStore((s) => s.currentLocationSlug);
   const travelTo            = useGameStore((s) => s.travelTo);
+  const joinRoom            = useGameStore((s) => s.joinRoom);
   const npcs                = useGameStore((s) => s.npcs);
   const tickNpcs            = useGameStore((s) => s.tickNpcs);
   const conversations       = useGameStore((s) => s.conversations);
@@ -1124,9 +1210,11 @@ export default function WorldScreen() {
   const [chatDraft, setChatDraft] = useState("");
   const [travelNotice, setTravelNotice] = useState<TravelNotice | null>(null);
   const [arrivalNotice, setArrivalNotice] = useState<ArrivalNotice | null>(null);
+  const [roomEntryNotice, setRoomEntryNotice] = useState<RoomEntryNotice | null>(null);
   const [selectedLocationSlug, setSelectedLocationSlug] = useState(currentLocationSlug);
   const travelTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const arrivalTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const roomEntryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const playerVisual = avatar ? getAvatarVisual(avatar) : null;
   const playerAction: AvatarAction =
@@ -1179,8 +1267,8 @@ export default function WorldScreen() {
   const selectedNpcCount = npcsByLoc[selectedLocationSlug]?.length ?? 0;
   const selectedOnlineCount = onlineCounts[selectedLocationSlug] ?? 0;
   const selectedDistrict = getResidentialDistrictForLocation(selectedLocationSlug);
-  const routeTargetSlug = travelNotice?.to ?? (selectedLocationSlug !== currentLocationSlug ? selectedLocationSlug : cityIntel.locationSlug);
-  const routeColor = travelNotice?.color ?? (selectedLocationSlug !== currentLocationSlug ? selectedRecommendedTravel?.color ?? "#67d8ff" : cityIntelTone);
+  const routeTargetSlug = roomEntryNotice?.locationSlug ?? travelNotice?.to ?? (selectedLocationSlug !== currentLocationSlug ? selectedLocationSlug : cityIntel.locationSlug);
+  const routeColor = roomEntryNotice ? "#38c793" : travelNotice?.color ?? (selectedLocationSlug !== currentLocationSlug ? selectedRecommendedTravel?.color ?? "#67d8ff" : cityIntelTone);
   const quickRoomMessages = WORLD_CHAT_SHORTCUTS.map((item) => {
     if (item.startsWith("Bonjour")) return `Bonjour, c'est ${avatar?.displayName ?? "moi"}. Je suis a ${currentLocationName}.`;
     return item;
@@ -1199,6 +1287,7 @@ export default function WorldScreen() {
     return () => {
       if (travelTimerRef.current) clearTimeout(travelTimerRef.current);
       if (arrivalTimerRef.current) clearTimeout(arrivalTimerRef.current);
+      if (roomEntryTimerRef.current) clearTimeout(roomEntryTimerRef.current);
     };
   }, []);
 
@@ -1271,6 +1360,42 @@ export default function WorldScreen() {
       }, 6500);
     }, plan.durationMs);
   }, [currentLocationSlug, housingTier, npcsByLoc, playerLevel, stats.money, stats.reputation, travelTo]);
+
+  const beginRoomEntry = useCallback((slug: string) => {
+    const code = LOCATION_ROOM_CODES[slug] ?? "LOUNGE";
+    const location = worldLocations.find((item) => item.slug === slug);
+    const roomName = slug === "home" ? "Home Suite" : location?.name ?? "Room";
+
+    if (roomEntryTimerRef.current) clearTimeout(roomEntryTimerRef.current);
+    if (travelTimerRef.current) clearTimeout(travelTimerRef.current);
+    if (arrivalTimerRef.current) clearTimeout(arrivalTimerRef.current);
+
+    setSelectedLocationSlug(slug);
+    setSelectedNpc(null);
+    setChatDraft("");
+    setArrivalNotice(null);
+    setTravelNotice(null);
+    setRoomEntryNotice({
+      code,
+      locationSlug: slug,
+      locationName: location?.name ?? slug,
+      roomName,
+      at: Date.now(),
+      durationMs: ROOM_ENTRY_DURATION_MS
+    });
+
+    roomEntryTimerRef.current = setTimeout(() => {
+      if (slug !== currentLocationSlug) {
+        travelTo(slug, { cost: 0, modeLabel: "Entrée room", energyCost: 1 });
+      }
+      const room = joinRoom(code);
+      setRoomEntryNotice(null);
+      roomEntryTimerRef.current = null;
+      if (room) {
+        router.push(`/(app)/room/${room.id}`);
+      }
+    }, ROOM_ENTRY_DURATION_MS);
+  }, [currentLocationSlug, joinRoom, travelTo]);
 
   const postLocationMessage = useCallback((body: string) => {
     const cleanDraft = body.trim();
@@ -2120,6 +2245,7 @@ export default function WorldScreen() {
             color={routeColor}
           />
           {travelNotice && <LiveTravelMarker notice={travelNotice} />}
+          {roomEntryNotice && <RoomEntryOverlay notice={roomEntryNotice} />}
 
           {/* rond-point et place centrale */}
           <View style={{ position:"absolute", left:152 * MAP_SX, top:270 * MAP_SY, width:82 * MAP_SX, height:82 * MAP_SY, borderRadius:42 * MAP_SX, backgroundColor:"#20282f", borderWidth: 2, borderColor: "rgba(255,255,255,0.18)", alignItems:"center", justifyContent:"center" }}>
@@ -2195,7 +2321,7 @@ export default function WorldScreen() {
                 onlineCount={onlineCounts[slug] ?? 0}
                 onPress={() => {
                   setSelectedLocationSlug(slug);
-                  if (slug === currentLocationSlug) enterLocation(slug);
+                  beginRoomEntry(slug);
                 }}
               />
             );
@@ -2426,18 +2552,18 @@ export default function WorldScreen() {
                 <Pressable
                   onPress={() => {
                     if (selectedLocationSlug !== currentLocationSlug) {
-                      enterLocation(selectedLocationSlug);
+                      beginRoomEntry(selectedLocationSlug);
                       return;
                     }
-                    if (primaryLocationAction) handleLocationAction(primaryLocationAction.action);
+                    beginRoomEntry(selectedLocationSlug);
                   }}
-                  disabled={!!travelNotice}
+                  disabled={!!travelNotice || !!roomEntryNotice}
                   style={{
                     flex: 1,
                     minHeight: 42,
                     borderRadius: 13,
                     backgroundColor: selectedLocationSlug === currentLocationSlug ? colors.accent : "#67d8ff",
-                    opacity: travelNotice ? 0.55 : 1,
+                    opacity: travelNotice || roomEntryNotice ? 0.55 : 1,
                     alignItems: "center",
                     justifyContent: "center",
                     flexDirection: "row",
@@ -2446,7 +2572,7 @@ export default function WorldScreen() {
                 >
                   <Ionicons name={(selectedLocationSlug === currentLocationSlug ? primaryLocationAction?.icon ?? "flash" : selectedRecommendedTravel?.icon ?? "navigate") as never} size={16} color="#07111f" />
                   <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#07111f", fontSize: 12, fontWeight: "900" }}>
-                    {travelNotice ? "En trajet" : selectedLocationSlug === currentLocationSlug ? primaryLocationAction?.label ?? "Agir" : "Y aller"}
+                    {roomEntryNotice ? "Entrée..." : travelNotice ? "En trajet" : selectedLocationSlug === currentLocationSlug ? "Entrer room" : "Entrer"}
                   </Text>
                 </Pressable>
                 <Pressable

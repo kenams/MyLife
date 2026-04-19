@@ -71,6 +71,136 @@ import type {
 
 type TestAccountPreset = "balanced" | "burnout" | "romantic" | "live";
 
+const DEFAULT_ROOMS: Array<Omit<Room, "createdAt">> = [
+  {
+    id: "room-lounge-global",
+    name: "Lounge - La ville",
+    kind: "public" as RoomKind,
+    code: "LOUNGE",
+    ownerId: "system",
+    ownerName: "Système",
+    locationSlug: "cafe",
+    memberCount: 6,
+    maxMembers: 100,
+    description: "Chat public de la ville - tout le monde peut écrire ici.",
+    isActive: true
+  },
+  {
+    id: "room-home-suite",
+    name: "Home Suite",
+    kind: "private" as RoomKind,
+    code: "HOME",
+    ownerId: "system",
+    ownerName: "Système",
+    locationSlug: "home",
+    memberCount: 1,
+    maxMembers: 8,
+    description: "Ta suite personnelle. Repos, calme et conversations privées.",
+    isActive: true
+  },
+  {
+    id: "room-test-live",
+    name: "Room Live - Ava, Noa & Leila",
+    kind: "public" as RoomKind,
+    code: "LIVE",
+    ownerId: "system",
+    ownerName: "Système",
+    locationSlug: "cafe",
+    memberCount: 3,
+    maxMembers: 20,
+    description: "Room test avec 3 résidents autonomes. Rejoins et discute en direct.",
+    isActive: true
+  },
+  {
+    id: "room-pulse-gym",
+    name: "Pulse Gym",
+    kind: "public" as RoomKind,
+    code: "GYM",
+    ownerId: "system",
+    ownerName: "Système",
+    locationSlug: "gym",
+    memberCount: 2,
+    maxMembers: 20,
+    description: "Salle de sport live pour discuter entraînement, énergie et défis.",
+    isActive: true
+  },
+  {
+    id: "room-luma-cinema",
+    name: "Luma Cinema",
+    kind: "public" as RoomKind,
+    code: "CINE",
+    ownerId: "system",
+    ownerName: "Système",
+    locationSlug: "cinema",
+    memberCount: 2,
+    maxMembers: 20,
+    description: "Salle cinéma pour sorties, films et rencontres tranquilles.",
+    isActive: true
+  },
+  {
+    id: "room-focus-office",
+    name: "Focus Office",
+    kind: "public" as RoomKind,
+    code: "WORK",
+    ownerId: "system",
+    ownerName: "Système",
+    locationSlug: "office",
+    memberCount: 2,
+    maxMembers: 16,
+    description: "Espace business, réseau, travail et progression.",
+    isActive: true
+  },
+  {
+    id: "room-riverside-park",
+    name: "Riverside Park",
+    kind: "public" as RoomKind,
+    code: "PARK",
+    ownerId: "system",
+    ownerName: "Système",
+    locationSlug: "park",
+    memberCount: 2,
+    maxMembers: 20,
+    description: "Parc live pour marcher, respirer et rencontrer des gens.",
+    isActive: true
+  },
+  {
+    id: "room-fresh-market",
+    name: "Fresh Market",
+    kind: "public" as RoomKind,
+    code: "SHOP",
+    ownerId: "system",
+    ownerName: "Système",
+    locationSlug: "market",
+    memberCount: 2,
+    maxMembers: 18,
+    description: "Marché social pour courses, échanges et petites discussions.",
+    isActive: true
+  },
+  {
+    id: "room-dinner-social",
+    name: "Dinner Social",
+    kind: "public" as RoomKind,
+    code: "FOOD",
+    ownerId: "system",
+    ownerName: "Système",
+    locationSlug: "restaurant",
+    memberCount: 2,
+    maxMembers: 18,
+    description: "Restaurant live pour dates, sorties et discussions calmes.",
+    isActive: true
+  }
+];
+
+function createDefaultRoom(room: Omit<Room, "createdAt">): Room {
+  return { ...room, createdAt: new Date().toISOString() } as Room;
+}
+
+function defaultRoomByCode(code: string): Room | undefined {
+  const normalized = code.toUpperCase();
+  const room = DEFAULT_ROOMS.find((item) => item.code === normalized);
+  return room ? createDefaultRoom(room) : undefined;
+}
+
 type GameState = {
   hasHydrated: boolean;
   session: UserSession | null;
@@ -189,36 +319,7 @@ function initialState() {
     hasHydrated: false,
     session: null as UserSession | null,
     npcs: seedNpcs() as NpcState[],
-    rooms: [
-      {
-        id:          "room-lounge-global",
-        name:        "🌍 Lounge — La ville",
-        kind:        "public" as RoomKind,
-        code:        "LOUNGE",
-        ownerId:     "system",
-        ownerName:   "Système",
-        locationSlug: "cafe",
-        memberCount: 6,
-        maxMembers:  100,
-        description: "Chat public de la ville — tout le monde peut écrire ici.",
-        createdAt:   new Date().toISOString(),
-        isActive:    true
-      } as Room,
-      {
-        id:          "room-test-live",
-        name:        "Room Live — Ava, Noa & Leila",
-        kind:        "public" as RoomKind,
-        code:        "LIVE",
-        ownerId:     "system",
-        ownerName:   "Système",
-        locationSlug: "cafe",
-        memberCount: 3,
-        maxMembers:  20,
-        description: "Room test avec 3 résidents autonomes. Rejoins et discute en direct.",
-        createdAt:   new Date().toISOString(),
-        isActive:    true
-      } as Room
-    ] as Room[],
+    rooms: DEFAULT_ROOMS.map(createDefaultRoom) as Room[],
     isPremium: false,
     premiumTier: null as PremiumTier | null,
     premiumExpiresAt: null as string | null,
@@ -247,7 +348,7 @@ function initialState() {
     housingLastPaidAt: null as string | null,
     wealthScore: 0,
     roomMessages: {} as Record<string, RoomMessage[]>,
-    joinedRooms: ["room-test-live", "room-lounge-global"] as string[],
+    joinedRooms: ["room-home-suite", "room-test-live", "room-lounge-global"] as string[],
     roomInvites: [] as RoomInvite[],
     secretRooms: [] as SecretRoom[],
     secretMessages: {} as Record<string, SecretMessage[]>,
@@ -1466,6 +1567,16 @@ export const useGameStore = create<GameState>()(
           const newWealthScore = computeWealthScore(
             penaltyStats.money, state.playerXp, penaltyStats.reputation, penaltyStats.streak, state.housingTier, state.playerLevel
           );
+          const rooms = [...state.rooms];
+          DEFAULT_ROOMS.forEach((defaultRoom) => {
+            if (!rooms.some((room) => room.id === defaultRoom.id)) {
+              rooms.push(createDefaultRoom(defaultRoom));
+            }
+          });
+          const joinedRooms = ["room-home-suite", "room-test-live", "room-lounge-global"].reduce<string[]>(
+            (current, roomId) => current.includes(roomId) ? current : [...current, roomId],
+            state.joinedRooms
+          );
 
           return {
             stats: normalizeStats(penaltyStats),
@@ -1477,6 +1588,8 @@ export const useGameStore = create<GameState>()(
             lastKnownRank,
             dailyGoals,
             wealthScore: newWealthScore,
+            rooms,
+            joinedRooms,
             ...(goalsNeedReset ? { lastDailyGoalResetAt: today } : {})
           };
         }),
@@ -2660,25 +2773,13 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const upperCode = code.toUpperCase();
         let room = state.rooms.find((r) => r.code === upperCode && r.isActive);
-        // Fallback : re-crée la room test LIVE si elle n'est plus en mémoire
-        if (!room && upperCode === "LIVE") {
-          room = {
-            id:          "room-test-live",
-            name:        "Room Live — Ava, Noa & Leila",
-            kind:        "public" as RoomKind,
-            code:        "LIVE",
-            ownerId:     "system",
-            ownerName:   "Système",
-            locationSlug: "cafe",
-            memberCount: 3,
-            maxMembers:  20,
-            description: "Room test avec 3 résidents autonomes.",
-            createdAt:   new Date().toISOString(),
-            isActive:    true
-          };
+        if (!room) {
+          room = defaultRoomByCode(upperCode);
+        }
+        if (room && !state.rooms.some((candidate) => candidate.id === room!.id)) {
           set((s) => ({
-            rooms: [room!, ...s.rooms.filter((r) => r.id !== "room-test-live")],
-            joinedRooms: s.joinedRooms.includes("room-test-live") ? s.joinedRooms : [...s.joinedRooms, "room-test-live"]
+            rooms: [room!, ...s.rooms.filter((r) => r.id !== room!.id)].slice(0, 50),
+            joinedRooms: s.joinedRooms.includes(room!.id) ? s.joinedRooms : [...s.joinedRooms, room!.id]
           }));
         }
         if (!room) return null;
