@@ -467,6 +467,80 @@ function Birds({ x, y }: { x: number; y: number }) {
   );
 }
 
+function CityLight({ x, y, color = "#f6b94f", delay = 0 }: { x: number; y: number; color?: string; delay?: number }) {
+  const pulse = useRef(new Animated.Value(0.45)).current;
+
+  useEffect(() => {
+    let loop: Animated.CompositeAnimation | null = null;
+    const timer = setTimeout(() => {
+      loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 0.45, duration: 900, useNativeDriver: true })
+        ])
+      );
+      loop.start();
+    }, delay);
+    return () => {
+      clearTimeout(timer);
+      loop?.stop();
+    };
+  }, [delay, pulse]);
+
+  return (
+    <View pointerEvents="none" style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, width: 18, height: 18, alignItems: "center", justifyContent: "center" }}>
+      <Animated.View style={{ position: "absolute", width: 18, height: 18, borderRadius: 9, backgroundColor: color, opacity: pulse, transform: [{ scale: 1.2 }] }} />
+      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: color, borderWidth: 1, borderColor: "rgba(7,17,31,0.72)" }} />
+    </View>
+  );
+}
+
+function HarborBoat({ x, y, color = "#f8fafc", dir = 1, delay = 0, distance = 42, speed = 12500 }: { x: number; y: number; color?: string; dir?: 1 | -1; delay?: number; distance?: number; speed?: number }) {
+  const move = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let active = true;
+    function sail() {
+      if (!active) return;
+      move.setValue(0);
+      Animated.timing(move, {
+        toValue: 1,
+        duration: speed,
+        easing: Easing.inOut(Easing.quad),
+        useNativeDriver: false
+      }).start(() => {
+        if (active) setTimeout(sail, 1200);
+      });
+    }
+    const timer = setTimeout(sail, delay);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [delay, move, speed]);
+
+  const left = move.interpolate({
+    inputRange: [0, 1],
+    outputRange: [x * MAP_SX, (x + distance * dir) * MAP_SX]
+  });
+
+  return (
+    <Animated.View pointerEvents="none" style={{ position: "absolute", left, top: y * MAP_SY, width: 28 * MAP_SX, height: 12 * MAP_SY, transform: [{ rotate: dir === 1 ? "4deg" : "-4deg" }] }}>
+      <View style={{ position: "absolute", left: 2, right: 2, top: 4, height: 7 * MAP_SY, borderRadius: 8, backgroundColor: "#d7b16f", opacity: 0.85 }} />
+      <View style={{ position: "absolute", left: 0, right: 0, top: 1, height: 8 * MAP_SY, borderRadius: 8, backgroundColor: color, borderWidth: 1, borderColor: "rgba(7,17,31,0.25)" }} />
+      <View style={{ position: "absolute", left: 10 * MAP_SX, top: -3, width: 8 * MAP_SX, height: 8 * MAP_SY, borderRadius: 3, backgroundColor: "#60a5fa" }} />
+    </Animated.View>
+  );
+}
+
+function CitySign({ x, y, label, color = "#67d8ff" }: { x: number; y: number; label: string; color?: string }) {
+  return (
+    <View pointerEvents="none" style={{ position: "absolute", left: x * MAP_SX, top: y * MAP_SY, backgroundColor: "rgba(7,17,31,0.82)", borderRadius: 9, paddingHorizontal: 7, paddingVertical: 4, borderWidth: 1, borderColor: color + "66" }}>
+      <Text numberOfLines={1} adjustsFontSizeToFit style={{ color, fontSize: 8, fontWeight: "900" }}>{label}</Text>
+    </View>
+  );
+}
+
 function DecoBuilding({
   x, y, w, h, color, label, windows = true
 }: {
@@ -491,6 +565,8 @@ function DecoBuilding({
         overflow: "hidden"
       }}
     >
+      <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: Math.max(5, w * MAP_SX * 0.16), backgroundColor: "rgba(255,255,255,0.10)" }} />
+      <View style={{ position: "absolute", right: 0, top: 0, bottom: 0, width: Math.max(5, w * MAP_SX * 0.18), backgroundColor: "rgba(0,0,0,0.16)" }} />
       <View style={{ position: "absolute", left: 4, right: 4, top: 4, height: 5, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.20)" }} />
       {windows && [0, 1, 2].map((row) => (
         <View key={row} style={{ position: "absolute", left: 8, right: 8, top: 18 + row * 14, flexDirection: "row", justifyContent: "space-between" }}>
@@ -2014,7 +2090,15 @@ export default function WorldScreen() {
           {[235, 278, 322, 354].map((x, i) => (
             <View key={`dock-${i}`} style={{ position:"absolute", left:x * MAP_SX, top:(i % 2 === 0 ? 86 : 80) * MAP_SY, width:24 * MAP_SX, height:5 * MAP_SY, backgroundColor:"#8a6a43", transform:[{ rotate:"-8deg" }] }} />
           ))}
+          {[222, 264, 306, 348].map((x, i) => (
+            <View key={`wave-top-${i}`} pointerEvents="none" style={{ position:"absolute", left:x * MAP_SX, top:(30 + i * 10) * MAP_SY, width:28 * MAP_SX, height:2, borderRadius:2, backgroundColor:"rgba(229,251,255,0.34)", transform:[{ rotate:"-8deg" }] }} />
+          ))}
+          {[266, 302, 338].map((x, i) => (
+            <View key={`wave-bottom-${i}`} pointerEvents="none" style={{ position:"absolute", left:x * MAP_SX, bottom:(20 + i * 13) * MAP_SY, width:32 * MAP_SX, height:2, borderRadius:2, backgroundColor:"rgba(229,251,255,0.30)", transform:[{ rotate:"6deg" }] }} />
+          ))}
           <Text style={{ position:"absolute", right:16, top:22 * MAP_SY, color:"#e5fbff", fontSize:12, fontWeight:"900", textShadowColor:"rgba(0,0,0,0.35)", textShadowRadius:2 }}>Port</Text>
+          <HarborBoat x={250} y={36} dir={1} delay={500} />
+          <HarborBoat x={356} y={414} dir={-1} color="#fff2c7" delay={1800} distance={58} speed={15000} />
 
           <Cloud x={18} y={16} scale={0.9} />
           <Cloud x={300} y={116} scale={0.72} />
@@ -2026,6 +2110,8 @@ export default function WorldScreen() {
           <Road x={120} y={0} w={26} h={460} horizontal={false} />
           <Road x={240} y={0} w={26} h={460} horizontal={false} />
           <View style={{ position:"absolute", left:0, top:390 * MAP_SY, width:300 * MAP_SX, height:36 * MAP_SY, backgroundColor:"#263039", borderWidth:1, borderColor:"rgba(255,255,255,0.08)", transform:[{ rotate:"-10deg" }] }} />
+          <View style={{ position:"absolute", left:148 * MAP_SX, top:128 * MAP_SY, width:82 * MAP_SX, height:40 * MAP_SY, borderRadius:20, borderWidth:2, borderColor:"rgba(255,255,255,0.12)", backgroundColor:"rgba(7,17,31,0.16)" }} />
+          <View style={{ position:"absolute", left:262 * MAP_SX, top:268 * MAP_SY, width:82 * MAP_SX, height:40 * MAP_SY, borderRadius:20, borderWidth:2, borderColor:"rgba(255,255,255,0.12)", backgroundColor:"rgba(7,17,31,0.16)" }} />
 
           {[0, 44, 88, 154, 198, 286, 330].map((x) => <RoadLine key={`r1-${x}`} x={x} y={146} w={22} h={3} />)}
           {[12, 56, 100, 164, 208, 284, 328].map((x) => <RoadLine key={`r2-${x}`} x={x} y={286} w={22} h={3} />)}
@@ -2057,6 +2143,9 @@ export default function WorldScreen() {
           <MapLabel x={14} y={442} text="Quartier pauvre" />
           <MapLabel x={142} y={74} text="Moyen riche" tone="blue" />
           <MapLabel x={286} y={432} text="Quartier riche" tone="light" />
+          <CitySign x={274} y={132} label="BUSINESS" color="#93c5fd" />
+          <CitySign x={16} y={258} label="GREEN ZONE" color="#8ee0bd" />
+          <CitySign x={296} y={360} label="ELITE" color="#f6b94f" />
           <TransitStop x={106} y={114} icon="bus" label="Bus" color="#60a5fa" />
           <TransitStop x={268} y={268} icon="bus" label="Bus" color="#60a5fa" />
           <TransitStop x={216} y={304} icon="car-sport" label="Parking" color="#f6b94f" />
@@ -2086,6 +2175,13 @@ export default function WorldScreen() {
           <MovingCar y={280} color="#f6b94f" dir={1} speed={9100} delay={900} />
           <MovingCar y={293} color="#38c793" dir={-1} speed={7800} delay={2200} />
           <MovingCar y={400} color="#f97316" dir={1} speed={10800} delay={1800} />
+          {[
+            [24, 126], [88, 126], [168, 126], [226, 126], [286, 126], [344, 126],
+            [34, 266], [96, 266], [168, 266], [226, 266], [286, 266], [344, 266],
+            [116, 34], [116, 196], [116, 342], [236, 42], [236, 214], [236, 360]
+          ].map(([x, y], i) => (
+            <CityLight key={`light-${i}`} x={x} y={y} delay={i * 120} color={i % 4 === 0 ? "#67d8ff" : "#f6b94f"} />
+          ))}
 
           {/* Tuiles */}
           {Object.entries(LOCATION_TILES).map(([slug, tile]) => {
