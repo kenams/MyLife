@@ -60,6 +60,123 @@ function scaleTile(tile: (typeof LOCATION_TILES)[string]) {
   };
 }
 
+function tileCenter(slug: string) {
+  const tile = LOCATION_TILES[slug];
+  if (!tile) return null;
+  const box = scaleTile(tile);
+  return { x: box.x + box.w / 2, y: box.y + box.h / 2 };
+}
+
+function RouteGuide({ fromSlug, toSlug, color = "#f6b94f" }: { fromSlug: string; toSlug: string; color?: string }) {
+  if (fromSlug === toSlug) return null;
+  const from = tileCenter(fromSlug);
+  const to = tileCenter(toSlug);
+  if (!from || !to) return null;
+
+  const x = Math.min(from.x, to.x);
+  const y = Math.min(from.y, to.y);
+  const horizontalWidth = Math.max(8, Math.abs(to.x - from.x));
+  const verticalHeight = Math.max(8, Math.abs(to.y - from.y));
+  const cornerX = to.x;
+  const cornerY = from.y;
+
+  return (
+    <View pointerEvents="none" style={{ position: "absolute", left: 0, right: 0, top: 0, bottom: 0 }}>
+      <View style={{ position: "absolute", left: x, top: from.y - 3, width: horizontalWidth, height: 6, borderRadius: 6, backgroundColor: "#07111f", opacity: 0.82 }} />
+      <View style={{ position: "absolute", left: cornerX - 3, top: y, width: 6, height: verticalHeight, borderRadius: 6, backgroundColor: "#07111f", opacity: 0.82 }} />
+      <View style={{ position: "absolute", left: x, top: from.y - 2, width: horizontalWidth, height: 4, borderRadius: 4, backgroundColor: color, opacity: 0.9 }} />
+      <View style={{ position: "absolute", left: cornerX - 2, top: y, width: 4, height: verticalHeight, borderRadius: 4, backgroundColor: color, opacity: 0.9 }} />
+      <View style={{ position: "absolute", left: from.x - 6, top: from.y - 6, width: 12, height: 12, borderRadius: 6, backgroundColor: colors.accent, borderWidth: 2, borderColor: "#07111f" }} />
+      <View style={{ position: "absolute", left: cornerX - 8, top: cornerY - 8, width: 16, height: 16, borderRadius: 8, backgroundColor: "#07111f", borderWidth: 2, borderColor: color }} />
+      <View style={{ position: "absolute", left: to.x - 8, top: to.y - 8, width: 16, height: 16, borderRadius: 8, backgroundColor: color, borderWidth: 2, borderColor: "#07111f" }} />
+    </View>
+  );
+}
+
+function LocationDetail({ slug, w, h }: { slug: string; w: number; h: number }) {
+  if (slug === "park") {
+    return (
+      <>
+        <View style={{ position:"absolute", left:8, top:12, width:16, height:16, borderRadius:8, backgroundColor:"#2ca65a" }} />
+        <View style={{ position:"absolute", right:8, bottom:14, width:18, height:18, borderRadius:9, backgroundColor:"#38c793" }} />
+        <View style={{ position:"absolute", left:"38%", top:"34%", width:22, height:22, borderRadius:11, backgroundColor:"rgba(88,178,255,0.50)", borderWidth:1, borderColor:"rgba(255,255,255,0.35)" }} />
+      </>
+    );
+  }
+
+  if (slug.includes("residence")) {
+    return (
+      <>
+        <View style={{ position:"absolute", left:10, top:14, width:w * 0.42, height:7, borderRadius:4, backgroundColor:"rgba(255,255,255,0.38)" }} />
+        <View style={{ position:"absolute", right:10, top:12, width:18, height:18, borderRadius:9, backgroundColor: slug === "residence-luxe" ? "#fff0a8" : "rgba(255,255,255,0.22)", borderWidth:1, borderColor:"rgba(255,255,255,0.32)" }} />
+        <View style={{ position:"absolute", left:w * 0.42, bottom:8, width:16, height:22, borderRadius:5, backgroundColor:"rgba(6,16,28,0.46)", borderWidth:1, borderColor:"rgba(255,255,255,0.18)" }} />
+      </>
+    );
+  }
+
+  if (slug === "market") {
+    return (
+      <>
+        <View style={{ position:"absolute", left:9, right:9, top:18, height:9, borderRadius:5, backgroundColor:"#fff5c2" }} />
+        <View style={{ position:"absolute", left:12, right:12, bottom:16, height:7, borderRadius:4, backgroundColor:"rgba(7,17,31,0.28)" }} />
+      </>
+    );
+  }
+
+  if (slug === "cafe") {
+    return (
+      <>
+        <View style={{ position:"absolute", left:12, right:12, top:20, height:8, borderRadius:6, backgroundColor:"#ffe0a3" }} />
+        <View style={{ position:"absolute", right:12, bottom:16, width:18, height:18, borderRadius:9, backgroundColor:"rgba(255,255,255,0.18)", borderWidth:2, borderColor:"#f6d38b" }} />
+      </>
+    );
+  }
+
+  if (slug === "office") {
+    return (
+      <>
+        <View style={{ position:"absolute", left:10, right:10, top:16, height:1.5, backgroundColor:"rgba(255,255,255,0.45)" }} />
+        <View style={{ position:"absolute", left:10, right:10, top:h * 0.48, height:1.5, backgroundColor:"rgba(255,255,255,0.35)" }} />
+        <View style={{ position:"absolute", right:12, bottom:12, width:18, height:22, borderRadius:3, backgroundColor:"rgba(10,25,43,0.45)" }} />
+      </>
+    );
+  }
+
+  if (slug === "gym") {
+    return (
+      <>
+        <View style={{ position:"absolute", left:12, right:12, top:18, height:10, borderRadius:6, backgroundColor:"rgba(255,255,255,0.22)" }} />
+        <View style={{ position:"absolute", left:18, bottom:22, width:w - 36, height:14, borderRadius:7, backgroundColor:"rgba(7,17,31,0.30)" }} />
+      </>
+    );
+  }
+
+  if (slug === "restaurant") {
+    return (
+      <>
+        <View style={{ position:"absolute", left:10, right:10, top:16, height:9, borderRadius:5, backgroundColor:"#f6b94f" }} />
+        <View style={{ position:"absolute", left:14, bottom:16, width:18, height:18, borderRadius:9, backgroundColor:"rgba(255,255,255,0.20)" }} />
+      </>
+    );
+  }
+
+  if (slug === "cinema") {
+    return (
+      <>
+        <View style={{ position:"absolute", left:9, right:9, top:18, height:10, borderRadius:3, backgroundColor:"rgba(255,255,255,0.82)" }} />
+        <View style={{ position:"absolute", left:14, top:34, width:w - 28, height:4, borderRadius:2, backgroundColor:"#f6b94f" }} />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <View style={{ position:"absolute", left:12, right:12, top:16, height:8, borderRadius:5, backgroundColor:"rgba(255,255,255,0.24)" }} />
+      <View style={{ position:"absolute", right:12, bottom:12, width:16, height:22, borderRadius:4, backgroundColor:"rgba(7,17,31,0.36)" }} />
+    </>
+  );
+}
+
 function RoadLine({ x, y, w, h }: { x: number; y: number; w: number; h: number }) {
   return (
     <View
@@ -430,16 +547,19 @@ const LOCATION_ACTIONS: Record<string, { label: string; action: LifeActionId; ic
   "residence-populaire": [
     { label: "Repos", action: "rest-home", icon: "bed" },
     { label: "Cuisiner", action: "home-cooking", icon: "restaurant" },
+    { label: "Douche", action: "shower", icon: "water" },
     { label: "Voisins", action: "cafe-chat", icon: "chatbubbles" }
   ],
   "residence-confort": [
     { label: "Repos", action: "rest-home", icon: "bed" },
     { label: "Cuisiner", action: "home-cooking", icon: "restaurant" },
+    { label: "Douche", action: "shower", icon: "water" },
     { label: "Inviter", action: "cafe-chat", icon: "people" }
   ],
   "residence-luxe": [
     { label: "Recevoir", action: "go-out", icon: "sparkles" },
     { label: "Reseau", action: "cafe-chat", icon: "people" },
+    { label: "Douche", action: "shower", icon: "water" },
     { label: "Reset", action: "rest-home", icon: "bed" }
   ],
   market: [
@@ -661,13 +781,7 @@ function LocationTile({
             ))}
           </View>
         ))}
-        {slug === "park" && (
-          <>
-            <View style={{ position:"absolute", left:8, top:12, width:16, height:16, borderRadius:8, backgroundColor:"#2ca65a" }} />
-            <View style={{ position:"absolute", right:8, bottom:14, width:18, height:18, borderRadius:9, backgroundColor:"#38c793" }} />
-            <View style={{ position:"absolute", left:"38%", top:"34%", width:22, height:22, borderRadius:11, backgroundColor:"rgba(88,178,255,0.50)", borderWidth:1, borderColor:"rgba(255,255,255,0.35)" }} />
-          </>
-        )}
+        <LocationDetail slug={slug} w={box.w} h={box.h} />
 
         <View style={{ flex:1, padding: 8, justifyContent:"space-between" }}>
           <View style={{ flexDirection:"row", justifyContent:"space-between", alignItems:"center" }}>
@@ -722,6 +836,7 @@ export default function WorldScreen() {
   const performAction       = useGameStore((s) => s.performAction);
   const dailyGoals          = useGameStore((s) => s.dailyGoals);
   const relationships       = useGameStore((s) => s.relationships);
+  const housingTier         = useGameStore((s) => s.housingTier);
 
   const { members: realLivePlayers } = useWorldPresence();
   const [simulatedPlayers, setSimulatedPlayers] = useState<WorldPresenceMember[]>([]);
@@ -730,6 +845,7 @@ export default function WorldScreen() {
   const [selectedNpc, setSelectedNpc] = useState<NpcState | null>(null);
   const [activeRoomNpcId, setActiveRoomNpcId] = useState<string | null>(null);
   const [chatDraft, setChatDraft] = useState("");
+  const [travelNotice, setTravelNotice] = useState<{ from: string; to: string; at: number } | null>(null);
 
   const playerVisual = avatar ? getAvatarVisual(avatar) : null;
   const playerAction: AvatarAction =
@@ -766,7 +882,7 @@ export default function WorldScreen() {
     ? conversations.find((conversation) => conversation.kind === "direct" && conversation.peerId === activeRoomNpc.id) ?? null
     : null;
   const visibleRoomMessages = hasLiveLocationChat ? locationChat.messages : activeConversation?.messages ?? [];
-  const cityIntel = buildCityIntel({ stats, currentLocationSlug, npcs, livePlayers, relationships });
+  const cityIntel = buildCityIntel({ stats, currentLocationSlug, npcs, livePlayers, relationships, housingTier });
   const cityIntelTone = cityIntelColor[cityIntel.urgency];
 
   useEffect(() => {
@@ -786,12 +902,18 @@ export default function WorldScreen() {
   }, [activeRoomNpc?.id]);
 
   const enterLocation = useCallback((slug: string) => {
+    if (slug !== currentLocationSlug) {
+      setTravelNotice({ from: currentLocationSlug, to: slug, at: Date.now() });
+      setTimeout(() => {
+        setTravelNotice((notice) => (notice?.to === slug ? null : notice));
+      }, 1400);
+    }
     travelTo(slug);
     const residents = npcsByLoc[slug] ?? [];
     setActiveRoomNpcId(residents[0]?.id ?? null);
     setSelectedNpc(null);
     setChatDraft("");
-  }, [npcsByLoc, travelTo]);
+  }, [currentLocationSlug, npcsByLoc, travelTo]);
 
   const sendRoomMessage = useCallback(() => {
     const cleanDraft = chatDraft.trim();
@@ -1216,6 +1338,11 @@ export default function WorldScreen() {
           <Crosswalk x={232} y={268} horizontal />
           <Crosswalk x={122} y={300} horizontal={false} />
           <Crosswalk x={242} y={164} horizontal={false} />
+          <RouteGuide
+            fromSlug={travelNotice?.from ?? currentLocationSlug}
+            toSlug={travelNotice?.to ?? cityIntel.locationSlug}
+            color={travelNotice ? colors.accent : cityIntelTone}
+          />
 
           {/* rond-point et place centrale */}
           <View style={{ position:"absolute", left:152 * MAP_SX, top:270 * MAP_SY, width:82 * MAP_SX, height:82 * MAP_SY, borderRadius:42 * MAP_SX, backgroundColor:"#20282f", borderWidth: 2, borderColor: "rgba(255,255,255,0.18)", alignItems:"center", justifyContent:"center" }}>
@@ -1361,6 +1488,39 @@ export default function WorldScreen() {
               </View>
             ))}
           </View>
+
+          {travelNotice && (
+            <View pointerEvents="none" style={{
+              position: "absolute",
+              left: 12,
+              right: 12,
+              bottom: 96,
+              backgroundColor: "rgba(7,17,31,0.92)",
+              borderRadius: 14,
+              paddingHorizontal: 12,
+              paddingVertical: 9,
+              borderWidth: 1,
+              borderColor: colors.accent + "66",
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10
+            }}>
+              <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="navigate" size={16} color="#07111f" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.accent, fontSize: 11, fontWeight: "900" }}>DEPLACEMENT</Text>
+                <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: "#ffffff", fontSize: 13, fontWeight: "900" }}>
+                  {worldLocations.find((l) => l.slug === travelNotice.from)?.name ?? travelNotice.from}
+                  {" -> "}
+                  {worldLocations.find((l) => l.slug === travelNotice.to)?.name ?? travelNotice.to}
+                </Text>
+              </View>
+              <Text style={{ color: "rgba(226,232,240,0.7)", fontSize: 10, fontWeight: "800" }}>
+                {new Date(travelNotice.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </Text>
+            </View>
+          )}
         </View>
 
           <View style={{

@@ -107,4 +107,18 @@ describe("city-intelligence", () => {
     expect(plan.action).toBe("cafe-chat");
     expect(plan.targetName).toBe("Ava");
   });
+
+  it("uses the player's residential district for recovery needs", () => {
+    const plan = buildCityIntel({
+      stats: normalizeStats({ ...createStatsFromAvatar(avatar), hunger: 80, energy: 12, hygiene: 80, money: 160 }),
+      currentLocationSlug: "office",
+      npcs: [],
+      livePlayers: [],
+      relationships,
+      housingTier: "villa"
+    });
+
+    expect(plan.locationSlug).toBe("residence-luxe");
+    expect(plan.action).toBe("rest-home");
+  });
 });

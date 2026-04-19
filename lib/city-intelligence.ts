@@ -1,3 +1,5 @@
+import { getResidentialDistrictForHousing } from "@/lib/residential-districts";
+import type { HousingTierId } from "@/lib/housing";
 import type { AvatarStats, LifeActionId, NpcState, RelationshipRecord, WorldPresenceMember } from "@/lib/types";
 
 export type CityIntelUrgency = "critical" | "high" | "medium" | "low";
@@ -19,6 +21,7 @@ type CityIntelInput = {
   npcs: NpcState[];
   livePlayers: WorldPresenceMember[];
   relationships: RelationshipRecord[];
+  housingTier?: HousingTierId;
 };
 
 const LOCATION_ACTION: Record<string, LifeActionId> = {
@@ -77,6 +80,7 @@ function buildPlan(
 
 export function buildCityIntel(input: CityIntelInput): CityIntelPlan {
   const { stats } = input;
+  const homeLocationSlug = getResidentialDistrictForHousing(input.housingTier ?? "squat").locationSlug;
 
   if (stats.hunger <= 22 || stats.hydration <= 20) {
     return buildPlan(
@@ -94,12 +98,12 @@ export function buildCityIntel(input: CityIntelInput): CityIntelPlan {
   if (stats.energy <= 22) {
     return buildPlan(
       input,
-      "home",
-      "sleep",
+      homeLocationSlug,
+      "rest-home",
       "critical",
       "Repos obligatoire",
-      "Rentre te reposer. Le social, le travail et les sorties coutent trop cher avec cette energie.",
-      "Dormir",
+      "Rentre dans ton quartier residentiel. Le social, le travail et les sorties coutent trop cher avec cette energie.",
+      "Rentrer",
       "energie critique"
     );
   }
@@ -107,11 +111,11 @@ export function buildCityIntel(input: CityIntelInput): CityIntelPlan {
   if (stats.hygiene <= 24) {
     return buildPlan(
       input,
-      "home",
+      homeLocationSlug,
       "shower",
       "high",
       "Image a corriger",
-      "Prepare ton avatar avant une interaction sociale. L'hygiene impacte directement l'attractivite.",
+      "Prepare ton avatar chez toi avant une interaction sociale. L'hygiene impacte directement l'attractivite.",
       "Douche",
       "hygiene basse"
     );
