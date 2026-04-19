@@ -7,6 +7,7 @@ import { AvatarSprite } from "@/components/avatar-sprite";
 import { Button, Card, Muted, Pill, SectionTitle } from "@/components/ui";
 import type { AvatarAction } from "@/lib/avatar-visual";
 import { ACTION_COLORS, ACTION_LABELS, getAvatarVisual, getNpcVisual } from "@/lib/avatar-visual";
+import { buildCityIntel, type CityIntelUrgency } from "@/lib/city-intelligence";
 import { cityName } from "@/lib/game-data";
 import { LOCATION_COORDS, tickAllNpcs } from "@/lib/npc-brain";
 import { getNpcStatusLine, getNpcMoodEmoji } from "@/lib/npc-ai";
@@ -311,6 +312,13 @@ function MapBadge({ icon, label, value, color }: { icon: string; label: string; 
   );
 }
 
+const cityIntelColor: Record<CityIntelUrgency, string> = {
+  critical: "#ef4444",
+  high: "#f6b94f",
+  medium: "#60a5fa",
+  low: "#38c793"
+};
+
 const INTERIORS: Record<string, { title: string; tone: string; actions: string[] }> = {
   home: {
     title: "Intérieur maison",
@@ -512,12 +520,13 @@ function LiveNpc({ npc, onPress }: { npc: NpcState; onPress: () => void }) {
 
 // ─── Tuile de lieu ────────────────────────────────────────────────────────────
 function LocationTile({
-  slug, tile, label, isHere, npcCount, onlineCount, onPress
+  slug, tile, label, isHere, isRecommended, npcCount, onlineCount, onPress
 }: {
   slug: string;
   tile: (typeof LOCATION_TILES)[string];
   label: string;
   isHere: boolean;
+  isRecommended: boolean;
   npcCount: number;
   onlineCount: number;
   onPress: () => void;
@@ -555,8 +564,8 @@ function LocationTile({
       <Animated.View style={{
         width: "100%", height: box.h,
         borderRadius: 14,
-        borderWidth: isHere ? 3 : 1.5,
-        borderColor: isHere ? colors.accent : "rgba(255,255,255,0.24)",
+        borderWidth: isHere || isRecommended ? 3 : 1.5,
+        borderColor: isHere ? colors.accent : isRecommended ? "#f6b94f" : "rgba(255,255,255,0.24)",
         opacity: glow,
         overflow: "hidden",
         shadowColor: tile.color,
@@ -589,6 +598,11 @@ function LocationTile({
             <View style={{ backgroundColor:"rgba(0,0,0,0.46)", borderRadius:11, padding:5, borderWidth: 1, borderColor: "rgba(255,255,255,0.22)" }}>
               <Ionicons name={tile.icon as never} size={19} color="#fff" />
             </View>
+            {isRecommended && (
+              <View style={{ backgroundColor:"#f6b94f", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.25)" }}>
+                <Text style={{ color:"#07111f", fontSize: 9, fontWeight: "900" }}>GO</Text>
+              </View>
+            )}
             {(npcCount > 0 || onlineCount > 0) && (
               <View style={{ backgroundColor: onlineCount>0 ? "#38c793" : "rgba(255,255,255,0.28)", borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: "rgba(255,255,255,0.18)" }}>
                 <Text style={{ color: onlineCount>0?"#07111f":"#fff", fontSize: 10, fontWeight: "900" }}>
@@ -603,6 +617,9 @@ function LocationTile({
             </Text>
             {isHere && (
               <Text style={{ color:"#8ee0bd", fontSize:9, fontWeight:"700" }}>📍 Tu es ici</Text>
+            )}
+            {!isHere && isRecommended && (
+              <Text style={{ color:"#ffe4a3", fontSize:9, fontWeight:"900" }}>Action conseillee</Text>
             )}
           </View>
         </View>
@@ -625,6 +642,7 @@ export default function WorldScreen() {
   const sendMessageStore    = useGameStore((s) => s.sendMessage);
   const performAction       = useGameStore((s) => s.performAction);
   const dailyGoals          = useGameStore((s) => s.dailyGoals);
+  const relationships       = useGameStore((s) => s.relationships);
 
   const { members: realLivePlayers } = useWorldPresence();
   const [simulatedPlayers, setSimulatedPlayers] = useState<WorldPresenceMember[]>([]);
@@ -669,6 +687,8 @@ export default function WorldScreen() {
     ? conversations.find((conversation) => conversation.kind === "direct" && conversation.peerId === activeRoomNpc.id) ?? null
     : null;
   const visibleRoomMessages = hasLiveLocationChat ? locationChat.messages : activeConversation?.messages ?? [];
+  const cityIntel = buildCityIntel({ stats, currentLocationSlug, npcs, livePlayers, relationships });
+  const cityIntelTone = cityIntelColor[cityIntel.urgency];
 
   useEffect(() => {
     if (currentRoomNpcs.length === 0) {
@@ -764,6 +784,51 @@ export default function WorldScreen() {
     }
   }, [activeRoomNpc, performAction, startDirectConversation]);
 
+  const executeCityIntel = useCallback(() => {
+    if (cityIntel.locationSlug !== currentLocationSlug) {
+      enterLocation(cityIntel.locationSlug);
+      return;
+    }
+    handleLocationAction(cityIntel.action);
+  }, [cityIntel.action, cityIntel.locationSlug, currentLocationSlug, enterLocation, handleLocationAction]);
+
+  const cityIntelPanel = (
+    <View style={{
+      backgroundColor: cityIntelTone + "12",
+      borderWidth: 1.5,
+      borderColor: cityIntelTone + "45",
+      borderRadius: 16,
+      padding: 12,
+      gap: 10
+    }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: cityIntelTone, fontSize: 12, fontWeight: "900" }}>CITY INTEL</Text>
+          <Text style={{ color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 2 }}>{cityIntel.title}</Text>
+        </View>
+        <View style={{ backgroundColor: cityIntelTone + "20", borderRadius: 12, paddingHorizontal: 9, paddingVertical: 6, borderWidth: 1, borderColor: cityIntelTone + "40" }}>
+          <Text style={{ color: cityIntelTone, fontSize: 10, fontWeight: "900" }}>{cityIntel.urgency.toUpperCase()}</Text>
+        </View>
+      </View>
+      <Text style={{ color: colors.textSoft, fontSize: 12, lineHeight: 17 }}>{cityIntel.body}</Text>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <View style={{ backgroundColor: "rgba(255,255,255,0.07)", borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(255,255,255,0.1)" }}>
+          <Text style={{ color: colors.textSoft, fontSize: 10, fontWeight: "800" }}>{cityIntel.reason}</Text>
+        </View>
+        {cityIntel.targetName && (
+          <View style={{ backgroundColor: "rgba(56,199,147,0.12)", borderRadius: 10, paddingHorizontal: 9, paddingVertical: 6, borderWidth: 1, borderColor: "rgba(56,199,147,0.28)" }}>
+            <Text style={{ color: "#8ee0bd", fontSize: 10, fontWeight: "900" }}>{cityIntel.targetName}</Text>
+          </View>
+        )}
+        <Pressable onPress={executeCityIntel} style={{ marginLeft: "auto", backgroundColor: cityIntelTone, borderRadius: 11, paddingHorizontal: 12, paddingVertical: 8 }}>
+          <Text style={{ color: "#07111f", fontSize: 11, fontWeight: "900" }}>
+            {cityIntel.locationSlug === currentLocationSlug ? cityIntel.actionLabel : "Y aller"}
+          </Text>
+        </Pressable>
+      </View>
+    </View>
+  );
+
   const travelMenu = (
     <View style={{
       backgroundColor: "rgba(255,255,255,0.055)",
@@ -783,6 +848,7 @@ export default function WorldScreen() {
           const npcHere = npcsByLoc[loc.slug]?.length ?? 0;
           const onlineHere = onlineCounts[loc.slug] ?? 0;
           const tile = LOCATION_TILES[loc.slug];
+          const isRecommended = cityIntel.locationSlug === loc.slug;
           return (
             <Pressable
               key={loc.slug}
@@ -792,9 +858,9 @@ export default function WorldScreen() {
                 minHeight: 64,
                 padding: 10,
                 borderRadius: 12,
-                backgroundColor: isHere ? "rgba(139,124,255,0.16)" : "rgba(255,255,255,0.045)",
+                backgroundColor: isHere ? "rgba(139,124,255,0.16)" : isRecommended ? "rgba(246,185,79,0.13)" : "rgba(255,255,255,0.045)",
                 borderWidth: 1,
-                borderColor: isHere ? colors.accent : "rgba(255,255,255,0.08)",
+                borderColor: isHere ? colors.accent : isRecommended ? "rgba(246,185,79,0.38)" : "rgba(255,255,255,0.08)",
                 gap: 5
               }}
             >
@@ -806,6 +872,7 @@ export default function WorldScreen() {
               </View>
               <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: isHere ? colors.accent : colors.text, fontWeight: "800", fontSize: 12 }}>{loc.name}</Text>
               {isHere && <Text style={{ color: colors.accent, fontSize: 9, fontWeight: "700" }}>Tu es ici</Text>}
+              {!isHere && isRecommended && <Text style={{ color: "#f6b94f", fontSize: 9, fontWeight: "900" }}>Conseille</Text>}
             </Pressable>
           );
         })}
@@ -982,6 +1049,8 @@ export default function WorldScreen() {
           </View>
         </View>
 
+        {!IS_WIDE && cityIntelPanel}
+
         {/* Carte 2D + chat de lieu */}
         <View style={{ width: "100%", flexDirection: IS_WIDE ? "row" : "column", gap: 12, alignItems: IS_WIDE ? "stretch" : "center" }}>
         <View style={{
@@ -1083,6 +1152,7 @@ export default function WorldScreen() {
               tile={tile}
               label={worldLocations.find((item) => item.slug === slug)?.name ?? slug}
               isHere={currentLocationSlug === slug}
+              isRecommended={cityIntel.locationSlug === slug}
               npcCount={npcsByLoc[slug]?.length ?? 0}
               onlineCount={onlineCounts[slug] ?? 0}
               onPress={() => enterLocation(slug)}
@@ -1305,6 +1375,7 @@ export default function WorldScreen() {
 
           {IS_WIDE && (
             <View style={{ flex: 1, minWidth: 300, maxWidth: 520, gap: 12 }}>
+              {cityIntelPanel}
               {travelMenu}
               {dailyMissionPanel}
               {locationInterior}
@@ -1496,6 +1567,7 @@ export default function WorldScreen() {
             const npcHere    = npcsByLoc[loc.slug]?.length ?? 0;
             const onlineHere = onlineCounts[loc.slug] ?? 0;
             const tile       = LOCATION_TILES[loc.slug];
+            const isRecommended = cityIntel.locationSlug === loc.slug;
             return (
               <Pressable
                 key={loc.slug}
@@ -1504,9 +1576,9 @@ export default function WorldScreen() {
                   width: "47%",
                   padding: 12,
                   borderRadius: 12,
-                  backgroundColor: isHere ? "rgba(139,124,255,0.12)" : "rgba(255,255,255,0.04)",
+                  backgroundColor: isHere ? "rgba(139,124,255,0.12)" : isRecommended ? "rgba(246,185,79,0.12)" : "rgba(255,255,255,0.04)",
                   borderWidth: 1,
-                  borderColor: isHere ? colors.accent : "rgba(255,255,255,0.08)",
+                  borderColor: isHere ? colors.accent : isRecommended ? "rgba(246,185,79,0.38)" : "rgba(255,255,255,0.08)",
                   gap: 4
                 }}
               >
@@ -1519,6 +1591,7 @@ export default function WorldScreen() {
                 </View>
                 <Text style={{ color: isHere ? colors.accent : colors.text, fontWeight: "700", fontSize: 13 }}>{loc.name}</Text>
                 {isHere && <Text style={{ color: colors.accent, fontSize: 10 }}>Tu es ici</Text>}
+                {!isHere && isRecommended && <Text style={{ color: "#f6b94f", fontSize: 10, fontWeight: "900" }}>Conseille</Text>}
               </Pressable>
             );
           })}

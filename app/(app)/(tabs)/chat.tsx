@@ -6,6 +6,7 @@ import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getNpcVisual } from "@/lib/avatar-visual";
 import { activities, starterResidents } from "@/lib/game-engine";
+import { getBestProfileMatches } from "@/lib/profile-matching";
 import { buildSocialHubSnapshot, relationshipScore } from "@/lib/social-hub";
 import { colors } from "@/lib/theme";
 import type { Conversation, NpcState, Room, RoomMessage } from "@/lib/types";
@@ -325,6 +326,7 @@ export default function ChatScreen() {
   const respondRoomInvite = useGameStore((x) => x.respondRoomInvite);
   const invitations = useGameStore((x) => x.invitations);
   const respondInvitation = useGameStore((x) => x.respondInvitation);
+  const startDirectConversation = useGameStore((x) => x.startDirectConversation);
   const avatar = useGameStore((x) => x.avatar);
   const roomMessages = useGameStore((x) => x.roomMessages);
   const [tab, setTab] = useState<Tab>("contacts");
@@ -362,6 +364,7 @@ export default function ChatScreen() {
   const pendingInvites = hub.pendingInvitations;
   const unread = hub.unreadTotal;
   const loungeLast = hub.loungeLastMessage;
+  const topMatches = getBestProfileMatches(avatar, starterResidents, relationships).slice(0, 3);
   const tabMeta: Record<Tab, { label: string; icon: IconName; badge: number }> = {
     contacts: { label: "Contacts", icon: "person", badge: unread },
     rooms: { label: "Rooms", icon: "people", badge: pendingRooms.length },
@@ -373,6 +376,12 @@ export default function ChatScreen() {
     setRoomName("");
     setCreateOpen(false);
     setRoomId(room.id);
+  }
+
+  function openMatch(residentId: string, residentName: string) {
+    const existing = conversations.find((conversation) => conversation.kind === "direct" && conversation.peerId === residentId);
+    startDirectConversation(residentId, residentName);
+    setConvId(existing?.id ?? `dm-${residentId}`);
   }
 
   return (
@@ -406,6 +415,23 @@ export default function ChatScreen() {
             {pendingRooms.map((i) => <View key={i.id} style={s.inviteLine}><Text style={s.inviteBody}>{i.fromName} t'invite dans {i.roomName}</Text><Pressable onPress={() => respondRoomInvite(i.id, "accepted")} style={s.ok}><Ionicons name="checkmark" size={16} color={colors.accent} /></Pressable><Pressable onPress={() => respondRoomInvite(i.id, "declined")} style={s.no}><Ionicons name="close" size={16} color={colors.danger} /></Pressable></View>)}
           </View>}
           {tab === "contacts" && <View>
+            <Text style={s.section}>MATCHS A CONTACTER</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.matchStrip}>
+              {topMatches.map((match) => {
+                const npc = npcs.find((item) => item.id === match.resident.id) ?? null;
+                return (
+                  <Pressable key={match.resident.id} onPress={() => openMatch(match.resident.id, match.resident.name)} style={s.matchCard}>
+                    {npc ? <NpcFace npc={npc} size={42} /> : <PlayerFace name={match.resident.name} size={42} />}
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <Text style={s.matchName} numberOfLines={1}>{match.resident.name}</Text>
+                      <Text style={s.matchScore}>Match {match.score}%</Text>
+                      <Text style={s.matchReason} numberOfLines={1}>{match.reasons[0]}</Text>
+                    </View>
+                    <Ionicons name="chatbubble-ellipses" size={17} color={colors.accent} />
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
             <Text style={s.section}>CONTACTS EN LIGNE</Text>
             {hub.friendOnline.length === 0 && <InfoPanel icon="person" title="Aucun proche en ligne" body="Les autres contacts restent accessibles dans Messages. Le lounge permet aussi de trouver du monde." action="Lounge" onPress={() => setRoomId("room-lounge-global")} />}
             {hub.friendOnline.map((npc) => {
@@ -545,5 +571,10 @@ const s = StyleSheet.create({
   dashboard: { flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingBottom: 10 },
   metric: { flex: 1, minHeight: 52, borderRadius: 13, backgroundColor: "#ffffff08", borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
   metricValue: { color: colors.text, fontSize: 16, fontWeight: "900" },
-  metricLabel: { color: colors.muted, fontSize: 10, fontWeight: "800", marginTop: 2 }
+  metricLabel: { color: colors.muted, fontSize: 10, fontWeight: "800", marginTop: 2 },
+  matchStrip: { gap: 10, paddingBottom: 10 },
+  matchCard: { width: 224, minHeight: 78, flexDirection: "row", alignItems: "center", gap: 10, padding: 11, borderRadius: 15, backgroundColor: colors.accent + "10", borderWidth: 1, borderColor: colors.accent + "32" },
+  matchName: { color: colors.text, fontSize: 13, fontWeight: "900" },
+  matchScore: { color: colors.accent, fontSize: 11, fontWeight: "900", marginTop: 2 },
+  matchReason: { color: colors.textSoft, fontSize: 10, marginTop: 2 }
 });
