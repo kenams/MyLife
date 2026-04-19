@@ -21,12 +21,9 @@ import { useWorldPresence } from "@/hooks/use-world-presence";
 const SCREEN_W = Dimensions.get("window").width;
 const SCREEN_H = Dimensions.get("window").height;
 const IS_WIDE = SCREEN_W >= 1360;
-const MAP_W = IS_WIDE
-  ? Math.min(Math.max(680, SCREEN_W - 760), 1040)
-  : Math.min(SCREEN_W - 24, 620);
-const MAP_H = IS_WIDE
-  ? Math.min(Math.round(MAP_W * 0.72), Math.max(520, SCREEN_H - 220))
-  : Math.round(MAP_W * 0.98);
+// Plein écran : la map occupe toute la surface disponible
+const MAP_W = SCREEN_W;
+const MAP_H = SCREEN_H;
 const MAP_BASE_W = 380;
 const MAP_BASE_H = 460;
 const MAP_SX = MAP_W / MAP_BASE_W;
@@ -2021,106 +2018,45 @@ export default function WorldScreen() {
   ) : null;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: "#07111f" }} showsVerticalScrollIndicator={false} scrollEnabled={!IS_WIDE}>
-      <View style={{ padding: 16, gap: 20, paddingBottom: 40 }}>
+    <View style={{ flex: 1, overflow: "hidden", backgroundColor: "#07111f" }}>
+      <View style={{ flex: 1 }}>
 
-        {/* Header */}
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+        {/* ── Header overlay ── */}
+        <View style={{
+          position: "absolute", top: 0, left: 0, right: 0, zIndex: 20,
+          flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12,
+          paddingHorizontal: 14, paddingTop: 50, paddingBottom: 12,
+          backgroundColor: "rgba(7,17,31,0.82)",
+        }}>
           <View>
-            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 21 }}>World Map</Text>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>{cityName} · clique un bâtiment pour entrer</Text>
+            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 17 }}>🏙️ {cityName}</Text>
+            <Text style={{ color: colors.muted, fontSize: 10 }}>
+              {npcs.filter((n) => n.presenceOnline).length} en ligne · clique un lieu
+            </Text>
           </View>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", gap: 8 }}>
+          <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable
               onPress={() => router.push("/(app)/rooms")}
-              style={{ backgroundColor: colors.accent, borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6 }}
+              style={{ backgroundColor: colors.accent, borderRadius: 14, paddingHorizontal: 10, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 5 }}
             >
-              <Ionicons name="people" size={14} color="#07111f" />
-              <Text style={{ color: "#07111f", fontWeight: "900", fontSize: 12 }}>Rooms</Text>
+              <Ionicons name="people" size={13} color="#07111f" />
+              <Text style={{ color: "#07111f", fontWeight: "900", fontSize: 11 }}>Rooms</Text>
             </Pressable>
             <Pressable
               onPress={() => router.push("/(app)/world-live")}
-              style={{ backgroundColor: "rgba(139,124,255,0.18)", borderRadius: 18, paddingHorizontal: 12, paddingVertical: 8, flexDirection: "row", alignItems: "center", gap: 6, borderWidth: 1, borderColor: "rgba(139,124,255,0.35)" }}
+              style={{ backgroundColor: "rgba(139,124,255,0.18)", borderRadius: 14, paddingHorizontal: 10, paddingVertical: 7, flexDirection: "row", alignItems: "center", gap: 5, borderWidth: 1, borderColor: "rgba(139,124,255,0.35)" }}
             >
-              <Ionicons name="radio" size={14} color="#d0c8ff" />
-              <Text style={{ color: "#d0c8ff", fontWeight: "900", fontSize: 12 }}>Live</Text>
+              <Ionicons name="radio" size={13} color="#d0c8ff" />
+              <Text style={{ color: "#d0c8ff", fontWeight: "900", fontSize: 11 }}>Résidents</Text>
             </Pressable>
           </View>
         </View>
-        {/* ── Hero : Neo Paris Live ── */}
-        <Pressable
-          onPress={() => router.push("/(app)/world-live")}
-          style={{
-            borderRadius: 20,
-            overflow: "hidden",
-            backgroundColor: "#0a0620",
-            borderWidth: 1,
-            borderColor: "#8b7cff40",
-          }}
-        >
-          <View style={{ padding: 16, gap: 10 }}>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-              <View style={{
-                width: 48, height: 48, borderRadius: 14,
-                backgroundColor: "#8b7cff22",
-                borderWidth: 1, borderColor: "#8b7cff55",
-                alignItems: "center", justifyContent: "center",
-              }}>
-                <Text style={{ fontSize: 24 }}>🏙️</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.text, fontWeight: "900", fontSize: 16 }}>Neo Paris — Carte Live</Text>
-                <Text style={{ color: colors.muted, fontSize: 11 }}>
-                  {npcs.filter((n) => n.presenceOnline).length} résidents en ligne · carte 2D plein écran
-                </Text>
-              </View>
-              <View style={{
-                backgroundColor: "#8b7cff",
-                borderRadius: 10, paddingHorizontal: 12, paddingVertical: 6,
-              }}>
-                <Text style={{ color: "#fff", fontWeight: "900", fontSize: 12 }}>Ouvrir</Text>
-              </View>
-            </View>
-            <View style={{ flexDirection: "row", gap: 8 }}>
-              {[
-                { label: "En ligne", value: `${npcs.filter((n) => n.presenceOnline).length}`, color: "#38c793" },
-                { label: "Bonne humeur", value: `${npcs.filter((n) => n.mood > 60).length}`, color: "#f6b94f" },
-                { label: "Résidents", value: `${npcs.length}`, color: "#60a5fa" },
-              ].map((item) => (
-                <View key={item.label} style={{
-                  flex: 1, backgroundColor: item.color + "10",
-                  borderRadius: 10, paddingVertical: 8, alignItems: "center",
-                  borderWidth: 1, borderColor: item.color + "30",
-                }}>
-                  <Text style={{ color: item.color, fontWeight: "900", fontSize: 16 }}>{item.value}</Text>
-                  <Text style={{ color: colors.muted, fontSize: 9 }}>{item.label}</Text>
-                </View>
-              ))}
-            </View>
-          </View>
-        </Pressable>
-
-        {worldStatusStrip}
-
-        {!IS_WIDE && cityIntelPanel}
-        {!IS_WIDE && transportPanel}
-        {!IS_WIDE && districtNavPanel}
-        {!IS_WIDE && quickPlayPanel}
-
-        {/* Carte 2D + chat de lieu */}
-        <View style={{ width: "100%", flexDirection: IS_WIDE ? "row" : "column", gap: 12, alignItems: IS_WIDE ? "stretch" : "center" }}>
+        {/* ── Carte 2D plein écran ── */}
+        <View style={{ flex: 1, flexDirection: IS_WIDE ? "row" : "column" }}>
         <View style={{
-          width: MAP_W, height: MAP_H,
+          flex: 1,
           backgroundColor: "#0d1f32",
-          borderRadius: 18,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.12)",
           overflow: "hidden",
-          alignSelf: "center",
-          shadowColor: "#000",
-          shadowOpacity: 0.35,
-          shadowRadius: 12,
-          elevation: 5
         }}>
           {/* base quartiers */}
           <View style={{ position:"absolute", inset:0, backgroundColor:"#b7d0a3" }} />
@@ -2847,6 +2783,6 @@ export default function WorldScreen() {
         )}
 
       </View>
-    </ScrollView>
+    </View>
   );
 }
