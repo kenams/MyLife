@@ -649,6 +649,7 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   win: { flex: 1, backgroundColor: "#06101f" },
   titleBar: { paddingTop: 44, paddingBottom: 10, paddingHorizontal: 14, backgroundColor: "#0b3f86", flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: "#9ed9ff44" },
+  titleBarAccentLine: { position: "absolute", top: 0, left: 0, right: 0, height: 3, backgroundColor: colors.accent },
   back: { width: 34, height: 34, borderRadius: 10, backgroundColor: "#ffffff18", alignItems: "center", justifyContent: "center" },
   logo: { width: 36, height: 36, borderRadius: 9, backgroundColor: "#dff4ff", alignItems: "center", justifyContent: "center" },
   title: { color: "#fff", fontSize: 17, fontWeight: "900" },
