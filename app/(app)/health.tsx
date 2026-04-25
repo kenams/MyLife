@@ -551,34 +551,69 @@ export default function HealthScreen() {
     { label: "Stress",      value: 100 - stats.stress, color: stats.stress > 65 ? "#e74c3c" : "#38c793" },
   ];
 
+  // Calculs pour le hero
+  const healthColor = stats.health > 65 ? "#38c793" : stats.health > 35 ? "#fbbf24" : "#f87171";
+  const fitnessColor = stats.fitness > 65 ? "#e74c3c" : stats.fitness > 35 ? "#fbbf24" : colors.muted;
+  const stressColor = stats.stress > 65 ? "#f87171" : stats.stress > 40 ? "#fbbf24" : "#38c793";
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
-      {/* Header */}
-      <View style={{
-        paddingHorizontal: 16, paddingTop: 52, paddingBottom: 12,
-        backgroundColor: "rgba(7,17,31,0.97)",
-        borderBottomWidth: 1, borderColor: "rgba(255,255,255,0.06)",
-        flexDirection: "row", alignItems: "center", gap: 10,
-      }}>
-        <Pressable onPress={() => router.back()} style={{ padding: 6 }}>
-          <Text style={{ color: colors.muted, fontSize: 13 }}>←</Text>
+      {/* ── Hero header ───────────────────────────────────────────────────── */}
+      <View style={{ backgroundColor: "#060d18", overflow: "hidden",
+        paddingHorizontal: 20, paddingTop: 54, paddingBottom: 20,
+        borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)" }}>
+        {/* Ambient glow */}
+        <View style={{ position: "absolute", top: -30, left: -20, width: 150, height: 150, borderRadius: 75,
+          backgroundColor: "#e74c3c0a" }} />
+        <View style={{ position: "absolute", top: 10, right: -30, width: 120, height: 120, borderRadius: 60,
+          backgroundColor: "#38c7930a" }} />
+
+        <Pressable onPress={() => router.back()} style={{ marginBottom: 16 }}>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>← Retour</Text>
         </Pressable>
-        <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.text, fontWeight: "800", fontSize: 18 }}>💪 Santé & Sport</Text>
-          <Text style={{ color: colors.muted, fontSize: 11 }}>
-            Énergie : {stats.energy}/100 · Forme : {stats.fitness}/100
-          </Text>
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16 }}>
+          <View style={{ width: 56, height: 56, borderRadius: 18,
+            backgroundColor: healthColor + "20", borderWidth: 2, borderColor: healthColor + "55",
+            alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontSize: 28 }}>💪</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: colors.text, fontWeight: "900", fontSize: 22 }}>Santé & Sport</Text>
+            <Text style={{ color: colors.muted, fontSize: 12, marginTop: 2 }}>
+              {timeCtx.gymPrime ? "⚡ Créneau sport idéal — " : ""}{timeCtx.label}
+            </Text>
+          </View>
+          <Pressable onPress={() => router.push("/(app)/studies" as never)}
+            style={{ backgroundColor: "#e74c3c18", borderRadius: 12,
+              paddingHorizontal: 12, paddingVertical: 8,
+              borderWidth: 1, borderColor: "#e74c3c35" }}>
+            <Text style={{ color: "#e74c3c", fontSize: 11, fontWeight: "800" }}>🏋️ Coach</Text>
+          </Pressable>
         </View>
-        <Pressable
-          onPress={() => router.push("/(app)/studies")}
-          style={{
-            backgroundColor: "rgba(231,76,60,0.15)", borderRadius: 10,
-            paddingHorizontal: 10, paddingVertical: 6,
-            borderWidth: 1, borderColor: "rgba(231,76,60,0.3)",
-          }}
-        >
-          <Text style={{ color: "#e74c3c", fontSize: 11, fontWeight: "700" }}>🏋️ Coach</Text>
-        </Pressable>
+
+        {/* Stats row */}
+        <View style={{ flexDirection: "row", gap: 8 }}>
+          {[
+            { label: "Santé",    value: stats.health,           color: healthColor  },
+            { label: "Forme",    value: stats.fitness,          color: fitnessColor },
+            { label: "Énergie",  value: stats.energy,           color: stats.energy < 20 ? "#f87171" : "#3498db" },
+            { label: "Anti-Stress", value: 100 - stats.stress,  color: stressColor  },
+          ].map((s) => {
+            const pct = Math.min(100, Math.max(0, s.value));
+            return (
+              <View key={s.label} style={{ flex: 1, backgroundColor: s.color + "0e",
+                borderRadius: 12, padding: 10, gap: 5,
+                borderWidth: 1, borderColor: s.color + "28" }}>
+                <Text style={{ color: s.color, fontWeight: "900", fontSize: 16 }}>{Math.round(pct)}</Text>
+                <View style={{ height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
+                  <View style={{ height: 4, borderRadius: 2, width: `${pct}%`, backgroundColor: s.color }} />
+                </View>
+                <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "700" }}>{s.label.toUpperCase()}</Text>
+              </View>
+            );
+          })}
+        </View>
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 14 }}>
@@ -599,30 +634,40 @@ export default function HealthScreen() {
           />
         )}
 
-        {/* ── Stats corporelles ── */}
+        {/* ── Bilan corporel ── */}
         {session.phase === "idle" && (
-          <View style={{
-            backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 14,
-            borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
-            padding: 14, gap: 8,
-          }}>
-            <Text style={{ color: colors.text, fontWeight: "800", fontSize: 13, marginBottom: 4 }}>
+          <View style={{ gap: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800", letterSpacing: 1.2 }}>
               BILAN CORPOREL
             </Text>
-            {statBars.map((s) => (
-              <View key={s.label} style={{ gap: 3 }}>
-                <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                  <Text style={{ color: colors.muted, fontSize: 11 }}>{s.label}</Text>
-                  <Text style={{ color: s.color, fontSize: 11, fontWeight: "700" }}>{Math.round(s.value)}/100</Text>
-                </View>
-                <View style={{ height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
-                  <View style={{ width: `${Math.min(100, s.value)}%`, height: "100%", backgroundColor: s.color, borderRadius: 3 }} />
-                </View>
-              </View>
-            ))}
-            <Text style={{ color: colors.muted, fontSize: 11, marginTop: 2 }}>
-              Poids : {stats.weight} kg
-            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {statBars.map((s) => {
+                const pct = Math.min(100, Math.max(0, s.value));
+                const urgent = pct < 25;
+                const displayColor = urgent ? "#f87171" : pct < 45 ? "#fbbf24" : s.color;
+                return (
+                  <View key={s.label} style={{ flex: 1, minWidth: 100,
+                    backgroundColor: displayColor + "0e", borderRadius: 14, padding: 12, gap: 7,
+                    borderWidth: 1, borderColor: displayColor + (urgent ? "40" : "28") }}>
+                    <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+                      <Text style={{ color: displayColor, fontSize: 17, fontWeight: "900" }}>{Math.round(pct)}</Text>
+                      {urgent && <Text style={{ fontSize: 12 }}>⚠️</Text>}
+                    </View>
+                    <View style={{ height: 5, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.1)", overflow: "hidden" }}>
+                      <View style={{ height: 5, borderRadius: 3, width: `${pct}%`, backgroundColor: displayColor }} />
+                    </View>
+                    <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "700" }}>{s.label.toUpperCase()}</Text>
+                  </View>
+                );
+              })}
+            </View>
+            <View style={{ backgroundColor: "rgba(255,255,255,0.03)", borderRadius: 12, padding: 10,
+              borderWidth: 1, borderColor: "rgba(255,255,255,0.06)",
+              flexDirection: "row", alignItems: "center", gap: 12 }}>
+              <Text style={{ fontSize: 20 }}>⚖️</Text>
+              <Text style={{ color: colors.muted, fontSize: 12 }}>Poids : <Text style={{ color: colors.textSoft, fontWeight: "700" }}>{stats.weight} kg</Text></Text>
+              <Text style={{ color: colors.muted, fontSize: 12, marginLeft: 12 }}>Hydrat. : <Text style={{ color: "#3498db", fontWeight: "700" }}>{stats.hydration}/100</Text></Text>
+            </View>
           </View>
         )}
 

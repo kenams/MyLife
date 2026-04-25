@@ -176,65 +176,84 @@ export default function WorkScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: colors.bg }}>
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
+        contentContainerStyle={{ paddingBottom: 60 }}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable onPress={() => router.back()} style={{ marginBottom: 14 }}>
-          <Text style={{ color: colors.muted, fontSize: 13 }}>← Retour</Text>
-        </Pressable>
+        {/* ── Hero header ─────────────────────────────────────────────────── */}
+        <View style={{ backgroundColor: "#060d18", overflow: "hidden",
+          paddingHorizontal: 20, paddingTop: 54, paddingBottom: 22,
+          borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)" }}>
+          {/* Glow de fond */}
+          <View style={{ position: "absolute", top: -30, left: -30, width: 160, height: 160, borderRadius: 80,
+            backgroundColor: jobColor + "12" }} />
+          <View style={{ position: "absolute", top: 10, right: -40, width: 120, height: 120, borderRadius: 60,
+            backgroundColor: isWorkPrime ? "#38c79310" : "rgba(255,255,255,0.02)" }} />
 
-        {/* ── Header job ── */}
-        <View style={{
-          backgroundColor: jobColor + "14", borderRadius: 20, padding: 20,
-          borderWidth: 1.5, borderColor: jobColor + "40", gap: 12, marginBottom: 14,
-        }}>
+          <Pressable onPress={() => router.back()} style={{ marginBottom: 16 }}>
+            <Text style={{ color: colors.muted, fontSize: 13 }}>← Retour</Text>
+          </Pressable>
+
           <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-            <View style={{
-              width: 56, height: 56, borderRadius: 16,
-              backgroundColor: jobColor + "25",
-              alignItems: "center", justifyContent: "center",
-            }}>
-              <Text style={{ fontSize: 28 }}>{jobEmoji}</Text>
+            <View style={{ width: 60, height: 60, borderRadius: 18,
+              backgroundColor: jobColor + "22", borderWidth: 2, borderColor: jobColor + "55",
+              alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 30 }}>{jobEmoji}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: "row", gap: 6, marginBottom: 4, flexWrap: "wrap" }}>
-                <View style={{ backgroundColor: colors.accent + "25", borderRadius: 8,
-                  paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: colors.accent + "40" }}>
-                  <Text style={{ color: colors.accent, fontSize: 10, fontWeight: "800" }}>Travail</Text>
-                </View>
+              <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap", marginBottom: 4 }}>
                 {isWorkPrime && (
-                  <View style={{ backgroundColor: "#38c79322", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                    <Text style={{ color: "#38c793", fontSize: 10, fontWeight: "800" }}>
-                      ⚡ {timeCtx.label} · +30%
-                    </Text>
+                  <View style={{ backgroundColor: "#38c79322", borderRadius: 8,
+                    paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "#38c79440" }}>
+                    <Text style={{ color: "#38c793", fontSize: 10, fontWeight: "800" }}>⚡ Pic productif +30%</Text>
                   </View>
                 )}
                 {isWorkOff && (
-                  <View style={{ backgroundColor: "#f8717122", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 }}>
-                    <Text style={{ color: "#f87171", fontSize: 10, fontWeight: "800" }}>
-                      ⚠️ Hors horaire · -25%
-                    </Text>
+                  <View style={{ backgroundColor: "#f8717118", borderRadius: 8,
+                    paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: "#f8717130" }}>
+                    <Text style={{ color: "#f87171", fontSize: 10, fontWeight: "800" }}>⚠️ Hors horaire -25%</Text>
                   </View>
                 )}
               </View>
-              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>{currentJob.name}</Text>
-              <Text style={{ color: jobColor, fontSize: 13, fontWeight: "700" }}>
+              <Text style={{ color: colors.text, fontWeight: "900", fontSize: 22 }}>{currentJob.name}</Text>
+              <Text style={{ color: jobColor, fontSize: 13, fontWeight: "700", marginTop: 2 }}>
                 ~{projectedEarnings} cr / shift · Niveau {jobLevel}
               </Text>
             </View>
           </View>
-          <XpBar xp={jobXp} level={jobLevel} />
-          {/* Bande horaire */}
-          <View style={{
-            flexDirection: "row", alignItems: "center", gap: 8,
-            paddingTop: 10, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.06)",
-          }}>
-            <Text style={{ fontSize: 14 }}>{timeCtx.emoji}</Text>
-            <Text style={{ color: colors.muted, fontSize: 11, flex: 1 }}>
-              {timeCtx.hour.toString().padStart(2, "0")}h{timeCtx.minutes.toString().padStart(2, "0")} · {timeCtx.isWeekend ? "Weekend" : "Semaine"} · Pic productivité 9h-12h et 14h-17h
-            </Text>
+
+          {/* XP Bar */}
+          <View style={{ marginTop: 16, gap: 5 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+              <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700" }}>
+                NIVEAU {jobLevel}{jobLevel >= 10 ? " — MAX" : ""}
+              </Text>
+              <Text style={{ color: "#fbbf24", fontSize: 11, fontWeight: "700" }}>{jobXp}/100 XP</Text>
+            </View>
+            <View style={{ height: 7, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.08)", overflow: "hidden" }}>
+              <View style={{ height: 7, borderRadius: 4, width: `${jobXp}%`, backgroundColor: "#fbbf24" }} />
+            </View>
+          </View>
+
+          {/* Stats rapides */}
+          <View style={{ flexDirection: "row", gap: 10, marginTop: 14 }}>
+            {[
+              { label: "Crédits",    value: `${stats.money} cr`,      color: "#38c793" },
+              { label: "Discipline", value: `${stats.discipline}`,     color: "#60a5fa" },
+              { label: "Énergie",    value: `${stats.energy}/100`,     color: stats.energy < 20 ? "#f87171" : "#a78bfa" },
+              { label: "Rép.",       value: `${stats.reputation}`,     color: colors.gold },
+            ].map((m) => (
+              <View key={m.label} style={{ flex: 1, backgroundColor: m.color + "0e",
+                borderRadius: 12, padding: 10, gap: 2,
+                borderWidth: 1, borderColor: m.color + "28" }}>
+                <Text style={{ color: m.color, fontWeight: "900", fontSize: 15 }}>{m.value}</Text>
+                <Text style={{ color: colors.muted, fontSize: 10 }}>{m.label}</Text>
+              </View>
+            ))}
           </View>
         </View>
+
+        {/* ── Contenu ─────────────────────────────────────────────────────── */}
+        <View style={{ padding: 20, gap: 14 }}>
 
         {/* ── Level up toast ── */}
         {leveledUp && (
@@ -250,24 +269,6 @@ export default function WorkScreen() {
             </View>
           </View>
         )}
-
-        {/* ── Stats rapides ── */}
-        <View style={{ flexDirection: "row", gap: 10, marginBottom: 14 }}>
-          {[
-            { label: "Crédits", value: `${stats.money}`, color: "#38c793" },
-            { label: "Discipline", value: `${stats.discipline}%`, color: "#60a5fa" },
-            { label: "Énergie", value: `${stats.energy}%`, color: stats.energy < 20 ? "#f87171" : "#a78bfa" },
-          ].map((m) => (
-            <View key={m.label} style={{
-              flex: 1, backgroundColor: "rgba(255,255,255,0.04)",
-              borderRadius: 14, padding: 12, gap: 2,
-              borderWidth: 1, borderColor: "rgba(255,255,255,0.08)",
-            }}>
-              <Text style={{ color: m.color, fontWeight: "900", fontSize: 18 }}>{m.value}</Text>
-              <Text style={{ color: colors.muted, fontSize: 11 }}>{m.label}</Text>
-            </View>
-          ))}
-        </View>
 
         {/* ── Zone shift ── */}
         {workSession.phase === "idle" && (
@@ -459,24 +460,26 @@ export default function WorkScreen() {
           </View>
         )}
 
-        {/* ── Impact ── */}
-        <View style={{
-          backgroundColor: "rgba(255,255,255,0.03)", borderRadius: 16, padding: 16,
-          borderWidth: 1, borderColor: "rgba(255,255,255,0.07)",
-        }}>
-          <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "800", letterSpacing: 1, marginBottom: 8 }}>
-            IMPACT DU TRAVAIL
+        {/* ── Conseil du poste ── */}
+        <View style={{ backgroundColor: jobColor + "0c", borderRadius: 16, padding: 16,
+          borderWidth: 1, borderColor: jobColor + "30", gap: 6 }}>
+          <Text style={{ color: jobColor, fontSize: 11, fontWeight: "800", letterSpacing: 1 }}>
+            💡 CONSEIL — {currentJob.name.toUpperCase()}
           </Text>
-          {[
-            "La discipline monte et soutient le rang social",
-            "Chaque niveau augmente les revenus de 5%",
-            "Le momentum actif booste les crédits par shift",
-            "Un stress élevé réduit le rendement net",
-            "La réputation progresse avec chaque shift réalisé",
-          ].map((line, i) => (
-            <Text key={i} style={{ color: colors.muted, fontSize: 12, marginBottom: 4 }}>· {line}</Text>
-          ))}
+          <Text style={{ color: colors.textSoft, fontSize: 13, lineHeight: 19 }}>
+            {jobTip}
+          </Text>
+          <View style={{ marginTop: 4, gap: 4 }}>
+            {[
+              "La discipline monte et soutient le rang social",
+              "Chaque niveau = +5% revenus par shift",
+              "Travaille aux heures de pointe pour le bonus",
+            ].map((line, i) => (
+              <Text key={i} style={{ color: colors.muted, fontSize: 11 }}>· {line}</Text>
+            ))}
+          </View>
         </View>
+        </View>{/* fin padding */}
       </ScrollView>
     </View>
   );

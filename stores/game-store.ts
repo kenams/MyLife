@@ -2740,6 +2740,37 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        // ── Détection : NPC arrive au même lieu que le joueur ──────────────
+        for (const npc of finalNpcs) {
+          const prev = prevNpcs.find((p) => p.id === npc.id);
+          const movedHere = prev
+            && prev.locationSlug !== s.currentLocationSlug
+            && npc.locationSlug === s.currentLocationSlug;
+          if (!movedHere) continue;
+          const rel = s.relationships.find((r) => r.residentId === npc.id);
+          const ACTION_EMOJI: Record<string, string> = {
+            working: "💼", eating: "🍽️", chatting: "💬",
+            exercising: "💪", walking: "🚶", sleeping: "😴", idle: "💭", waving: "👋",
+          };
+          const actionEmoji = ACTION_EMOJI[npc.action] ?? "•";
+          if (rel && rel.score >= 30) {
+            notifications = appendNotification(notifications, {
+              id:        `encounter-${now}-${npc.id}`,
+              kind:      "social",
+              title:     `${actionEmoji} ${npc.name} vient d'arriver ici`,
+              body:      `${npc.name} est maintenant au même endroit que toi — parle-lui !`,
+              createdAt: new Date(now).toISOString(),
+              read:      false,
+            });
+          }
+          lifeFeed = appendFeed(lifeFeed, {
+            id:        `feed-encounter-${now}-${npc.id}`,
+            title:     `${actionEmoji} ${npc.name} arrive`,
+            body:      `${npc.name} vient de rejoindre ton lieu.`,
+            createdAt: new Date(now).toISOString(),
+          });
+        }
+
         return {
           npcs:          finalNpcs,
           conversations,
