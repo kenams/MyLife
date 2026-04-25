@@ -145,12 +145,15 @@ export default function ProfileScreen() {
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} showsVerticalScrollIndicator={false}>
 
         {/* ── HERO ── */}
-        <View style={{ backgroundColor: "#050c1a", paddingBottom: 28, overflow: "hidden" }}>
+        <View style={{ backgroundColor: "#060d18", paddingBottom: 28, overflow: "hidden",
+          borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)" }}>
           {/* Ambient */}
-          <View style={{ position: "absolute", top: -30, left: -30, width: 140, height: 140, borderRadius: 70,
+          <View style={{ position: "absolute", top: -40, left: -40, width: 180, height: 180, borderRadius: 90,
             backgroundColor: colors.accentGlow }} />
-          <View style={{ position: "absolute", top: 10, right: -40, width: 120, height: 120, borderRadius: 60,
-            backgroundColor: housing.color + "18" }} />
+          <View style={{ position: "absolute", top: -10, right: -50, width: 160, height: 160, borderRadius: 80,
+            backgroundColor: housing.color + "14" }} />
+          <View style={{ position: "absolute", bottom: -20, left: "40%", width: 100, height: 100, borderRadius: 50,
+            backgroundColor: colors.purpleGlow }} />
 
           {/* Top badges */}
           <View style={{ flexDirection: "row", paddingHorizontal: 20, paddingTop: 54, paddingBottom: 16, gap: 8, flexWrap: "wrap" }}>
@@ -245,17 +248,20 @@ export default function ProfileScreen() {
           </View>
 
           {/* Quick stats row */}
-          <View style={{ flexDirection: "row", paddingHorizontal: 20, marginTop: 16, gap: 10 }}>
+          <View style={{ flexDirection: "row", paddingHorizontal: 20, marginTop: 16, gap: 8 }}>
             {[
-              { label: "Richesse", value: `${(wealthScore / 1000).toFixed(1)}k`, color: colors.gold   },
-              { label: "Réputation", value: `${stats.reputation}`, color: colors.accent },
-              { label: "Streak",   value: `${stats.streak}j`,   color: "#f87171"      },
-              { label: "Argent",   value: `${stats.money} cr`, color: colors.blue    },
+              { label: "Richesse", value: `${(wealthScore / 1000).toFixed(1)}k`, color: colors.gold,   icon: "💰" },
+              { label: "Réputation", value: `${stats.reputation}`,               color: colors.accent, icon: "⭐" },
+              { label: "Streak",   value: `${stats.streak}j`,                    color: "#f87171",     icon: "🔥" },
+              { label: "Argent",   value: `${stats.money} cr`,                   color: colors.blue,   icon: "💳" },
             ].map((item) => (
-              <View key={item.label} style={{ flex: 1, backgroundColor: item.color + "10", borderRadius: 12,
-                padding: 10, alignItems: "center", borderWidth: 1, borderColor: item.color + "30" }}>
+              <View key={item.label} style={{ flex: 1, backgroundColor: item.color + "12", borderRadius: 14,
+                paddingVertical: 10, paddingHorizontal: 8, alignItems: "center", gap: 3,
+                borderWidth: 1, borderColor: item.color + "35",
+                shadowColor: item.color, shadowOpacity: 0.15, shadowRadius: 6 }}>
+                <Text style={{ fontSize: 16 }}>{item.icon}</Text>
                 <Text style={{ color: item.color, fontWeight: "900", fontSize: 13 }}>{item.value}</Text>
-                <Text style={{ color: colors.muted, fontSize: 9, marginTop: 2 }}>{item.label}</Text>
+                <Text style={{ color: colors.muted, fontSize: 8, letterSpacing: 0.3 }}>{item.label.toUpperCase()}</Text>
               </View>
             ))}
           </View>
@@ -268,9 +274,14 @@ export default function ProfileScreen() {
             borderWidth: 1, borderColor: colors.border }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
               <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>RANG SOCIAL</Text>
-              <Text style={{ color: colors.accent, fontWeight: "700", fontSize: 12 }}>
-                {RANK_EMOJIS[currentRank]} {RANK_LABELS[currentRank]}
-              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6,
+                backgroundColor: colors.accentGlow, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 5,
+                borderWidth: 1, borderColor: colors.accent + "40" }}>
+                <Text style={{ fontSize: 13 }}>{RANK_EMOJIS[currentRank]}</Text>
+                <Text style={{ color: colors.accent, fontWeight: "800", fontSize: 12 }}>
+                  {RANK_LABELS[currentRank]}
+                </Text>
+              </View>
             </View>
 
             {/* Étapes visuelles */}
@@ -423,21 +434,21 @@ export default function ProfileScreen() {
           </View>
 
           {/* ── ACCÈS RAPIDE ── */}
-          <View style={{ gap: 8 }}>
+          <View style={{ gap: 10 }}>
             <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>ACCÈS RAPIDE</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {[
-                { label: "🏆 Classement", route: "/(app)/leaderboard" },
-                { label: "⚡ Progression", route: "/(app)/progression" },
-                { label: "🎯 Missions",   route: "/(app)/missions"   },
-                { label: "⭐ Premium",    route: "/(app)/premium"    },
-                { label: "🏠 Rooms",      route: "/(app)/rooms"      },
-                { label: "👤 Profil public", route: "/(app)/profile-public" },
+                { label: "🏆 Classement",   route: "/(app)/leaderboard",    color: colors.gold   },
+                { label: "⚡ Progression",   route: "/(app)/progression",    color: colors.accent },
+                { label: "🎯 Missions",      route: "/(app)/missions",       color: "#f87171"     },
+                { label: "⭐ Premium",       route: "/(app)/premium",        color: colors.purple },
+                { label: "🏠 Rooms",         route: "/(app)/rooms",          color: colors.teal   },
+                { label: "👤 Profil public", route: "/(app)/profile-public", color: colors.blue   },
               ].map((item) => (
                 <Pressable key={item.route} onPress={() => router.push(item.route as never)}
                   style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 22,
-                    backgroundColor: "rgba(255,255,255,0.05)", borderWidth: 1, borderColor: colors.border }}>
-                  <Text style={{ color: colors.textSoft, fontWeight: "600", fontSize: 12 }}>{item.label}</Text>
+                    backgroundColor: item.color + "12", borderWidth: 1, borderColor: item.color + "35" }}>
+                  <Text style={{ color: item.color, fontWeight: "700", fontSize: 12 }}>{item.label}</Text>
                 </Pressable>
               ))}
             </View>

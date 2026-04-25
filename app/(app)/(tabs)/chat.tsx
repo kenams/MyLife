@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from
 import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { AvatarSprite } from "@/components/avatar-sprite";
-import { getNpcVisual } from "@/lib/avatar-visual";
+import { getAvatarVisual, getNpcVisual } from "@/lib/avatar-visual";
 import { activities, starterResidents } from "@/lib/game-engine";
 import { getBestProfileMatches } from "@/lib/profile-matching";
 import { buildSocialHubSnapshot, relationshipScore } from "@/lib/social-hub";
@@ -46,7 +46,17 @@ function NpcFace({ npc, size = 44 }: { npc: NpcState; size?: number }) {
   );
 }
 
-function PlayerFace({ name, size = 42 }: { name?: string; size?: number }) {
+function PlayerFace({ name, size = 42, visual }: { name?: string; size?: number; visual?: ReturnType<typeof getNpcVisual> | null }) {
+  if (visual) {
+    return (
+      <View style={[s.faceWrap, { width: size, height: size, borderRadius: 12, overflow: "hidden",
+        borderWidth: 2, borderColor: colors.accent + "55", backgroundColor: colors.accentGlow }]}>
+        <View style={{ transform: [{ scale: size <= 34 ? 0.72 : 0.88 }] }}>
+          <AvatarSprite visual={visual} action="idle" size={size <= 34 ? "xs" : "sm"} />
+        </View>
+      </View>
+    );
+  }
   return (
     <View style={[s.playerFace, { width: size, height: size }]}>
       <Text style={s.playerInitial}>{(name ?? "Moi").slice(0, 1).toUpperCase()}</Text>
@@ -568,7 +578,7 @@ export default function ChatScreen() {
   }
 
   return (
-    <Win title="MSN MyLife 2026" subtitle={`${online.length} contacts en ligne - ${unread ? `${unread} non lu(s)` : "tout est lu"}`} right={<PlayerFace name={avatar?.displayName} size={38} />}>
+    <Win title="MSN MyLife 2026" subtitle={`${online.length} contacts en ligne - ${unread ? `${unread} non lu(s)` : "tout est lu"}`} right={<PlayerFace name={avatar?.displayName} visual={avatar ? getAvatarVisual(avatar) : null} size={38} />}>
       <View style={s.hub}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.shortcuts}>
           <Pressable onPress={() => router.push("/(app)/(tabs)/world")} style={[s.shortcut, { backgroundColor: colors.accent + "18", borderColor: colors.accent + "38" }]}><Ionicons name="map" size={18} color={colors.accent} /><Text style={[s.shortcutText, { color: colors.accent }]}>World live</Text></Pressable>
@@ -648,20 +658,20 @@ export default function ChatScreen() {
 const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   win: { flex: 1, backgroundColor: "#06101f" },
-  titleBar: { paddingTop: 44, paddingBottom: 10, paddingHorizontal: 14, backgroundColor: "#0b3f86", flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: "#9ed9ff44" },
-  titleBarAccentLine: { position: "absolute", top: 0, left: 0, right: 0, height: 3, backgroundColor: colors.accent },
-  back: { width: 34, height: 34, borderRadius: 10, backgroundColor: "#ffffff18", alignItems: "center", justifyContent: "center" },
-  logo: { width: 36, height: 36, borderRadius: 9, backgroundColor: "#dff4ff", alignItems: "center", justifyContent: "center" },
+  titleBar: { paddingTop: 44, paddingBottom: 10, paddingHorizontal: 14, backgroundColor: "#060d18", flexDirection: "row", alignItems: "center", gap: 10, borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.08)" },
+  titleBarAccentLine: { position: "absolute", top: 0, left: 0, right: 0, height: 4, backgroundColor: colors.accent },
+  back: { width: 34, height: 34, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.08)", alignItems: "center", justifyContent: "center" },
+  logo: { width: 36, height: 36, borderRadius: 9, backgroundColor: colors.accent + "18", borderWidth: 1, borderColor: colors.accent + "40", alignItems: "center", justifyContent: "center" },
   title: { color: "#fff", fontSize: 17, fontWeight: "900" },
-  subtitle: { color: "#d6ecff", fontSize: 11, fontWeight: "700" },
+  subtitle: { color: colors.textSoft, fontSize: 11, fontWeight: "700" },
   status: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999, borderWidth: 1 },
   statusDot: { width: 7, height: 7, borderRadius: 4 },
   statusText: { fontSize: 10, fontWeight: "900" },
   dot: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: colors.bg },
   dotAbs: { position: "absolute", right: 0, bottom: 0 },
   faceWrap: { position: "relative", alignItems: "center", justifyContent: "center" },
-  playerFace: { borderRadius: 12, backgroundColor: "#dff4ff", borderWidth: 2, borderColor: colors.accent, alignItems: "center", justifyContent: "center" },
-  playerInitial: { color: "#06243a", fontSize: 14, fontWeight: "900" },
+  playerFace: { borderRadius: 12, backgroundColor: "#0f1e30", borderWidth: 2, borderColor: colors.accent + "60", alignItems: "center", justifyContent: "center" },
+  playerInitial: { color: colors.accent, fontSize: 14, fontWeight: "900" },
   tools: { backgroundColor: "#eaf6ff12", borderBottomWidth: 1, borderBottomColor: colors.border },
   toolsBody: { paddingHorizontal: 12, paddingVertical: 9, gap: 8 },
   toolBtn: { width: 74, minHeight: 58, borderRadius: 10, alignItems: "center", justifyContent: "center", gap: 5, backgroundColor: "#ffffff10", borderWidth: 1, borderColor: "#ffffff18" },
@@ -685,7 +695,7 @@ const s = StyleSheet.create({
   nudgeChip: { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 13, backgroundColor: "#ffffff0d", borderWidth: 1, borderColor: "#ffffff18" },
   nudgeText: { color: colors.textSoft, fontSize: 11, fontWeight: "800" },
   inputLine: { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 12, paddingBottom: 10 },
-  input: { flex: 1, minHeight: 44, maxHeight: 110, backgroundColor: "#f7fbff", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, color: "#09203a", fontSize: 14, borderWidth: 1, borderColor: "#9ed9ff" },
+  input: { flex: 1, minHeight: 44, maxHeight: 110, backgroundColor: "#0f1a2e", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, color: colors.text, fontSize: 14, borderWidth: 1, borderColor: colors.accent + "44" },
   send: { width: 78, height: 44, borderRadius: 12, backgroundColor: colors.accent, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
   sendText: { color: "#05211a", fontSize: 12, fontWeight: "900" },
   msgList: { padding: 16, gap: 10 },
@@ -720,7 +730,7 @@ const s = StyleSheet.create({
   invites: { backgroundColor: "#eaf6ff12", borderBottomWidth: 1, borderBottomColor: colors.border },
   inviteNpc: { width: 62, alignItems: "center", gap: 4 },
   inviteText: { color: colors.textSoft, fontSize: 10, fontWeight: "800" },
-  hub: { backgroundColor: "#eaf6ff10", borderBottomWidth: 1, borderBottomColor: colors.border },
+  hub: { backgroundColor: "#060d18", borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.07)" },
   shortcuts: { paddingHorizontal: 12, paddingVertical: 10, gap: 10 },
   shortcut: { minWidth: 116, borderRadius: 14, padding: 10, borderWidth: 1, flexDirection: "row", alignItems: "center", gap: 8 },
   shortcutText: { fontSize: 12, fontWeight: "900" },
@@ -752,7 +762,7 @@ const s = StyleSheet.create({
   createBox: { backgroundColor: "#ffffff08", borderRadius: 16, borderWidth: 1, borderColor: colors.border, padding: 12, marginBottom: 14 },
   createBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: colors.accent + "18", borderRadius: 13, padding: 13, borderWidth: 1, borderColor: colors.accent + "40" },
   createText: { color: colors.accent, fontSize: 13, fontWeight: "900" },
-  createInput: { backgroundColor: "#f7fbff", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, color: "#09203a", borderWidth: 1, borderColor: "#9ed9ff" },
+  createInput: { backgroundColor: "#0f1a2e", borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, color: colors.text, borderWidth: 1, borderColor: colors.accent + "44" },
   createOk: { flex: 1, borderRadius: 12, padding: 12, alignItems: "center", backgroundColor: colors.accent },
   createOkText: { color: "#05211a", fontSize: 12, fontWeight: "900" },
   createCancel: { flex: 1, borderRadius: 12, padding: 12, alignItems: "center", backgroundColor: "#ffffff10" },
@@ -777,9 +787,9 @@ const s = StyleSheet.create({
   memberItem: { width: 58, alignItems: "center", gap: 3 },
   memberName: { color: colors.textSoft, fontSize: 10, fontWeight: "800", textAlign: "center" },
   dashboard: { flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingBottom: 10 },
-  metric: { flex: 1, minHeight: 52, borderRadius: 13, backgroundColor: "#ffffff08", borderWidth: 1, borderColor: colors.border, alignItems: "center", justifyContent: "center" },
-  metricValue: { color: colors.text, fontSize: 16, fontWeight: "900" },
-  metricLabel: { color: colors.muted, fontSize: 10, fontWeight: "800", marginTop: 2 },
+  metric: { flex: 1, minHeight: 60, borderRadius: 14, backgroundColor: colors.accentGlow, borderWidth: 1, borderColor: colors.accent + "28", alignItems: "center", justifyContent: "center", gap: 2 },
+  metricValue: { color: colors.text, fontSize: 18, fontWeight: "900" },
+  metricLabel: { color: colors.muted, fontSize: 9, fontWeight: "800", letterSpacing: 0.4 },
   matchStrip: { gap: 10, paddingBottom: 10 },
   matchCard: { width: 224, minHeight: 78, flexDirection: "row", alignItems: "center", gap: 10, padding: 11, borderRadius: 15, backgroundColor: colors.accent + "10", borderWidth: 1, borderColor: colors.accent + "32" },
   matchName: { color: colors.text, fontSize: 13, fontWeight: "900" },
