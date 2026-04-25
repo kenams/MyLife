@@ -3,6 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Pressable, ScrollView, Share, Text, View } from "react-native";
 import Svg, { Rect } from "react-native-svg";
 
+import { AvatarSprite } from "@/components/avatar-sprite";
+import { getAvatarVisual } from "@/lib/avatar-visual";
 import { getLevelTitle } from "@/lib/progression";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
@@ -170,10 +172,13 @@ export default function ProfilePublicScreen() {
           <View style={{ width: 88, height: 88, borderRadius: 44,
             backgroundColor: avatarColor + "20",
             borderWidth: 3, borderColor: avatarColor,
-            alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 40 }}>
-              {avatar?.gender === "woman" ? "👩" : avatar?.gender === "man" ? "👨" : "🧑"}
-            </Text>
+            alignItems: "center", justifyContent: "center",
+            overflow: "hidden" }}>
+            {avatar ? (
+              <AvatarSprite visual={getAvatarVisual(avatar)} action="waving" size="sm" />
+            ) : (
+              <Text style={{ fontSize: 40 }}>🧑</Text>
+            )}
           </View>
 
           <View style={{ alignItems: "center", gap: 4 }}>
