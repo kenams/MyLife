@@ -2,6 +2,8 @@ import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 
+import { AvatarSprite } from "@/components/avatar-sprite";
+import { getNpcVisual } from "@/lib/avatar-visual";
 import { getDateReadiness, getDateVenueOptions, starterResidents } from "@/lib/game-engine";
 import { getDateVenueLabel, getRelationshipLabel } from "@/lib/selectors";
 import { colors } from "@/lib/theme";
@@ -42,12 +44,10 @@ function ProfileCard({ resident, relationship, isSelected, onSelect }: {
         backgroundColor: isSelected ? colors.accent + "12" : "rgba(255,255,255,0.04)"
       }}
     >
-      {/* Couleur de fond avatar */}
+      {/* Avatar NPC */}
       <View style={{ height: 90, backgroundColor: isSelected ? colors.accent + "30" : "rgba(255,255,255,0.06)",
-        alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontSize: 48 }}>
-          {resident.id === "ava" ? "👩" : resident.id === "noa" ? "🧑" : "👩‍🦱"}
-        </Text>
+        alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+        <AvatarSprite visual={getNpcVisual(resident.id)} action="idle" size="md" />
       </View>
       <View style={{ padding: 14, gap: 4 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
