@@ -180,9 +180,11 @@ export default function SignInScreen() {
             <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
               DÉMARRAGE RAPIDE
             </Text>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>Test sans compte — données locales</Text>
+            <Text style={{ color: colors.muted, fontSize: 12 }}>
+              Compte local simple, sans e-mail ni validation Gmail
+            </Text>
             <View style={{ gap: 8 }}>
-              <ActionBtn label="🌟 Profil équilibré" onPress={() => handleLoadTestAccount("balanced")} />
+              <ActionBtn label="Compte simple - Kenan" onPress={() => handleLoadTestAccount("balanced")} />
               <ActionBtn label="🔥 Profil sous pression" onPress={() => handleLoadTestAccount("burnout")} variant="secondary" />
               <ActionBtn label="💕 Profil date & social" onPress={() => handleLoadTestAccount("romantic")} variant="secondary" />
               <ActionBtn label="🌆 Mode test live complet" onPress={() => handleLoadTestAccount("live")} />
