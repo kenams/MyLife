@@ -289,7 +289,6 @@ function LocationPanel({
 // ─── Écran principal ──────────────────────────────────────────────────────────
 
 export default function WorldScreen() {
-  const avatar              = useGameStore((s) => s.avatar);
   const stats               = useGameStore((s) => s.stats);
   const currentLocationSlug = useGameStore((s) => s.currentLocationSlug);
   const travelTo            = useGameStore((s) => s.travelTo);
@@ -325,6 +324,10 @@ export default function WorldScreen() {
 
   const currentLoc = worldLocations.find((l) => l.slug === currentLocationSlug);
   const currentLocStyle = KIND_STYLE[currentLoc?.kind ?? "public"] ?? KIND_STYLE.public;
+  const currentNpcs = npcsByLoc[currentLocationSlug] ?? [];
+  const activeNeighborhood = NEIGHBORHOODS.find((neighborhood) =>
+    neighborhood.slugs.includes(currentLocationSlug)
+  );
 
   const handleTravel = (slug: string) => {
     if (slug === currentLocationSlug) return;
@@ -333,15 +336,36 @@ export default function WorldScreen() {
 
   // Stats en temps réel pour le header
   const moneyColor = stats.money >= 200 ? "#f6b94f" : stats.money >= 80 ? "#86efac" : "#f87171";
+  const intelColor = cityIntel.urgency === "critical"
+    ? "#FB7185"
+    : cityIntel.urgency === "high"
+      ? "#FBBF24"
+      : ACCENT;
+  const primaryEvent = mapEvents[0];
+  const suggestedSlugs = [
+    cityIntel.locationSlug,
+    primaryEvent?.locationSlug,
+    currentLocationSlug,
+    ...mapEvents.map((event) => event.locationSlug),
+    "market",
+    "park",
+    "office",
+    "cafe",
+    "gym",
+    "home",
+  ].filter((slug): slug is string =>
+    Boolean(slug) && worldLocations.some((location) => location.slug === slug)
+  );
+  const quickSlugs = Array.from(new Set(suggestedSlugs)).slice(0, 8);
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <ScrollView
-        contentContainerStyle={{ paddingBottom: 120 }}
+        contentContainerStyle={{ paddingTop: 12, paddingBottom: 120, alignItems: "center" }}
         showsVerticalScrollIndicator={false}>
 
         {/* ── Safe area top ─────────────────────────────────── */}
-        <View style={{ height: 52 }} />
+        <View style={{ height: 0 }} />
 
         {/* ── Carte ville interactive ────────────────────────── */}
         <VillageMap
@@ -351,8 +375,8 @@ export default function WorldScreen() {
         />
 
         {/* ── Barre info joueur ──────────────────────────────── */}
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10,
-          marginHorizontal: 12, marginTop: 10,
+        <View style={{ width: "100%", maxWidth: 1180, flexDirection: "row", alignItems: "center", gap: 10,
+          marginTop: 10, paddingHorizontal: 12,
           backgroundColor: "rgba(14,22,35,0.95)", borderRadius: 16,
           borderWidth: 1, borderColor: "rgba(255,255,255,0.07)", padding: 12 }}>
           <View style={{ width: 44, height: 44, borderRadius: 12,
@@ -362,7 +386,7 @@ export default function WorldScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ color: TEXT_MUTED, fontSize: 10, fontWeight: "800",
-              textTransform: "uppercase", letterSpacing: 0.6 }}>Vous êtes ici</Text>
+              textTransform: "uppercase", letterSpacing: 0.6 }}>{activeNeighborhood?.label ?? "Ville"}</Text>
             <Text style={{ color: ACCENT, fontSize: 15, fontWeight: "900", marginTop: 1 }}>
               {currentLoc?.name ?? currentLocationSlug}
             </Text>
@@ -383,29 +407,29 @@ export default function WorldScreen() {
         {cityIntel && cityIntel.locationSlug !== currentLocationSlug && (
           <Pressable
             onPress={() => setSelectedSlug(cityIntel.locationSlug)}
-            style={{ marginHorizontal: 16, marginBottom: 4,
+            style={{ width: "100%", maxWidth: 1180, marginTop: 10, marginBottom: 4,
               borderRadius: 14, padding: 12,
-              backgroundColor: "rgba(246,185,79,0.08)",
-              borderWidth: 1, borderColor: "rgba(246,185,79,0.20)",
+              backgroundColor: intelColor + "12",
+              borderWidth: 1, borderColor: intelColor + "35",
               flexDirection: "row", alignItems: "center", gap: 10 }}>
             <Text style={{ fontSize: 22 }}>💡</Text>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: "#f6b94f", fontSize: 11, fontWeight: "900",
-                textTransform: "uppercase", letterSpacing: 0.5 }}>Conseil ville</Text>
-              <Text numberOfLines={2} style={{ color: TEXT_SOFT, fontSize: 12,
+              <Text style={{ color: intelColor, fontSize: 11, fontWeight: "900",
+                textTransform: "uppercase", letterSpacing: 0.5 }}>{cityIntel.title}</Text>
+              <Text numberOfLines={1} style={{ color: TEXT_SOFT, fontSize: 12,
                 marginTop: 2, lineHeight: 17 }}>{cityIntel.body}</Text>
             </View>
-            <Text style={{ color: "#f6b94f", fontSize: 18 }}>→</Text>
+            <Text style={{ color: intelColor, fontSize: 18 }}>→</Text>
           </Pressable>
         )}
 
         {mapEvents.length > 0 && (
-          <View style={{ marginHorizontal: 16, marginTop: 12, gap: 8 }}>
+          <View style={{ width: "100%", maxWidth: 1180, marginTop: 10, gap: 8 }}>
             <Text style={{ color: TEXT_MUTED, fontSize: 10, fontWeight: "900",
               textTransform: "uppercase", letterSpacing: 0.8 }}>
               Signaux de vie
             </Text>
-            {mapEvents.slice(0, 2).map((event) => {
+            {mapEvents.slice(0, 1).map((event) => {
               const loc = worldLocations.find((l) => l.slug === event.locationSlug);
               const color = event.severity === "high" ? "#FB7185" : event.severity === "medium" ? "#FBBF24" : "#60A5FA";
               return (
@@ -434,124 +458,94 @@ export default function WorldScreen() {
         )}
 
         {/* ── Quartiers ────────────────────────────────────────── */}
-        {NEIGHBORHOODS.map((neighborhood) => {
-          const validSlugs = neighborhood.slugs.filter(
-            (slug) => worldLocations.some((l) => l.slug === slug)
-          );
-          if (validSlugs.length === 0) return null;
-
-          const totalNpcsHere = validSlugs.reduce(
-            (sum, slug) => sum + (npcsByLoc[slug]?.length ?? 0), 0
-          );
-
-          return (
-            <View key={neighborhood.label} style={{ marginTop: 18, paddingHorizontal: 11 }}>
-              {/* Titre quartier */}
-              <View style={{ flexDirection: "row", alignItems: "center",
-                gap: 8, marginBottom: 4, paddingHorizontal: 5 }}>
-                <Text style={{ color: neighborhood.color, fontSize: 14, fontWeight: "900" }}>
-                  {neighborhood.label}
-                </Text>
-                {totalNpcsHere > 0 && (
-                  <View style={{ backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 8,
-                    paddingHorizontal: 7, paddingVertical: 2 }}>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 10, fontWeight: "700" }}>
-                      {totalNpcsHere} bots
-                    </Text>
-                  </View>
-                )}
-              </View>
-
-              {/* Grille 2 colonnes */}
-              <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-                {validSlugs.map((slug) => (
-                  <LocationCard
-                    key={slug}
-                    slug={slug}
-                    isHere={slug === currentLocationSlug}
-                    npcCount={npcsByLoc[slug]?.length ?? 0}
-                    eventEmoji={mapEventsByLocation[slug]?.emoji}
-                    eventSeverity={mapEventsByLocation[slug]?.severity}
-                    onPress={() => setSelectedSlug(slug)}
-                  />
-                ))}
-              </View>
-            </View>
-          );
-        })}
-
-        {/* ── Statistiques bots ────────────────────────────────── */}
-        <View style={{ marginHorizontal: 16, marginTop: 24,
-          borderRadius: 16, backgroundColor: CARD_BG,
-          borderWidth: 1, borderColor: CARD_BORDER, padding: 16 }}>
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <Text style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}>Vie en ville</Text>
-            <Text style={{ color: TEXT_MUTED, fontSize: 11 }}>{npcs.length} habitants</Text>
+        <View style={{ width: "100%", maxWidth: 1180, marginTop: 14, gap: 12 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+            <Text style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}>Lieux utiles</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 11 }}>Touchez la map ou un lieu</Text>
           </View>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {npcs.slice(0, 3).map((npc) => {
-              const emoji = ACTION_EMOJI[npc.action] ?? "•";
-              const moneyC = npc.money >= 200 ? "#f6b94f" : npc.money >= 80 ? "#86efac" : "#f87171";
-              const locName = worldLocations.find((l) => l.slug === npc.locationSlug)?.name ?? npc.locationSlug;
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 12 }}>
+            {quickSlugs.map((slug) => (
+              <View key={slug} style={{ width: 190 }}>
+                <LocationCard
+                  slug={slug}
+                  isHere={slug === currentLocationSlug}
+                  npcCount={npcsByLoc[slug]?.length ?? 0}
+                  eventEmoji={mapEventsByLocation[slug]?.emoji}
+                  eventSeverity={mapEventsByLocation[slug]?.severity}
+                  onPress={() => setSelectedSlug(slug)}
+                />
+              </View>
+            ))}
+          </ScrollView>
+
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 12 }}>
+            {NEIGHBORHOODS.map((neighborhood) => {
+              const firstSlug = neighborhood.slugs.find((slug) => worldLocations.some((l) => l.slug === slug));
+              if (!firstSlug) return null;
+              const active = neighborhood.slugs.includes(currentLocationSlug);
+              const totalNpcsHere = neighborhood.slugs.reduce(
+                (sum, slug) => sum + (npcsByLoc[slug]?.length ?? 0), 0
+              );
+
               return (
-                <View key={npc.id}
-                  style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 12,
-                    padding: 10, gap: 4, minWidth: 120, flex: 1 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                    <Text style={{ fontSize: 16 }}>{emoji}</Text>
-                    <Text style={{ color: TEXT, fontSize: 12, fontWeight: "800", flex: 1 }}>
-                      {npc.name}
-                    </Text>
-                    <Text style={{ color: "#60a5fa", fontSize: 10, fontWeight: "700" }}>
-                      Nv{npc.level}
-                    </Text>
-                  </View>
-                  <Text numberOfLines={1} style={{ color: TEXT_MUTED, fontSize: 10 }}>
-                    📍 {locName}
+                <Pressable
+                  key={neighborhood.label}
+                  onPress={() => setSelectedSlug(firstSlug)}
+                  style={{
+                    minWidth: 140,
+                    borderRadius: 999,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    borderWidth: 1,
+                    borderColor: active ? neighborhood.color : "rgba(255,255,255,0.08)",
+                    backgroundColor: active ? neighborhood.color + "18" : "rgba(255,255,255,0.04)",
+                    flexDirection: "row",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: 8,
+                  }}>
+                  <Text numberOfLines={1} style={{ color: active ? neighborhood.color : TEXT_SOFT, fontSize: 12, fontWeight: "900" }}>
+                    {neighborhood.label}
                   </Text>
-                  <View style={{ flexDirection: "row", justifyContent: "space-between",
-                    alignItems: "center" }}>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 9 }}>
-                      😊{npc.mood} ⚡{npc.energy}
+                  {totalNpcsHere > 0 && (
+                    <Text style={{ color: TEXT_MUTED, fontSize: 10, fontWeight: "800" }}>
+                      {totalNpcsHere}
                     </Text>
-                    <Text style={{ color: moneyC, fontSize: 11, fontWeight: "900" }}>
-                      💰{npc.money}
-                    </Text>
-                  </View>
-                </View>
+                  )}
+                </Pressable>
               );
             })}
-          </View>
-          {npcs.length > 3 && (
-            <Text style={{ color: TEXT_MUTED, fontSize: 11, marginTop: 10 }}>
-              +{npcs.length - 3} autres habitants se déplacent en arrière-plan.
+          </ScrollView>
+        </View>
+
+        {/* ── Statistiques bots ────────────────────────────────── */}
+        <View style={{ width: "100%", maxWidth: 1180, marginTop: 12,
+          borderRadius: 16, backgroundColor: "rgba(14,22,35,0.72)",
+          borderWidth: 1, borderColor: CARD_BORDER, padding: 12,
+          flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: TEXT, fontSize: 13, fontWeight: "900" }}>Vie en ville</Text>
+            <Text numberOfLines={1} style={{ color: TEXT_MUTED, fontSize: 11, marginTop: 2 }}>
+              {currentNpcs.length > 0
+                ? `${currentNpcs.length} habitant${currentNpcs.length > 1 ? "s" : ""} ici`
+                : `${npcs.length} habitants bougent en arriere-plan`}
             </Text>
-          )}
+          </View>
+          {currentNpcs.slice(0, 2).map((npc) => (
+            <Pressable
+              key={npc.id}
+              onPress={() => setSelectedSlug(npc.locationSlug)}
+              style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7,
+                backgroundColor: "rgba(255,255,255,0.05)", borderWidth: 1, borderColor: "rgba(255,255,255,0.07)" }}>
+              <Text numberOfLines={1} style={{ color: TEXT_SOFT, fontSize: 11, fontWeight: "800" }}>
+                {ACTION_EMOJI[npc.action] ?? "•"} {npc.name}
+              </Text>
+            </Pressable>
+          ))}
         </View>
 
         {/* ── Lien avatar ──────────────────────────────────────── */}
-        {avatar && (
-          <Pressable
-            onPress={() => router.push("/(app)/profile")}
-            style={{ marginHorizontal: 16, marginTop: 16,
-              borderRadius: 14, padding: 14,
-              backgroundColor: "rgba(167,139,250,0.08)",
-              borderWidth: 1, borderColor: "rgba(167,139,250,0.20)",
-              flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <Text style={{ fontSize: 26 }}>
-              {avatar.gender === "Femme" ? "👩" : "🧑"}
-            </Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: TEXT, fontSize: 14, fontWeight: "800" }}>
-                {avatar.displayName}
-              </Text>
-              <Text style={{ color: TEXT_MUTED, fontSize: 11, marginTop: 2 }}>
-                Voir profil & apparence
-              </Text>
-            </View>
-            <Text style={{ color: "#a78bfa", fontSize: 18 }}>→</Text>
-          </Pressable>
-        )}
       </ScrollView>
 
       {/* ── Panel détail (Modal bottom sheet) ────────────────── */}

@@ -15,9 +15,14 @@ import Svg, {
 import type { MapEvent } from "@/lib/map-events";
 import { useTimeContext } from "@/lib/time-context";
 
-const SCREEN_W = Dimensions.get("window").width;
-export const MAP_W = Math.min(SCREEN_W - 0, 620);
-export const MAP_H = 560;
+const SCREEN = Dimensions.get("window");
+const SCREEN_W = SCREEN.width;
+const SCREEN_H = SCREEN.height;
+const IS_WIDE = SCREEN_W >= 900;
+export const MAP_W = Math.max(320, Math.min(SCREEN_W - (IS_WIDE ? 64 : 16), IS_WIDE ? 1180 : 620));
+export const MAP_H = IS_WIDE
+  ? Math.min(Math.max(600, MAP_W * 0.52), Math.min(720, SCREEN_H * 0.74))
+  : Math.min(560, Math.max(520, SCREEN_H * 0.58));
 
 // World units
 const WW = 520;
