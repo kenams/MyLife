@@ -12,6 +12,7 @@ import Svg, {
   Rect, Stop, Text as SvgText,
 } from "react-native-svg";
 
+import type { MapEvent } from "@/lib/map-events";
 import { useTimeContext } from "@/lib/time-context";
 
 const SCREEN_W = Dimensions.get("window").width;
@@ -26,6 +27,13 @@ const SY = MAP_H / WH;
 
 function wx(x: number) { return x * SX; }
 function wy(y: number) { return y * SY; }
+
+function eventColor(event?: MapEvent) {
+  if (!event) return "transparent";
+  if (event.severity === "high") return "#FB7185";
+  if (event.severity === "medium") return "#FBBF24";
+  return "#60A5FA";
+}
 
 // ─── Palette jour/nuit ────────────────────────────────────────────────────────
 function mkPal(night: boolean, dawn: boolean) {
@@ -185,9 +193,155 @@ const BLDGS: Bldg[] = [
   },
 ];
 
+function UrbanProp({ x, y, kind, night }: { x: number; y: number; kind: "bench" | "lamp" | "sign" | "table" | "queue"; night: boolean }) {
+  const px = wx(x);
+  const py = wy(y);
+  if (kind === "bench") {
+    return (
+      <G>
+        <Ellipse cx={px + wx(8)} cy={py + wy(7)} rx={wx(11)} ry={wy(3)} fill="rgba(0,0,0,0.16)" />
+        <Rect x={px} y={py} width={wx(17)} height={wy(4)} rx={wy(1.5)} fill={night ? "#4B5563" : "#8B5A2B"} />
+        <Rect x={px + wx(2)} y={py + wy(5)} width={wx(2)} height={wy(5)} fill="#475569" />
+        <Rect x={px + wx(13)} y={py + wy(5)} width={wx(2)} height={wy(5)} fill="#475569" />
+      </G>
+    );
+  }
+  if (kind === "lamp") {
+    return (
+      <G>
+        <Rect x={px} y={py} width={wx(2)} height={wy(18)} fill="#64748B" rx={wy(1)} />
+        <Circle cx={px + wx(1)} cy={py - wy(1)} r={wy(4)} fill={night ? "#FCD34D" : "#CBD5E1"} opacity={night ? 0.95 : 0.7} />
+        {night && <Circle cx={px + wx(1)} cy={py - wy(1)} r={wy(15)} fill="#FCD34D" opacity={0.08} />}
+      </G>
+    );
+  }
+  if (kind === "table") {
+    return (
+      <G>
+        <Ellipse cx={px + wx(7)} cy={py + wy(7)} rx={wx(10)} ry={wy(5)} fill="rgba(0,0,0,0.14)" />
+        <Circle cx={px + wx(7)} cy={py + wy(4)} r={wy(5)} fill={night ? "#7C2D12" : "#F97316"} opacity={0.78} />
+        <Line x1={px + wx(7)} y1={py + wy(4)} x2={px + wx(7)} y2={py + wy(11)} stroke="#475569" strokeWidth={wy(1.3)} />
+      </G>
+    );
+  }
+  if (kind === "queue") {
+    return (
+      <G>
+        {[0, 1, 2].map((i) => (
+          <Circle key={i} cx={px + wx(i * 7)} cy={py + wy((i % 2) * 3)} r={wy(3.2)} fill={night ? "#A78BFA" : "#475569"} opacity={0.9} />
+        ))}
+      </G>
+    );
+  }
+  return (
+    <G>
+      <Rect x={px} y={py} width={wx(14)} height={wy(9)} rx={wy(2)} fill={night ? "#111827" : "#FFFFFF"} stroke="#38BDF8" strokeWidth={wy(1)} />
+      <Line x1={px + wx(7)} y1={py + wy(9)} x2={px + wx(7)} y2={py + wy(17)} stroke="#64748B" strokeWidth={wy(1.3)} />
+    </G>
+  );
+}
+
+function BuildingDetails({ b, night }: { b: Bldg; night: boolean }) {
+  const x = wx(b.x);
+  const y = wy(b.y);
+  const bw = wx(b.w);
+  const bh = wy(b.h);
+  const groundY = y + bh + wy(b.tall ? 23 : 18);
+
+  if (b.slug === "market") {
+    return (
+      <G>
+        {[0.18, 0.42, 0.66].map((ratio, i) => (
+          <G key={i}>
+            <Rect x={x + bw * ratio} y={groundY - wy(12)} width={wx(13)} height={wy(8)} rx={wy(2)} fill={i === 1 ? "#22C55E" : "#F97316"} opacity={0.85} />
+            <Circle cx={x + bw * ratio + wx(4)} cy={groundY - wy(14)} r={wy(2)} fill="#FBBF24" />
+            <Circle cx={x + bw * ratio + wx(9)} cy={groundY - wy(14)} r={wy(2)} fill="#EF4444" />
+          </G>
+        ))}
+      </G>
+    );
+  }
+
+  if (b.slug === "restaurant" || b.slug === "cafe") {
+    return (
+      <G>
+        <UrbanProp x={b.x + 9} y={b.y + b.h + 15} kind="table" night={night} />
+        <UrbanProp x={b.x + 30} y={b.y + b.h + 12} kind="table" night={night} />
+        <Path d={`M ${x + bw * 0.72} ${groundY - wy(18)} C ${x + bw * 0.68} ${groundY - wy(27)}, ${x + bw * 0.82} ${groundY - wy(28)}, ${x + bw * 0.78} ${groundY - wy(38)}`}
+          stroke={night ? "rgba(226,232,240,0.22)" : "rgba(71,85,105,0.25)"} strokeWidth={wy(2)} fill="none" strokeLinecap="round" />
+      </G>
+    );
+  }
+
+  if (b.slug === "nightclub" || b.slug === "rooftop-bar") {
+    return (
+      <G>
+        <UrbanProp x={b.x + 7} y={b.y + b.h + 19} kind="queue" night={night} />
+        <Rect x={x + bw * 0.18} y={y - wy(6)} width={bw * 0.62} height={wy(4)} rx={wy(2)} fill={b.neon ?? b.accentColor} opacity={night ? 0.95 : 0.45} />
+        {night && <Rect x={x - wy(8)} y={y - wy(10)} width={bw + wy(16)} height={bh + wy(34)} rx={wy(10)} fill={b.neon ?? b.accentColor} opacity={0.045} />}
+      </G>
+    );
+  }
+
+  if (b.slug === "residence-luxe") {
+    return (
+      <G>
+        <Rect x={x + bw * 0.58} y={groundY - wy(15)} width={wx(22)} height={wy(12)} rx={wy(6)} fill={night ? "#0F3A4A" : "#38BDF8"} opacity={0.65} />
+        <Rect x={x + bw * 0.08} y={groundY - wy(12)} width={bw * 0.32} height={wy(3)} rx={wy(1.5)} fill="#F6B94F" opacity={0.75} />
+        <UrbanProp x={b.x + 11} y={b.y + b.h + 16} kind="lamp" night={night} />
+      </G>
+    );
+  }
+
+  if (b.slug === "gym") {
+    return (
+      <G>
+        <Line x1={x + bw * 0.18} y1={groundY - wy(9)} x2={x + bw * 0.42} y2={groundY - wy(9)} stroke="#CBD5E1" strokeWidth={wy(2.2)} strokeLinecap="round" />
+        <Circle cx={x + bw * 0.16} cy={groundY - wy(9)} r={wy(3)} fill="#EF4444" />
+        <Circle cx={x + bw * 0.44} cy={groundY - wy(9)} r={wy(3)} fill="#EF4444" />
+      </G>
+    );
+  }
+
+  if (b.kind === "work") {
+    return (
+      <G>
+        <UrbanProp x={b.x + b.w - 17} y={b.y + b.h + 14} kind="sign" night={night} />
+        <Rect x={x + bw * 0.14} y={y + wy(8)} width={bw * 0.72} height={wy(2)} rx={wy(1)} fill="#7DD3FC" opacity={night ? 0.7 : 0.35} />
+      </G>
+    );
+  }
+
+  if (b.kind === "home") {
+    return (
+      <G>
+        <Rect x={x + bw * 0.12} y={groundY - wy(12)} width={bw * 0.24} height={wy(4)} rx={wy(2)} fill="#94A3B8" opacity={0.55} />
+        <UrbanProp x={b.x + b.w - 25} y={b.y + b.h + 11} kind="bench" night={night} />
+      </G>
+    );
+  }
+
+  return null;
+}
+
+function MapEventBadge({ b, event }: { b: Bldg; event: MapEvent }) {
+  const x = wx(b.x + b.w * 0.72);
+  const y = wy(b.y - 12);
+  const color = eventColor(event);
+  return (
+    <G>
+      <Circle cx={x} cy={y} r={wy(12)} fill={color} opacity={0.18} />
+      <Circle cx={x} cy={y} r={wy(8)} fill={color} opacity={0.92} />
+      <SvgText x={x} y={y + wy(3.4)} textAnchor="middle" fontSize={wy(8)} fontWeight="900" fill="#0B1020">
+        {event.emoji}
+      </SvgText>
+    </G>
+  );
+}
+
 // ─── Bâtiment SVG ─────────────────────────────────────────────────────────────
-function Building({ b, night, isCurrent, onPress }: {
-  b: Bldg; night: boolean; isCurrent: boolean;
+function Building({ b, night, isCurrent, event, onPress }: {
+  b: Bldg; night: boolean; isCurrent: boolean; event?: MapEvent;
   onPress: () => void;
 }) {
   const x   = wx(b.x);
@@ -214,8 +368,13 @@ function Building({ b, night, isCurrent, onPress }: {
 
   // Bâtiment spécial : parc (zone verte, pas de fenêtres)
   if (b.slug === "park") {
+    const color = eventColor(event);
     return (
       <G onPress={onPress}>
+        {event && (
+          <Rect x={x-wy(4)} y={y-wy(4)} width={bw+wy(8)} height={bh+wy(8)}
+            fill={color} opacity={0.08} rx={wy(10)} />
+        )}
         <Rect x={x} y={y} width={bw} height={bh} fill={night ? "#061206" : "#2E7D32"} rx={wy(8)} />
         <Rect x={x+wx(4)} y={y+wy(4)} width={bw-wx(8)} height={bh-wy(8)}
           fill={night ? "#0a1e0a" : "#388E3C"} rx={wy(6)} />
@@ -246,12 +405,18 @@ function Building({ b, night, isCurrent, onPress }: {
         {isCurrent && (
           <Circle cx={x+bw/2} cy={y-wy(6)} r={wy(7)} fill="#34D39955" />
         )}
+        {event && <MapEventBadge b={b} event={event} />}
       </G>
     );
   }
 
+  const color = eventColor(event);
   return (
     <G onPress={onPress}>
+      {event && (
+        <Rect x={x-wy(8)} y={y-wy(8)} width={bw+wy(16)} height={bh+roofH+wy(22)}
+          fill={color} stroke={color} strokeWidth={wy(1)} opacity={event.severity === "high" ? 0.14 : 0.09} rx={wy(10)} />
+      )}
       {/* Ombre */}
       <Rect x={x+wy(4)} y={y+roofH+wy(4)} width={bw} height={bh}
         fill="rgba(0,0,0,0.25)" rx={wy(5)} />
@@ -315,6 +480,9 @@ function Building({ b, night, isCurrent, onPress }: {
             fill="transparent" stroke={b.neon} strokeWidth={wy(0.7)} rx={wy(9)} opacity={0.12} />
         </>
       )}
+
+      <BuildingDetails b={b} night={night} />
+      {event && <MapEventBadge b={b} event={event} />}
 
       {/* Badge "ICI" */}
       {isCurrent && (
@@ -404,22 +572,37 @@ function Lighthouse({ x, y, night }: { x: number; y: number; night: boolean }) {
 }
 
 // ─── NPC animé ────────────────────────────────────────────────────────────────
-type NpcDef = { nm: string; clr: string; ini: string; zoneY: number; zoneH: number; startX: number };
+type NpcDef = {
+  nm: string;
+  clr: string;
+  ini: string;
+  zoneY: number;
+  zoneH: number;
+  startX: number;
+  morningY?: number;
+  lunchY?: number;
+  nightY?: number;
+};
 
 const NPC_DEFS: NpcDef[] = [
-  { nm:"Ava",   clr:"#10B981", ini:"A", zoneY:175, zoneH:12, startX:0.15 },
-  { nm:"Malik", clr:"#3B82F6", ini:"M", zoneY:295, zoneH:12, startX:0.35 },
-  { nm:"Noa",   clr:"#EC4899", ini:"N", zoneY:175, zoneH:12, startX:0.60 },
-  { nm:"Leila", clr:"#F59E0B", ini:"L", zoneY:295, zoneH:12, startX:0.75 },
-  { nm:"Yan",   clr:"#8B5CF6", ini:"Y", zoneY:405, zoneH:12, startX:0.25 },
-  { nm:"Sana",  clr:"#EF4444", ini:"S", zoneY:405, zoneH:12, startX:0.70 },
-  { nm:"Kim",   clr:"#06B6D4", ini:"K", zoneY:175, zoneH:12, startX:0.85 },
-  { nm:"Lena",  clr:"#A78BFA", ini:"L", zoneY:295, zoneH:12, startX:0.10 },
+  { nm:"Ava",   clr:"#10B981", ini:"A", zoneY:175, zoneH:12, startX:0.15, lunchY:295, nightY:405 },
+  { nm:"Malik", clr:"#3B82F6", ini:"M", zoneY:175, zoneH:12, startX:0.35, morningY:175, lunchY:295, nightY:405 },
+  { nm:"Noa",   clr:"#EC4899", ini:"N", zoneY:295, zoneH:12, startX:0.60, lunchY:295, nightY:405 },
+  { nm:"Leila", clr:"#F59E0B", ini:"L", zoneY:295, zoneH:12, startX:0.75, morningY:295, nightY:295 },
+  { nm:"Yan",   clr:"#8B5CF6", ini:"Y", zoneY:175, zoneH:12, startX:0.25, morningY:175, lunchY:295, nightY:405 },
+  { nm:"Sana",  clr:"#EF4444", ini:"S", zoneY:295, zoneH:12, startX:0.70, morningY:295, lunchY:295, nightY:405 },
+  { nm:"Kim",   clr:"#06B6D4", ini:"K", zoneY:175, zoneH:12, startX:0.85, lunchY:295, nightY:405 },
+  { nm:"Lena",  clr:"#A78BFA", ini:"L", zoneY:405, zoneH:12, startX:0.10, morningY:295, lunchY:295, nightY:405 },
 ];
 
-function NpcWalker({ def, night, delay }: { def: NpcDef; night: boolean; delay: number }) {
+function NpcWalker({ def, hour, night, delay }: { def: NpcDef; hour: number; night: boolean; delay: number }) {
+  const activeZoneY =
+    night ? (def.nightY ?? def.zoneY)
+      : hour >= 11 && hour < 15 ? (def.lunchY ?? def.zoneY)
+        : hour >= 7 && hour < 11 ? (def.morningY ?? def.zoneY)
+          : def.zoneY;
   const posX = useRef(new Animated.Value(MAP_W * def.startX)).current;
-  const posY = useRef(new Animated.Value(wy(def.zoneY))).current;
+  const posY = useRef(new Animated.Value(wy(activeZoneY))).current;
   const bob  = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -432,7 +615,7 @@ function NpcWalker({ def, night, delay }: { def: NpcDef; night: boolean; delay: 
   useEffect(() => {
     function wander() {
       const nextX = MAP_W * (0.04 + Math.random() * 0.92);
-      const nextY = wy(def.zoneY) + (Math.random() - 0.5) * wy(def.zoneH);
+      const nextY = wy(activeZoneY) + (Math.random() - 0.5) * wy(def.zoneH);
       Animated.sequence([
         Animated.parallel([
           Animated.timing(posX, { toValue: nextX, duration: 2800 + Math.random() * 3500, useNativeDriver: false, easing: Easing.inOut(Easing.quad) }),
@@ -443,7 +626,7 @@ function NpcWalker({ def, night, delay }: { def: NpcDef; night: boolean; delay: 
     }
     const t = setTimeout(wander, delay);
     return () => clearTimeout(t);
-  }, [def.zoneY, def.zoneH, delay, posX, posY]);
+  }, [activeZoneY, def.zoneH, delay, posX, posY]);
 
   return (
     <Animated.View
@@ -470,7 +653,7 @@ function NpcWalker({ def, night, delay }: { def: NpcDef; night: boolean; delay: 
 }
 
 // ─── Voiture animée ───────────────────────────────────────────────────────────
-type CarDef = { color: string; roadY: number; dir: 1 | -1; speed: number };
+type CarDef = { color: string; roadY: number; dir: 1 | -1; speed: number; kind?: "car" | "bus" };
 const CAR_DEFS: CarDef[] = [
   { color:"#3B82F6", roadY:RH[0]-5,  dir:1,  speed:8800  },
   { color:"#EF4444", roadY:RH[0]+5,  dir:-1, speed:10200 },
@@ -479,6 +662,7 @@ const CAR_DEFS: CarDef[] = [
   { color:"#8B5CF6", roadY:RH[2]-5,  dir:1,  speed:11000 },
   { color:"#EC4899", roadY:RH[2]+5,  dir:-1, speed:8200  },
   { color:"#06B6D4", roadY:RH[3]-5,  dir:1,  speed:9800  },
+  { color:"#FCD34D", roadY:RH[1]-1,  dir:-1, speed:14800, kind:"bus" },
 ];
 
 function MovingCar({ c, night }: { c: CarDef; night: boolean }) {
@@ -501,12 +685,15 @@ function MovingCar({ c, night }: { c: CarDef; night: boolean }) {
       pointerEvents="none"
       style={{
         position:"absolute", left:posX, top:wy(c.roadY)-7,
-        width:34, height:14, borderRadius:5, backgroundColor:c.color,
+        width:c.kind === "bus" ? 52 : 34, height:14, borderRadius:c.kind === "bus" ? 4 : 5, backgroundColor:c.color,
         shadowColor:c.color, shadowOpacity:night?0.7:0.45, shadowRadius:night?8:4, elevation:4,
         transform:[{scaleX:c.dir}],
       }}>
       {/* Vitre */}
-      <View style={{ position:"absolute", right:4, top:2.5, width:10, height:7, backgroundColor:"rgba(200,235,255,0.65)", borderRadius:2 }} />
+      <View style={{ position:"absolute", right:4, top:2.5, width:c.kind === "bus" ? 28 : 10, height:7, backgroundColor:"rgba(200,235,255,0.65)", borderRadius:2 }} />
+      {c.kind === "bus" && (
+        <View style={{ position:"absolute", left:6, top:3, width:8, height:6, backgroundColor:"rgba(15,23,42,0.35)", borderRadius:1 }} />
+      )}
       {/* Phares */}
       {night && <>
         <View style={{ position:"absolute", left:2, top:3, width:3, height:3, backgroundColor:"#FFFDE7", borderRadius:2 }} />
@@ -520,11 +707,12 @@ function MovingCar({ c, night }: { c: CarDef; night: boolean }) {
 }
 
 // ─── Composant VillageMap ─────────────────────────────────────────────────────
-export function VillageMap({ currentSlug, onLocationPress }: {
+export function VillageMap({ currentSlug, events = [], onLocationPress }: {
   currentSlug: string;
+  events?: MapEvent[];
   onLocationPress: (slug: string, label: string) => void;
 }) {
-  const { hour, minutes } = useTimeContext();
+  const { hour, minutes, weather, weatherEmoji } = useTimeContext();
   const isNight = hour < 6 || hour >= 21;
   const isDawn  = (hour >= 6 && hour < 8) || (hour >= 19 && hour < 21);
   const pal = mkPal(isNight, isDawn);
@@ -551,6 +739,13 @@ export function VillageMap({ currentSlug, onLocationPress }: {
 
   const timeStr = `${String(hour).padStart(2,"0")}:${String(minutes).padStart(2,"0")}`;
   const currentBldg = BLDGS.find((b) => b.slug === currentSlug);
+  const eventsByLocation = events.reduce<Record<string, MapEvent>>((acc, event) => {
+    const existing = acc[event.locationSlug];
+    if (!existing || event.severity === "high") {
+      acc[event.locationSlug] = event;
+    }
+    return acc;
+  }, {});
 
   // Arbres dispersés
   const treeList: Array<{ x: number; y: number; r: number; v: number }> = [
@@ -792,6 +987,7 @@ export function VillageMap({ currentSlug, onLocationPress }: {
           <Building
             key={b.slug} b={b} night={isNight}
             isCurrent={currentSlug === b.slug}
+            event={eventsByLocation[b.slug]}
             onPress={() => onLocationPress(b.slug, b.label)}
           />
         ))}
@@ -819,7 +1015,7 @@ export function VillageMap({ currentSlug, onLocationPress }: {
 
       {/* ── NPCs ── */}
       {NPC_DEFS.map((def,i) => (
-        <NpcWalker key={def.nm} def={def} night={isNight} delay={i * 450} />
+        <NpcWalker key={def.nm} def={def} hour={hour} night={isNight} delay={i * 450} />
       ))}
 
       {/* ── Voitures ── */}
@@ -841,7 +1037,7 @@ export function VillageMap({ currentSlug, onLocationPress }: {
         <View>
           <Text style={{ color:isNight?"#FCD34D":isDawn?"#F97316":"#1D4ED8", fontSize:15, fontWeight:"900" }}>{timeStr}</Text>
           <Text style={{ color:isNight?"#64748B":"#94A3B8", fontSize:9, fontWeight:"700" }}>
-            {isNight?"Nuit":isDawn?"Aube":"Journée"} · Neo Paris
+            {weatherEmoji} {isNight?"Nuit":isDawn?"Aube":"Journée"} · Neo Paris
           </Text>
         </View>
       </View>
@@ -887,6 +1083,23 @@ export function VillageMap({ currentSlug, onLocationPress }: {
           </View>
         ))}
       </View>
+
+      {(weather === "rainy" || weather === "stormy") && (
+        <View pointerEvents="none" style={{ position:"absolute", left:0, right:0, top:0, bottom:0, opacity:weather === "stormy" ? 0.28 : 0.18 }}>
+          {Array.from({ length: 26 }, (_, i) => (
+            <View key={i} style={{
+              position:"absolute",
+              left:`${(i * 13) % 100}%`,
+              top:`${(i * 17) % 92}%`,
+              width:1.2,
+              height:weather === "stormy" ? 16 : 11,
+              borderRadius:1,
+              backgroundColor:"rgba(191,219,254,0.9)",
+              transform:[{ rotate:"18deg" }],
+            }} />
+          ))}
+        </View>
+      )}
     </View>
   );
 }

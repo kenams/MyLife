@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { Text, View } from "react-native";
 
+import { buildMapEvents } from "@/lib/map-events";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
 
@@ -54,21 +55,56 @@ function ChatBadge({ color, focused }: { color: string; focused: boolean }) {
   );
 }
 
+function WorldBadge({ color, focused }: { color: string; focused: boolean }) {
+  const stats = useGameStore((s) => s.stats);
+  const urgentCount = buildMapEvents(stats, 5).filter((event) => event.severity !== "low").length;
+  return (
+    <View style={{ position: "relative" }}>
+      <Ionicons name={focused ? "compass" : "compass-outline"} color={color} size={24} />
+      {urgentCount > 0 && (
+        <View style={{
+          position: "absolute", top: -5, right: -7,
+          minWidth: 16, height: 16, borderRadius: 8,
+          backgroundColor: urgentCount > 1 ? "#fb7185" : "#f6b94f",
+          alignItems: "center", justifyContent: "center", paddingHorizontal: 3,
+          borderWidth: 1, borderColor: "#07111f"
+        }}>
+          <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>{urgentCount > 9 ? "9+" : urgentCount}</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
 export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: "#060f1b",
-          borderTopColor: "rgba(255,255,255,0.07)",
-          height: 76,
-          paddingBottom: 12,
-          paddingTop: 10
+          position: "absolute",
+          left: 12,
+          right: 12,
+          bottom: 10,
+          backgroundColor: "rgba(6,15,27,0.96)",
+          borderTopColor: "rgba(255,255,255,0.10)",
+          borderTopWidth: 1,
+          borderRadius: 22,
+          height: 72,
+          paddingBottom: 10,
+          paddingTop: 9,
+          shadowColor: "#000",
+          shadowOpacity: 0.35,
+          shadowRadius: 18,
+          elevation: 14
         },
         tabBarActiveTintColor:   colors.accent,
-        tabBarInactiveTintColor: "rgba(155,169,189,0.5)",
-        tabBarLabelStyle: { fontSize: 10, fontWeight: "700" }
+        tabBarInactiveTintColor: "rgba(155,169,189,0.58)",
+        tabBarItemStyle: {
+          borderRadius: 16,
+          marginHorizontal: 3,
+        },
+        tabBarLabelStyle: { fontSize: 10, fontWeight: "800", marginTop: 2 }
       }}
     >
       <Tabs.Screen
@@ -84,9 +120,7 @@ export default function TabsLayout() {
         name="world"
         options={{
           title: "Ville",
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "compass" : "compass-outline"} color={color} size={24} />
-          )
+          tabBarIcon: ({ color, focused }) => <WorldBadge color={color} focused={focused} />
         }}
       />
       <Tabs.Screen

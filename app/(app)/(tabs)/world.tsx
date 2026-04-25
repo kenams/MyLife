@@ -10,6 +10,7 @@ import {
 
 import { VillageMap } from "@/components/village-map";
 import { buildCityIntel } from "@/lib/city-intelligence";
+import { buildMapEvents, eventByLocation } from "@/lib/map-events";
 import { useGameStore, worldLocations } from "@/stores/game-store";
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -93,11 +94,15 @@ function LocationCard({
   slug,
   isHere,
   npcCount,
+  eventEmoji,
+  eventSeverity,
   onPress
 }: {
   slug: string;
   isHere: boolean;
   npcCount: number;
+  eventEmoji?: string;
+  eventSeverity?: string;
   onPress: () => void;
 }) {
   const loc = worldLocations.find((l) => l.slug === slug);
@@ -129,6 +134,14 @@ function LocationCard({
               <Text style={{ color: "#07111f", fontSize: 9, fontWeight: "900" }}>ICI</Text>
             </View>
           )}
+          {eventEmoji && (
+            <View style={{ backgroundColor: eventSeverity === "high" ? "rgba(251,113,133,0.22)" : "rgba(251,191,36,0.18)", borderRadius: 7,
+              paddingHorizontal: 6, paddingVertical: 2 }}>
+              <Text style={{ color: eventSeverity === "high" ? "#FB7185" : "#FBBF24", fontSize: 10, fontWeight: "900" }}>
+                {eventEmoji}
+              </Text>
+            </View>
+          )}
           {npcCount > 0 && (
             <View style={{ backgroundColor: "rgba(255,255,255,0.08)", borderRadius: 7,
               paddingHorizontal: 6, paddingVertical: 2 }}>
@@ -158,12 +171,14 @@ function LocationPanel({
   slug,
   currentSlug,
   npcs,
+  event,
   onTravel,
   onClose,
 }: {
   slug: string;
   currentSlug: string;
   npcs: import("@/lib/types").NpcState[];
+  event?: ReturnType<typeof buildMapEvents>[number];
   onTravel: (slug: string) => void;
   onClose: () => void;
 }) {
@@ -204,6 +219,24 @@ function LocationPanel({
 
       {/* Description */}
       <Text style={{ color: TEXT_SOFT, fontSize: 13, lineHeight: 19 }}>{loc.summary}</Text>
+
+      {event && (
+        <View style={{ borderRadius: 14, padding: 12,
+          backgroundColor: event.severity === "high" ? "rgba(251,113,133,0.12)" : "rgba(251,191,36,0.10)",
+          borderWidth: 1,
+          borderColor: event.severity === "high" ? "rgba(251,113,133,0.35)" : "rgba(251,191,36,0.28)",
+          flexDirection: "row", alignItems: "center", gap: 10 }}>
+          <Text style={{ fontSize: 20 }}>{event.emoji}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: event.severity === "high" ? "#FB7185" : "#FBBF24", fontSize: 12, fontWeight: "900" }}>
+              {event.title}
+            </Text>
+            <Text style={{ color: TEXT_SOFT, fontSize: 11, lineHeight: 16, marginTop: 2 }}>
+              {event.body}
+            </Text>
+          </View>
+        </View>
+      )}
 
       {/* NPCs présents */}
       {locNpcs.length > 0 ? (
@@ -287,6 +320,8 @@ export default function WorldScreen() {
     stats, currentLocationSlug, npcs,
     livePlayers: [], relationships, housingTier
   });
+  const mapEvents = buildMapEvents(stats, 4);
+  const mapEventsByLocation = eventByLocation(mapEvents);
 
   const currentLoc = worldLocations.find((l) => l.slug === currentLocationSlug);
   const currentLocStyle = KIND_STYLE[currentLoc?.kind ?? "public"] ?? KIND_STYLE.public;
@@ -311,6 +346,7 @@ export default function WorldScreen() {
         {/* ── Carte ville interactive ────────────────────────── */}
         <VillageMap
           currentSlug={currentLocationSlug}
+          events={mapEvents}
           onLocationPress={(slug) => setSelectedSlug(slug)}
         />
 
@@ -363,6 +399,40 @@ export default function WorldScreen() {
           </Pressable>
         )}
 
+        {mapEvents.length > 0 && (
+          <View style={{ marginHorizontal: 16, marginTop: 12, gap: 8 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 10, fontWeight: "900",
+              textTransform: "uppercase", letterSpacing: 0.8 }}>
+              Signaux de vie
+            </Text>
+            {mapEvents.slice(0, 3).map((event) => {
+              const loc = worldLocations.find((l) => l.slug === event.locationSlug);
+              const color = event.severity === "high" ? "#FB7185" : event.severity === "medium" ? "#FBBF24" : "#60A5FA";
+              return (
+                <Pressable
+                  key={event.id}
+                  onPress={() => setSelectedSlug(event.locationSlug)}
+                  style={{ borderRadius: 14, padding: 12,
+                    backgroundColor: color + "12",
+                    borderWidth: 1, borderColor: color + "35",
+                    flexDirection: "row", alignItems: "center", gap: 10 }}>
+                  <View style={{ width: 34, height: 34, borderRadius: 11,
+                    backgroundColor: color + "22", alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontSize: 18 }}>{event.emoji}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color, fontSize: 12, fontWeight: "900" }}>{event.title}</Text>
+                    <Text numberOfLines={1} style={{ color: TEXT_SOFT, fontSize: 11, marginTop: 2 }}>
+                      {loc?.name ?? event.locationSlug} · {event.body}
+                    </Text>
+                  </View>
+                  <Text style={{ color, fontSize: 16 }}>→</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
         {/* ── Quartiers ────────────────────────────────────────── */}
         {NEIGHBORHOODS.map((neighborhood) => {
           const validSlugs = neighborhood.slugs.filter(
@@ -400,6 +470,8 @@ export default function WorldScreen() {
                     slug={slug}
                     isHere={slug === currentLocationSlug}
                     npcCount={npcsByLoc[slug]?.length ?? 0}
+                    eventEmoji={mapEventsByLocation[slug]?.emoji}
+                    eventSeverity={mapEventsByLocation[slug]?.severity}
                     onPress={() => setSelectedSlug(slug)}
                   />
                 ))}
@@ -491,6 +563,7 @@ export default function WorldScreen() {
                 slug={selectedSlug}
                 currentSlug={currentLocationSlug}
                 npcs={npcs}
+                event={mapEventsByLocation[selectedSlug]}
                 onTravel={handleTravel}
                 onClose={() => setSelectedSlug(null)}
               />
