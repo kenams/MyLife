@@ -1,6 +1,7 @@
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useRef, useState } from "react";
 import {
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -299,6 +300,8 @@ export default function WorldScreen() {
   const playerLevel         = useGameStore((s) => s.playerLevel);
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [travelingTo, setTravelingTo] = useState<string | null>(null);
+  const travelAnim = useRef(new Animated.Value(0)).current;
 
   // NPC tick toutes les 30s quand l'écran est actif
   useFocusEffect(
@@ -331,7 +334,13 @@ export default function WorldScreen() {
 
   const handleTravel = (slug: string) => {
     if (slug === currentLocationSlug) return;
-    travelTo(slug);
+    setTravelingTo(slug);
+    travelAnim.setValue(0);
+    Animated.timing(travelAnim, { toValue: 1, duration: 750, useNativeDriver: false }).start(() => {
+      travelTo(slug);
+      setTravelingTo(null);
+      travelAnim.setValue(0);
+    });
   };
 
   // Stats en temps réel pour le header
@@ -358,8 +367,36 @@ export default function WorldScreen() {
   );
   const quickSlugs = Array.from(new Set(suggestedSlugs)).slice(0, 8);
 
+  const travelingLoc = travelingTo ? worldLocations.find((l) => l.slug === travelingTo) : null;
+  const travelBarWidth = travelAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
+      {/* ── Overlay animation voyage ─────────────────────────── */}
+      {travelingTo && travelingLoc && (
+        <View style={{
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: "rgba(4,8,15,0.88)",
+          zIndex: 100, alignItems: "center", justifyContent: "center", gap: 20,
+        }}>
+          <View style={{ width: 72, height: 72, borderRadius: 24,
+            backgroundColor: (KIND_STYLE[travelingLoc.kind] ?? KIND_STYLE.public).bg,
+            alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ fontSize: 36 }}>{(KIND_STYLE[travelingLoc.kind] ?? KIND_STYLE.public).emoji}</Text>
+          </View>
+          <View style={{ alignItems: "center", gap: 6 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 11, fontWeight: "800", letterSpacing: 1.5 }}>EN ROUTE</Text>
+            <Text style={{ color: TEXT, fontSize: 20, fontWeight: "900" }}>{travelingLoc.name}</Text>
+          </View>
+          <View style={{ width: 200, height: 5, borderRadius: 3,
+            backgroundColor: "rgba(255,255,255,0.10)", overflow: "hidden" }}>
+            <Animated.View style={{ height: 5, borderRadius: 3,
+              width: travelBarWidth,
+              backgroundColor: ACCENT }} />
+          </View>
+        </View>
+      )}
+
       <ScrollView
         contentContainerStyle={{ paddingTop: 12, paddingBottom: 120, alignItems: "center" }}
         showsVerticalScrollIndicator={false}>

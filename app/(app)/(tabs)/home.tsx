@@ -211,6 +211,7 @@ export default function HomeScreen() {
   const housingTier      = useGameStore((s) => s.housingTier);
   const checkHousingRent = useGameStore((s) => s.checkHousingRent);
   const lifeFeed         = useGameStore((s) => s.lifeFeed ?? []);
+  const npcs             = useGameStore((s) => s.npcs);
   const [eventModalOpen, setEventModalOpen] = useState(false);
 
   useFocusEffect(useCallback(() => { bootstrap(); checkHousingRent(); }, [bootstrap, checkHousingRent]));
@@ -255,6 +256,7 @@ export default function HomeScreen() {
     .filter(Boolean) as ActionDef[];
   const primaryAction = primaryCrisis ? actionById.get(primaryCrisis.action) : quickActions[0];
   const locationLabel = currentLocation === "home" ? "Chez toi" : currentLocation;
+  const npcsHere = npcs.filter((n) => n.locationSlug === currentLocation).slice(0, 3);
   const keyNeeds = [
     { emoji: "🍱", label: "Faim", value: stats.hunger, color: colors.gold },
     { emoji: "⚡", label: "Énergie", value: stats.energy, color: colors.blue },
@@ -485,8 +487,28 @@ export default function HomeScreen() {
             ))}
           </View>
 
+          {npcsHere.length > 0 && (
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "900", letterSpacing: 1.2 }}>
+                PRÉSENTS ICI
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                {npcsHere.map((npc) => (
+                  <View key={npc.id} style={{ flex: 1, backgroundColor: colors.accent + "0e", borderRadius: 14,
+                    padding: 12, borderWidth: 1, borderColor: colors.accent + "28", alignItems: "center", gap: 4 }}>
+                    <Text style={{ fontSize: 20 }}>
+                      {npc.action === "working" ? "💼" : npc.action === "eating" ? "🍽️" : npc.action === "sleeping" ? "😴" : npc.action === "chatting" ? "💬" : npc.action === "exercising" ? "💪" : "💭"}
+                    </Text>
+                    <Text numberOfLines={1} style={{ color: colors.text, fontSize: 12, fontWeight: "800" }}>{npc.name}</Text>
+                    <Text style={{ color: colors.muted, fontSize: 10 }}>{npc.action}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
           {lifeFeed.length > 0 && (
-            <View style={{ opacity: 0.72 }}>
+            <View>
               <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "900", letterSpacing: 1.2, marginBottom: 8 }}>
                 DERNIER ÉVÉNEMENT
               </Text>

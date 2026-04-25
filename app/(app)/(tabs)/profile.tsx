@@ -1,6 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useRef } from "react";
+
+import { AvatarSprite } from "@/components/avatar-sprite";
+import { getAvatarVisual } from "@/lib/avatar-visual";
 import { Animated, Easing, Pressable, ScrollView, Text, View } from "react-native";
 
 import { getHousingTier } from "@/lib/housing";
@@ -183,8 +186,17 @@ export default function ProfileScreen() {
                 backgroundColor: colors.accentGlow,
                 borderWidth: 3, borderColor: housing.color,
                 alignItems: "center", justifyContent: "center",
+                overflow: "hidden",
                 shadowColor: housing.color, shadowOpacity: 0.5, shadowRadius: 16 }}>
-                <Text style={{ fontSize: 36 }}>🧑</Text>
+                {avatar ? (
+                  <AvatarSprite
+                    visual={getAvatarVisual(avatar)}
+                    action={stats.energy < 20 ? "sleeping" : "idle"}
+                    size="sm"
+                  />
+                ) : (
+                  <Text style={{ fontSize: 36 }}>🧑</Text>
+                )}
               </View>
               {/* Housing badge */}
               <View style={{ position: "absolute", bottom: -4, right: -6,

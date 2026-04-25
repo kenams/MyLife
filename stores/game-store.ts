@@ -1669,12 +1669,21 @@ export const useGameStore = create<GameState>()(
               createdAt: nowIso(),
               read: false
             }),
-            lifeFeed: appendFeed(state.lifeFeed, {
-              id: `feed-travel-${Date.now()}`,
-              title: "Changement de decor",
-              body: `Tu as rejoint ${location.name}. Le contexte influence ton humeur, ton image et tes rencontres.`,
-              createdAt: nowIso()
-            })
+            lifeFeed: appendFeed(state.lifeFeed, (() => {
+              const npcsHere = state.npcs.filter((n) => n.locationSlug === locationSlug);
+              const npcNames = npcsHere.slice(0, 2).map((n) => n.name);
+              const npcStr = npcsHere.length === 0
+                ? "Personne ici pour l'instant."
+                : npcsHere.length === 1
+                  ? `${npcNames[0]} est déjà là.`
+                  : `${npcNames.join(" et ")}${npcsHere.length > 2 ? ` +${npcsHere.length - 2}` : ""} sont là.`;
+              return {
+                id: `feed-travel-${Date.now()}`,
+                title: `Arrivée : ${location.name}`,
+                body: npcStr,
+                createdAt: nowIso()
+              };
+            })())
           };
         }),
       sendMessage: (conversationId, body) =>

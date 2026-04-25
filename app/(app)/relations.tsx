@@ -2,11 +2,19 @@ import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, Pressable, ScrollView, Text, View } from "react-native";
 
+import { AvatarSprite } from "@/components/avatar-sprite";
+import type { AvatarAction } from "@/lib/avatar-visual";
+import { getNpcVisual } from "@/lib/avatar-visual";
+
+const VALID_ACTIONS = new Set<AvatarAction>(["idle","walking","working","eating","sleeping","chatting","exercising","waving"]);
+function toAvatarAction(a?: string): AvatarAction {
+  return VALID_ACTIONS.has(a as AvatarAction) ? (a as AvatarAction) : "idle";
+}
 import { starterResidents } from "@/lib/game-engine";
-import { getCompatibilityBadge, getRelationshipLabel, getResidentAccessibility } from "@/lib/selectors";
+import { getCompatibilityBadge, getResidentAccessibility } from "@/lib/selectors";
 import { colors } from "@/lib/theme";
 import type { RelationshipRecord } from "@/lib/types";
-import { useGameStore } from "@/stores/game-store";
+import { useGameStore, worldLocations } from "@/stores/game-store";
 
 const QUALITY_COLOR: Record<NonNullable<RelationshipRecord["quality"]>, string> = {
   inspirante: "#38c793",
@@ -44,9 +52,11 @@ function RelationProgress({ status }: { status: RelationshipRecord["status"] }) 
 }
 
 export default function RelationsScreen() {
-  const avatar        = useGameStore((s) => s.avatar);
-  const stats         = useGameStore((s) => s.stats);
-  const relationships = useGameStore((s) => s.relationships);
+  const avatar               = useGameStore((s) => s.avatar);
+  const stats                = useGameStore((s) => s.stats);
+  const relationships        = useGameStore((s) => s.relationships);
+  const npcs                 = useGameStore((s) => s.npcs);
+  const currentLocationSlug  = useGameStore((s) => s.currentLocationSlug);
   const startDirectConversation = useGameStore((s) => s.startDirectConversation);
   const sendInvitation          = useGameStore((s) => s.sendInvitation);
 
@@ -102,23 +112,40 @@ export default function RelationsScreen() {
             const qualityColor = QUALITY_COLOR[rel.quality] ?? colors.muted;
             const scoreColor   = rel.score >= 65 ? "#38c793" : rel.score >= 40 ? colors.accent : rel.score >= 20 ? "#fbbf24" : "#f87171";
             const accessColor  = access.level === "accessible" ? "#38c793" : access.level === "receptif" ? "#fbbf24" : colors.muted;
+            const npcState     = npcs.find((n) => n.id === resident.id);
+            const isHere       = npcState?.locationSlug === currentLocationSlug;
+            const npcLoc       = npcState ? worldLocations.find((l) => l.slug === npcState.locationSlug) : null;
 
             return (
               <View key={rel.residentId} style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 18,
-                padding: 16, gap: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
+                padding: 16, gap: 12, borderWidth: 1,
+                borderColor: isHere ? colors.accent + "40" : "rgba(255,255,255,0.08)" }}>
 
                 {/* Top row */}
                 <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
                   <View style={{ width: 50, height: 50, borderRadius: 25,
                     backgroundColor: qualityColor + "20", borderWidth: 2, borderColor: qualityColor + "50",
-                    alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontSize: 22 }}>👤</Text>
+                    alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                    <AvatarSprite visual={getNpcVisual(resident.id)} action={toAvatarAction(npcState?.action)} size="xs" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16 }}>{resident.name}</Text>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      <Text style={{ color: colors.text, fontWeight: "800", fontSize: 16 }}>{resident.name}</Text>
+                      {isHere && (
+                        <View style={{ backgroundColor: colors.accent, borderRadius: 6,
+                          paddingHorizontal: 6, paddingVertical: 2 }}>
+                          <Text style={{ color: "#07111f", fontSize: 9, fontWeight: "900" }}>ICI</Text>
+                        </View>
+                      )}
+                    </View>
                     <Text style={{ color: colors.muted, fontSize: 12 }}>{resident.role} · {resident.status}</Text>
+                    {npcLoc && (
+                      <Text style={{ color: colors.muted, fontSize: 11, marginTop: 2 }}>
+                        📍 {npcLoc.name}
+                      </Text>
+                    )}
                     <Text style={{ color: getCompatibilityBadge(avatar?.interests ?? [], resident.interests) ? colors.accent : colors.muted,
-                      fontSize: 11, marginTop: 2 }}>
+                      fontSize: 11, marginTop: 1 }}>
                       {getCompatibilityBadge(avatar?.interests ?? [], resident.interests)}
                     </Text>
                   </View>
