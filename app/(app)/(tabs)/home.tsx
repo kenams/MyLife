@@ -126,20 +126,25 @@ function XpBar({ xp, level }: { xp: number; level: number }) {
 // ─── Carte d'action ───────────────────────────────────────────────────────────
 
 function ActionCard({
-  action, onPress, disabled, isPriority
-}: { action: ActionDef; onPress: () => void; disabled: boolean; isPriority: boolean }) {
+  action, onPress, disabled, isPriority, compact = false
+}: { action: ActionDef; onPress: () => void; disabled: boolean; isPriority: boolean; compact?: boolean }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const color = CATEGORY_COLORS[action.category];
 
   return (
-    <Animated.View style={{ flex: 1, minWidth: "47%", transform: [{ scale: scaleAnim }] }}>
+    <Animated.View style={{
+      flex: compact ? undefined : 1,
+      width: compact ? 154 : undefined,
+      minWidth: compact ? 154 : "47%",
+      transform: [{ scale: scaleAnim }]
+    }}>
       <Pressable
         onPressIn={() => Animated.spring(scaleAnim, { toValue: 0.93, useNativeDriver: true, speed: 60 }).start()}
         onPressOut={() => Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, speed: 60 }).start()}
         onPress={onPress}
         disabled={disabled}
         style={{
-          borderRadius: 16, padding: 14, gap: 6,
+          borderRadius: 16, padding: compact ? 12 : 14, gap: 6,
           backgroundColor: isPriority ? color + "18" : disabled ? "rgba(255,255,255,0.02)" : "rgba(255,255,255,0.05)",
           borderWidth: isPriority ? 1.5 : 1,
           borderColor: isPriority ? color + "60" : "rgba(255,255,255,0.08)",
@@ -149,10 +154,10 @@ function ActionCard({
         {isPriority && (
           <View style={{ position: "absolute", top: 8, right: 8, backgroundColor: color + "30",
             borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2 }}>
-            <Text style={{ color, fontSize: 8, fontWeight: "900" }}>★ TOP</Text>
+            <Text style={{ color, fontSize: 8, fontWeight: "900" }}>À faire</Text>
           </View>
         )}
-        <Text style={{ fontSize: 26 }}>{action.emoji}</Text>
+        <Text style={{ fontSize: compact ? 22 : 26 }}>{action.emoji}</Text>
         <Text style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>{action.label}</Text>
         <View style={{ flexDirection: "row", gap: 6, flexWrap: "wrap" }}>
           <Text style={{ color: "#f87171", fontSize: 10 }}>-{action.costLabel}</Text>
@@ -165,10 +170,9 @@ function ActionCard({
 
 // ─── Event du jour Modal ──────────────────────────────────────────────────────
 
-function DailyEventModal() {
+function DailyEventModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const dailyEvent = useGameStore((s) => s.dailyEvent);
   const resolveDailyEvent = useGameStore((s) => s.resolveDailyEvent);
-  const [visible, setVisible] = useState(true);
   if (!dailyEvent || dailyEvent.resolved || !visible) return null;
 
   const kindColor =
@@ -183,7 +187,7 @@ function DailyEventModal() {
     dailyEvent.kind === "social"      ? "🤝" : "⚠️";
 
   return (
-    <Modal transparent animationType="slide" visible={visible} onRequestClose={() => setVisible(false)}>
+    <Modal transparent animationType="slide" visible={visible} onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.88)", justifyContent: "flex-end", padding: 16 }}>
         <View style={{
           backgroundColor: "#0d1117", borderRadius: 28, padding: 24, gap: 18,
@@ -228,13 +232,13 @@ function DailyEventModal() {
           </View>
 
           <View style={{ flexDirection: "row", gap: 10 }}>
-            <Pressable onPress={() => { resolveDailyEvent("accepted"); setVisible(false); }}
+            <Pressable onPress={() => { resolveDailyEvent("accepted"); onClose(); }}
               style={{ flex: 2, paddingVertical: 16, borderRadius: 16, backgroundColor: kindColor + "22",
                 borderWidth: 1.5, borderColor: kindColor + "55", alignItems: "center" }}>
               <Text style={{ color: kindColor, fontWeight: "900", fontSize: 15 }}>{dailyEvent.actionLabel}</Text>
             </Pressable>
             {dailyEvent.kind !== "windfall" && (
-              <Pressable onPress={() => { resolveDailyEvent("skipped"); setVisible(false); }}
+              <Pressable onPress={() => { resolveDailyEvent("skipped"); onClose(); }}
                 style={{ flex: 1, paddingVertical: 16, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.04)",
                   borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", alignItems: "center" }}>
                 <Text style={{ color: colors.muted, fontWeight: "700", fontSize: 13 }}>Passer</Text>
@@ -250,23 +254,16 @@ function DailyEventModal() {
 // ─── Streak Badge ─────────────────────────────────────────────────────────────
 
 function StreakBadge({ streak }: { streak: number }) {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    Animated.loop(Animated.sequence([
-      Animated.timing(pulseAnim, { toValue: 1.06, duration: 900, useNativeDriver: true }),
-      Animated.timing(pulseAnim, { toValue: 1, duration: 900, useNativeDriver: true }),
-    ])).start();
-  }, []);
   const color = streak >= 30 ? "#ff4500" : streak >= 14 ? "#ff7f00" : streak >= 7 ? colors.gold : "#60a5fa";
   const emoji = streak >= 30 ? "🔥" : streak >= 14 ? "⚡" : streak >= 7 ? "⭐" : "💧";
   return (
-    <Animated.View style={{ transform: [{ scale: pulseAnim }],
+    <View style={{
       backgroundColor: color + "18", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10,
       borderWidth: 1.5, borderColor: color + "40", alignItems: "center" }}>
       <Text style={{ fontSize: 18 }}>{emoji}</Text>
       <Text style={{ color, fontWeight: "900", fontSize: 18 }}>{streak}</Text>
       <Text style={{ color: colors.muted, fontSize: 8 }}>streak</Text>
-    </Animated.View>
+    </View>
   );
 }
 
@@ -285,6 +282,7 @@ export default function HomeScreen() {
   const housingTier      = useGameStore((s) => s.housingTier);
   const checkHousingRent = useGameStore((s) => s.checkHousingRent);
   const lifeFeed         = useGameStore((s) => s.lifeFeed ?? []);
+  const [eventModalOpen, setEventModalOpen] = useState(false);
 
   useFocusEffect(useCallback(() => { bootstrap(); checkHousingRent(); }, [bootstrap, checkHousingRent]));
 
@@ -327,7 +325,7 @@ export default function HomeScreen() {
   return (
     <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
       <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} showsVerticalScrollIndicator={false}>
-        <DailyEventModal />
+        <DailyEventModal visible={eventModalOpen} onClose={() => setEventModalOpen(false)} />
 
         {/* ── HERO ── */}
         <View style={{ backgroundColor: "#060d1a", paddingBottom: 20, overflow: "hidden" }}>
@@ -473,16 +471,16 @@ export default function HomeScreen() {
 
           {/* ÉVÉNEMENT DU JOUR */}
           {dailyEvent && !dailyEvent.resolved && (
-            <Pressable onPress={() => bootstrap()}
+            <Pressable onPress={() => setEventModalOpen(true)}
               style={{ backgroundColor: colors.goldGlow, borderRadius: 16, padding: 14,
                 borderWidth: 1.5, borderColor: colors.gold + "40",
                 flexDirection: "row", alignItems: "center", gap: 12 }}>
               <Text style={{ fontSize: 26 }}>📅</Text>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: colors.gold, fontWeight: "900", fontSize: 13 }}>Événement du jour !</Text>
+                <Text style={{ color: colors.gold, fontWeight: "900", fontSize: 13 }}>Événement prêt</Text>
                 <Text style={{ color: colors.muted, fontSize: 12 }} numberOfLines={1}>{dailyEvent.title}</Text>
               </View>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.gold }} />
+              <Text style={{ color: colors.gold, fontSize: 12, fontWeight: "900" }}>Voir</Text>
             </Pressable>
           )}
 
@@ -531,7 +529,8 @@ export default function HomeScreen() {
                 <Text style={{ color: catColor, fontSize: 11, fontWeight: "900", letterSpacing: 1.5, marginBottom: 10 }}>
                   {CATEGORY_LABELS[cat]}
                 </Text>
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 10, paddingRight: 18 }}>
                   {actions.map((action) => (
                     <ActionCard
                       key={action.id}
@@ -539,9 +538,10 @@ export default function HomeScreen() {
                       onPress={() => performAction(action.id)}
                       disabled={!isAvailable(action)}
                       isPriority={suggested.includes(action.id)}
+                      compact
                     />
                   ))}
-                </View>
+                </ScrollView>
               </View>
             );
           })}
@@ -555,12 +555,10 @@ export default function HomeScreen() {
               {[
                 { emoji: "🗺️", label: "Carte",          route: "/(app)/(tabs)/world" },
                 { emoji: "👤", label: "Relations",      route: "/(app)/relations" },
-                { emoji: "📈", label: "Progression",    route: "/(app)/progression" },
                 { emoji: "💊", label: "Santé",          route: "/(app)/health" },
                 { emoji: "🏢", label: "Logement",       route: "/(app)/housing" },
-                { emoji: "💹", label: "Économie",       route: "/(app)/economy" },
                 { emoji: "🎯", label: "Missions",       route: "/(app)/missions" },
-                { emoji: "🏆", label: "Classement",     route: "/(app)/leaderboard" },
+                { emoji: "💼", label: "Travail",        route: "/(app)/work" },
               ].map((item) => (
                 <Pressable key={item.route} onPress={() => router.push(item.route as never)}
                   style={{ flexDirection: "row", alignItems: "center", gap: 6,
@@ -581,11 +579,11 @@ export default function HomeScreen() {
                 📰 JOURNAL
               </Text>
               <View style={{ gap: 8 }}>
-                {lifeFeed.slice(0, 4).map((item) => (
+                {lifeFeed.slice(0, 2).map((item) => (
                   <View key={item.id} style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 14, padding: 12,
                     borderWidth: 1, borderColor: "rgba(255,255,255,0.06)" }}>
                     <Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{item.title}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 12, marginTop: 3, lineHeight: 18 }}>{item.body}</Text>
+                    <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 12, marginTop: 3, lineHeight: 18 }}>{item.body}</Text>
                   </View>
                 ))}
               </View>

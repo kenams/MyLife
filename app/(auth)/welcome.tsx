@@ -1,6 +1,6 @@
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
-import { Animated, Dimensions, Easing, Pressable, ScrollView, Text, View } from "react-native";
+import { Animated, Dimensions, Easing, Pressable, Text, View } from "react-native";
 
 import { colors } from "@/lib/theme";
 
@@ -9,55 +9,46 @@ const { width: W } = Dimensions.get("window");
 const SLIDES = [
   {
     id: "intro",
-    emoji: "🌆",
+    emoji: "🏙️",
     title: "Bienvenue dans MyLife",
-    subtitle: "La simulation de vie qui change la donne",
-    body: "Un monde vivant, des vrais gens,\nta vie gamifiée en temps réel.",
+    subtitle: "Simulation de vie",
+    body: "Prends soin de ton personnage.\nChaque jour compte.",
     color: "#8b7cff",
     bg: "#0b0d1a",
   },
   {
-    id: "stats",
+    id: "needs",
     emoji: "⚡",
-    title: "Tes stats sont réelles",
-    subtitle: "Corps · Esprit · Social",
-    body: "Faim, énergie, humeur, stress...\nTout évolue selon tes actions et l'heure réelle.",
+    title: "Surveille tes besoins",
+    subtitle: "Faim · Énergie · Moral",
+    body: "Mange, dors, reste propre.\nSinon ta vie se dégrade.",
     color: "#60a5fa",
     bg: "#07111f",
   },
   {
     id: "world",
     emoji: "🗺️",
-    title: "Un village vivant",
-    subtitle: "NPCs · Lieux · Ambiances nocturnes",
-    body: "Café, gym, cinéma, club...\nLe monde change selon l'heure et la météo.",
+    title: "Utilise la ville",
+    subtitle: "Lieux utiles",
+    body: "Marché, parc, travail, café.\nChaque lieu sert ton quotidien.",
     color: "#38c793",
     bg: "#07110f",
   },
   {
     id: "missions",
     emoji: "🎯",
-    title: "Missions & Progression",
-    subtitle: "XP · Niveaux · Talents",
-    body: "Accomplis des quêtes, monte de niveau,\ndébloques des talents uniques.",
+    title: "Reviens progresser",
+    subtitle: "Missions · XP · Relations",
+    body: "Garde ta vie stable.\nDébloque de meilleurs choix.",
     color: "#f6b94f",
     bg: "#151005",
   },
   {
-    id: "social",
-    emoji: "👥",
-    title: "Joue avec de vraies personnes",
-    subtitle: "Rooms · Chat · Dates",
-    body: "Rencontre des joueurs en live,\norganise des sorties, construis des relations.",
-    color: "#c084fc",
-    bg: "#130b1a",
-  },
-  {
     id: "start",
-    emoji: "🚀",
-    title: "Prêt à commencer ?",
-    subtitle: "Ton aventure commence maintenant",
-    body: "Crée ton avatar, définis ton style de vie,\net plonge dans MyLife.",
+    emoji: "🧑",
+    title: "Crée ton avatar",
+    subtitle: "Première étape",
+    body: "Choisis ton style.\nPuis commence ta vie.",
     color: "#ff6b6b",
     bg: "#150707",
   },

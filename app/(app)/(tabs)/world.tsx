@@ -405,7 +405,7 @@ export default function WorldScreen() {
               textTransform: "uppercase", letterSpacing: 0.8 }}>
               Signaux de vie
             </Text>
-            {mapEvents.slice(0, 3).map((event) => {
+            {mapEvents.slice(0, 2).map((event) => {
               const loc = worldLocations.find((l) => l.slug === event.locationSlug);
               const color = event.severity === "high" ? "#FB7185" : event.severity === "medium" ? "#FBBF24" : "#60A5FA";
               return (
@@ -484,11 +484,12 @@ export default function WorldScreen() {
         <View style={{ marginHorizontal: 16, marginTop: 24,
           borderRadius: 16, backgroundColor: CARD_BG,
           borderWidth: 1, borderColor: CARD_BORDER, padding: 16 }}>
-          <Text style={{ color: TEXT, fontSize: 14, fontWeight: "900", marginBottom: 12 }}>
-            🤖 Activité des bots
-          </Text>
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <Text style={{ color: TEXT, fontSize: 14, fontWeight: "900" }}>Vie en ville</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 11 }}>{npcs.length} habitants</Text>
+          </View>
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-            {npcs.map((npc) => {
+            {npcs.slice(0, 3).map((npc) => {
               const emoji = ACTION_EMOJI[npc.action] ?? "•";
               const moneyC = npc.money >= 200 ? "#f6b94f" : npc.money >= 80 ? "#86efac" : "#f87171";
               const locName = worldLocations.find((l) => l.slug === npc.locationSlug)?.name ?? npc.locationSlug;
@@ -521,6 +522,11 @@ export default function WorldScreen() {
               );
             })}
           </View>
+          {npcs.length > 3 && (
+            <Text style={{ color: TEXT_MUTED, fontSize: 11, marginTop: 10 }}>
+              +{npcs.length - 3} autres habitants se déplacent en arrière-plan.
+            </Text>
+          )}
         </View>
 
         {/* ── Lien avatar ──────────────────────────────────────── */}

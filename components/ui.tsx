@@ -176,10 +176,10 @@ export function ListRow({
 export const styles = StyleSheet.create({
   card: {
     backgroundColor: "rgba(13, 23, 41, 0.9)",
-    borderRadius: 26,
+    borderRadius: 18,
     borderWidth: 1,
     borderColor: colors.border,
-    padding: 18,
+    padding: 16,
     gap: 12,
     shadowColor: "#000",
     shadowOpacity: 0.18,
@@ -190,12 +190,12 @@ export const styles = StyleSheet.create({
     borderColor: "rgba(88,214,163,0.24)",
     backgroundColor: "rgba(13, 26, 45, 0.96)"
   },
-  title: { color: colors.text, fontSize: 30, fontWeight: "800", lineHeight: 36 },
-  sectionTitle: { color: colors.text, fontSize: 19, fontWeight: "800" },
-  muted: { color: colors.muted, fontSize: 15, lineHeight: 22 },
+  title: { color: colors.text, fontSize: 28, fontWeight: "800", lineHeight: 34 },
+  sectionTitle: { color: colors.text, fontSize: 18, fontWeight: "800" },
+  muted: { color: colors.muted, fontSize: 14, lineHeight: 20 },
   button: {
-    minHeight: 54,
-    borderRadius: 18,
+    minHeight: 50,
+    borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 18
@@ -254,7 +254,7 @@ export const styles = StyleSheet.create({
     flex: 1,
     minWidth: 140,
     padding: 14,
-    borderRadius: 20,
+    borderRadius: 16,
     backgroundColor: colors.cardAlt,
     gap: 4
   },

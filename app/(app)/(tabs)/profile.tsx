@@ -135,6 +135,7 @@ export default function ProfileScreen() {
     Animated.timing(xpBarAnim, { toValue: xpPct, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
   }, [xpPct]);
   const xpBarWidth = xpBarAnim.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] });
+  const showTestMode = process.env.NODE_ENV !== "production";
 
   return (
     <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
@@ -449,6 +450,7 @@ export default function ProfileScreen() {
           )}
 
           {/* ── TEST MODE ── */}
+          {showTestMode && (
           <View style={{ backgroundColor: colors.cardAlt, borderRadius: 14, padding: 14,
             borderWidth: 1, borderColor: colors.border, gap: 10 }}>
             <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>MODE TEST</Text>
@@ -461,6 +463,7 @@ export default function ProfileScreen() {
               <Text style={{ color: colors.textSoft, fontWeight: "700", fontSize: 12 }}>⚡ Activer test live</Text>
             </Pressable>
           </View>
+          )}
 
           {/* ── SYNC SUPABASE ── */}
           {session?.provider === "supabase" && (

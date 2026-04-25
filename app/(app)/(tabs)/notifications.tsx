@@ -145,19 +145,19 @@ export default function QuetesTab() {
 
   const dailyTasks = [
     { emoji: "🍽️", label: "Manger", done: eatDone, urgency: eatUrgency,
-      detail: eatDone ? `Dernier repas il y a ${Math.round(hoursSinceEat)}h` : hoursSinceEat > 6 ? `Critique — ${Math.round(hoursSinceEat)}h sans manger. Tu perds des crédits !` : `Mange dans les 2 prochaines heures`,
+      detail: eatDone ? `Dernier repas il y a ${Math.round(hoursSinceEat)}h` : hoursSinceEat > 6 ? `Ton personnage a faim.` : `Mange bientôt.`,
       route: "/(app)/health" },
     { emoji: "😴", label: "Dormir", done: sleepDone, urgency: sleepUrgency,
-      detail: sleepDone ? `Énergie : ${stats.energy}/100` : `Énergie critique : ${stats.energy}/100 — réputation en baisse`,
+      detail: sleepDone ? `Énergie : ${stats.energy}/100` : `Il faut récupérer.`,
       route: "/(app)/health" },
     { emoji: "🚿", label: "Hygiène", done: hygieneDone, urgency: hygieneUrgency,
-      detail: hygieneDone ? `Hygiène : ${stats.hygiene}/100` : `Hygiène basse : ${stats.hygiene}/100 — impact social`,
+      detail: hygieneDone ? `Hygiène : ${stats.hygiene}/100` : `Va prendre une douche.`,
       route: "/(app)/health" },
     { emoji: "💼", label: "Travailler", done: workDone, urgency: workUrgency,
-      detail: workDone ? `Discipline : ${stats.discipline}/100` : `Travaille pour gagner des crédits et discipline`,
+      detail: workDone ? `Discipline : ${stats.discipline}/100` : `Travaille pour gagner des crédits.`,
       route: "/(app)/work" },
     { emoji: "😊", label: "Humeur", done: moodDone, urgency: moodUrgency,
-      detail: moodDone ? `Humeur : ${stats.mood}/100` : `Humeur basse : ${stats.mood}/100 — sors ou socialise`,
+      detail: moodDone ? `Humeur : ${stats.mood}/100` : `Sors ou parle à quelqu'un.`,
       route: "/(app)/(tabs)/world" },
   ] as const;
 
@@ -176,7 +176,7 @@ export default function QuetesTab() {
             backgroundColor: "#f6b94f08" }} />
           <Text style={{ color: colors.text, fontWeight: "900", fontSize: 24 }}>🎯 Quêtes & Tâches</Text>
           <Text style={{ color: colors.muted, fontSize: 12, marginTop: 3 }}>
-            Accomplis tes tâches ou subis les conséquences
+            Garde ton personnage stable, puis progresse.
           </Text>
 
           {/* XP bar */}
@@ -276,7 +276,7 @@ export default function QuetesTab() {
                 {smartNotifs.length} signal{smartNotifs.length > 1 ? "s" : ""}
               </Text>
             </View>
-            {smartNotifs.slice(0, 3).map((n) => {
+            {smartNotifs.slice(0, 2).map((n) => {
               const priorityColor = smartPriorityColor[n.priority];
               return (
                 <Pressable
@@ -359,7 +359,7 @@ export default function QuetesTab() {
                     </View>
                     <Pressable onPress={() => claimMission(prog.missionId)}
                       style={{ backgroundColor: catColor, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 }}>
-                      <Text style={{ color: "#000", fontWeight: "900", fontSize: 13 }}>Claim</Text>
+                      <Text style={{ color: "#000", fontWeight: "900", fontSize: 13 }}>Réclamer</Text>
                     </Pressable>
                   </View>
                 );
@@ -377,7 +377,7 @@ export default function QuetesTab() {
                 <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "700" }}>Tout voir →</Text>
               </Pressable>
             </View>
-            {activeMissions.slice(0, 3).map((mission) => {
+            {activeMissions.slice(0, 2).map((mission) => {
               const prog = missionProgresses.find((p) => p.missionId === mission.id);
               const reqs = prog?.requirements ?? mission.requirements.map((r) => ({ ...r, current: 0 }));
               const totalCount = reqs.reduce((s, r) => s + r.count, 0);
@@ -414,7 +414,7 @@ export default function QuetesTab() {
                   <Text style={{ color: colors.muted, fontSize: 11 }}>Tout lire</Text>
                 </Pressable>
               </View>
-              {unreadNotifs.slice(0, 4).map((n) => {
+              {unreadNotifs.slice(0, 3).map((n) => {
                 const meta = notificationKindMeta[n.kind] ?? notificationKindMeta.tip;
                 const kindColor = meta.color;
                 return (
