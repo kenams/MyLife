@@ -1,524 +1,892 @@
 /**
- * VillageMap v4 — Carte jeu top-down : bâtiments 3D, voitures animées, NPCs
+ * VillageMap v7 — Neo Paris : ville côtière vivante
+ * Inspirée de la référence visuelle : littoral, quartiers, densité, circulation
+ * SVG + Animated Views : zéro dépendance supplémentaire
  */
 
 import React, { useEffect, useRef } from "react";
-import { Animated, Dimensions, Text, View } from "react-native";
+import { Animated, Dimensions, Easing, Pressable, Text, View } from "react-native";
 import Svg, {
-  Circle, Defs, G, LinearGradient,
-  Line, Polygon, Rect, Stop, Text as SvgText, Ellipse,
+  Circle, ClipPath, Defs, Ellipse, G, Line,
+  LinearGradient, Path, Polygon, RadialGradient,
+  Rect, Stop, Text as SvgText,
 } from "react-native-svg";
 
 import { useTimeContext } from "@/lib/time-context";
 
 const SCREEN_W = Dimensions.get("window").width;
-const MAP_W    = Math.min(SCREEN_W - 24, 560);
-const MAP_H    = 560;
-const S        = MAP_W / 380;
+export const MAP_W = Math.min(SCREEN_W - 0, 620);
+export const MAP_H = 560;
 
-// ─── Palette jour / nuit ──────────────────────────────────────────────────────
-function mkPal(night: boolean) {
+// World units
+const WW = 520;
+const WH = 520;
+const SX = MAP_W / WW;
+const SY = MAP_H / WH;
+
+function wx(x: number) { return x * SX; }
+function wy(y: number) { return y * SY; }
+
+// ─── Palette jour/nuit ────────────────────────────────────────────────────────
+function mkPal(night: boolean, dawn: boolean) {
   return {
-    skyA:   night ? "#07111f" : "#5ba4cf",
-    skyB:   night ? "#0d1f3a" : "#c9e8f5",
-    ground: night ? "#0b160b" : "#c4e0b8",
-    park:   night ? "#091409" : "#7cb342",
-    road:   night ? "#1a2130" : "#6b7888",
-    roadL:  night ? "rgba(251,191,36,0.35)" : "rgba(255,255,255,0.65)",
-    swalk:  night ? "#1a2540" : "#adb5bd",
-    water:  night ? "#0a2540" : "#42a5f5",
-    wshim:  night ? "#1a4a7a" : "#bbdefb",
-    treeA:  night ? "#0c2b12" : "#2e7d32",
-    treeB:  night ? "#173a20" : "#43a047",
-    trunk:  "#5d4037",
-    sun:    night ? "#f5f0d0" : "#fdd835",
+    skyTop:    night ? "#020810" : dawn ? "#FF8C42" : "#1976D2",
+    skyBot:    night ? "#0d1a2e" : dawn ? "#FFD580" : "#BBDEFB",
+    water:     night ? "#0a2040" : "#1976D2",
+    waterSurf: night ? "#1a3a60" : "#42A5F5",
+    waterShim: night ? "#2a4a70" : "#90CAF9",
+    beach:     night ? "#2a2214" : "#F5DEB3",
+    beachEdge: night ? "#1c1808" : "#DEB887",
+    ground:    night ? "#0d1a0d" : "#C8E6C9",
+    groundMid: night ? "#111f11" : "#A5D6A7",
+    park:      night ? "#061206" : "#388E3C",
+    parkLight: night ? "#0a1e0a" : "#4CAF50",
+    road:      night ? "#151e2a" : "#546E7A",
+    roadLine:  night ? "rgba(251,191,36,0.7)" : "rgba(255,255,255,0.85)",
+    sidewalk:  night ? "#1e2a38" : "#B0BEC5",
+    treeD:     night ? "#061206" : "#1B5E20",
+    treeL:     night ? "#0c2010" : "#2E7D32",
+    treeM:     night ? "#102814" : "#388E3C",
+    trunk:     night ? "#2a1808" : "#5D4037",
+    sand:      night ? "#1c1808" : "#F9E4B7",
+    sun:       night ? "#E8DFC8" : "#FDD835",
+    cross:     night ? "rgba(255,255,255,0.2)" : "rgba(255,255,255,0.7)",
+    lampGlow:  "#FCD34D",
+    roofGlow:  night ? "rgba(255,200,100,0.12)" : "rgba(255,255,255,0.08)",
+    fog:       night ? "rgba(0,0,0,0.22)" : "rgba(0,0,0,0)",
   };
 }
 type Pal = ReturnType<typeof mkPal>;
 
-// ─── Bâtiments ────────────────────────────────────────────────────────────────
+// ─── Coordonnées des routes ───────────────────────────────────────────────────
+// Horizontales : y = 75, 190, 310, 420
+// Verticales   : x = 88, 180, 272, 364, 456 (— routes sont larges de 18 unités)
+const RH = [75, 190, 310, 420] as const;   // routes H (milieu)
+const RV = [88, 180, 272, 364, 456] as const; // routes V (milieu)
+const RW = 18; // largeur route (world units)
+
+// ─── Types bâtiments ──────────────────────────────────────────────────────────
 type Bldg = {
   slug: string; label: string; em: string;
   x: number; y: number; w: number; h: number;
-  wall: string; dark: string; roof: string; ra: string;
-  win: string; door: string;
-  aw: string | null; sign: string | null; neon: string | null;
+  wall: string; wallDark: string; roof: string;
+  accentColor: string;
+  neon: string | null;
+  tall?: boolean;   // immeuble de grande hauteur
+  kind: "work" | "social" | "food" | "wellness" | "home" | "leisure" | "premium";
 };
 
+// Disposition :
+// Zone NORD  (y=90..184)  : library, office, startup, res-luxe
+// Zone CENTRE-L (y=205..305): park zone (décoratif)
+// Zone CENTRE-M (y=205..305): cafe, market, gym
+// Zone SUD   (y=325..415)  : res-pop, restaurant, cinema, nightclub, spa
+// Zone BOTTOM (y=430..510) : home, res-confort, rooftop-bar
 const BLDGS: Bldg[] = [
-  // ── Nord ────────────────────────────────────────────────────────────────────
-  { slug:"home",       label:"Maison",       em:"🏠", x:5,   y:50,  w:84,  h:82, wall:"#1e3d6e", dark:"#0d1e38", roof:"#0f2d52", ra:"#1a4a7a", win:"#7eb8e8", door:"#8b7cff", aw:null,      sign:null,     neon:null      },
-  { slug:"cafe",       label:"Café",          em:"☕", x:100, y:50,  w:80,  h:82, wall:"#4a2c0f", dark:"#2a1808", roof:"#2a1808", ra:"#6b3f15", win:"#f4a261", door:"#e76f51", aw:"#c0392b", sign:"CAFÉ",   neon:null      },
-  { slug:"office",     label:"Bureau",        em:"💼", x:192, y:50,  w:84,  h:82, wall:"#1a2744", dark:"#0d1528", roof:"#0d1528", ra:"#2a3d5e", win:"#7dd3fc", door:"#38bdf8", aw:null,      sign:"OFFICE", neon:null      },
-  { slug:"library",    label:"Bibliothèque",  em:"📚", x:288, y:50,  w:88,  h:82, wall:"#2d1356", dark:"#1a0b30", roof:"#1a0b30", ra:"#4c2080", win:"#c084fc", door:"#a855f7", aw:null,      sign:"BIBLIO", neon:null      },
-  // ── Sud ─────────────────────────────────────────────────────────────────────
-  { slug:"gym",        label:"Gym",           em:"💪", x:5,   y:358, w:84,  h:84, wall:"#3d0f0f", dark:"#200808", roof:"#200808", ra:"#5c1a1a", win:"#f87171", door:"#ef4444", aw:null,      sign:"GYM",    neon:"#ff4444" },
-  { slug:"club",       label:"Club",          em:"🎵", x:100, y:358, w:80,  h:84, wall:"#120826", dark:"#080415", roof:"#080415", ra:"#2a1050", win:"#e879f9", door:"#a21caf", aw:"#7e22ce", sign:"CLUB",   neon:"#dd00ff" },
-  { slug:"restaurant", label:"Restaurant",    em:"🍽️", x:192, y:358, w:84,  h:84, wall:"#2a1a08", dark:"#150d04", roof:"#150d04", ra:"#4a2f10", win:"#fbbf24", door:"#d97706", aw:"#92400e", sign:"RESTO",  neon:null      },
-  { slug:"cinema",     label:"Cinéma",        em:"🎬", x:288, y:358, w:88,  h:84, wall:"#0d0d1a", dark:"#080810", roof:"#080810", ra:"#1a1a3a", win:"#818cf8", door:"#4338ca", aw:null,      sign:"CINÉMA", neon:"#6366f1" },
+  // ── Ligne NORD ───────────────────────────────────────────────────────────
+  {
+    slug:"library", label:"Bibliothèque", em:"📚",
+    x:4, y:90, w:76, h:90,
+    wall:"#263258", wallDark:"#141C38", roof:"#1A2240",
+    accentColor:"#818CF8", neon:null, kind:"wellness"
+  },
+  {
+    slug:"office", label:"Bureau", em:"💼",
+    x:98, y:76, w:74, h:108,
+    wall:"#1A3050", wallDark:"#0D1A30", roof:"#0D1A30",
+    accentColor:"#38BDF8", neon:null, tall:true, kind:"work"
+  },
+  {
+    slug:"startup", label:"Startup Lab", em:"🚀",
+    x:192, y:84, w:72, h:100,
+    wall:"#1A2050", wallDark:"#0D1230", roof:"#0D1230",
+    accentColor:"#7C3AED", neon:null, tall:true, kind:"work"
+  },
+  {
+    slug:"residence-luxe", label:"Résidence Luxe", em:"👑",
+    x:286, y:90, w:76, h:90,
+    wall:"#2A1C08", wallDark:"#160E04", roof:"#160E04",
+    accentColor:"#F6B94F", neon:null, kind:"premium"
+  },
+  {
+    slug:"rooftop-bar", label:"Sky Lounge", em:"🍸",
+    x:380, y:90, w:74, h:90,
+    wall:"#1A0A2A", wallDark:"#0D051A", roof:"#0D051A",
+    accentColor:"#C084FC", neon:"#C084FC", kind:"premium"
+  },
+  // ── Ligne CENTRE (droite du parc) ────────────────────────────────────────
+  {
+    slug:"cafe", label:"Social Café", em:"☕",
+    x:194, y:208, w:70, h:90,
+    wall:"#3A1C0A", wallDark:"#1E0E04", roof:"#1E0E04",
+    accentColor:"#F97316", neon:null, kind:"social"
+  },
+  {
+    slug:"market", label:"Fresh Market", em:"🛒",
+    x:286, y:208, w:70, h:90,
+    wall:"#0E2A10", wallDark:"#071508", roof:"#071508",
+    accentColor:"#22C55E", neon:null, kind:"food"
+  },
+  {
+    slug:"gym", label:"Pulse Gym", em:"💪",
+    x:378, y:208, w:76, h:90,
+    wall:"#2A0A08", wallDark:"#150504", roof:"#150504",
+    accentColor:"#EF4444", neon:"#EF4444", kind:"wellness"
+  },
+  // ── Ligne SUD ────────────────────────────────────────────────────────────
+  {
+    slug:"residence-populaire", label:"Bloc Pop", em:"🏘️",
+    x:4, y:328, w:78, h:82,
+    wall:"#28180E", wallDark:"#140C08", roof:"#140C08",
+    accentColor:"#D97706", neon:null, kind:"home"
+  },
+  {
+    slug:"restaurant", label:"Maison Ember", em:"🍽️",
+    x:98, y:328, w:74, h:82,
+    wall:"#200A04", wallDark:"#100504", roof:"#100504",
+    accentColor:"#F59E0B", neon:null, kind:"food"
+  },
+  {
+    slug:"cinema", label:"Luma Cinéma", em:"🎬",
+    x:192, y:328, w:74, h:82,
+    wall:"#080820", wallDark:"#040410", roof:"#040410",
+    accentColor:"#6366F1", neon:"#6366F1", kind:"leisure"
+  },
+  {
+    slug:"nightclub", label:"Neo Club", em:"🎵",
+    x:286, y:328, w:72, h:82,
+    wall:"#100620", wallDark:"#080310", roof:"#080310",
+    accentColor:"#A855F7", neon:"#DD00FF", kind:"leisure"
+  },
+  {
+    slug:"spa", label:"Zenith Spa", em:"🌿",
+    x:374, y:328, w:80, h:82,
+    wall:"#041818", wallDark:"#020C0C", roof:"#020C0C",
+    accentColor:"#2DD4BF", neon:null, kind:"wellness"
+  },
+  // ── Ligne BOTTOM ─────────────────────────────────────────────────────────
+  {
+    slug:"home", label:"Home Suite", em:"🏠",
+    x:4, y:438, w:90, h:68,
+    wall:"#1A3050", wallDark:"#0D1A30", roof:"#0D1A30",
+    accentColor:"#60A5FA", neon:null, kind:"home"
+  },
+  {
+    slug:"residence-confort", label:"Résidence", em:"🏢",
+    x:106, y:438, w:82, h:68,
+    wall:"#1A2240", wallDark:"#0D1220", roof:"#0D1220",
+    accentColor:"#8B9CF6", neon:null, kind:"home"
+  },
+  {
+    slug:"park", label:"Riverside Park", em:"🌳",
+    x:4, y:208, w:178, h:90,
+    wall:"#0E2A0E", wallDark:"#071408", roof:"#071408",
+    accentColor:"#4ADE80", neon:null, kind:"wellness"
+  },
 ];
 
-// ─── Données NPC ─────────────────────────────────────────────────────────────
-const NPCS = [
-  { id:"ava", nm:"Ava", clr:"#38c793", ini:"A", ry: 168 },
-  { id:"lea", nm:"Léa", clr:"#f472b6", ini:"L", ry: 180 },
-  { id:"noa", nm:"Noa", clr:"#60a5fa", ini:"N", ry: 268 },
-  { id:"kim", nm:"Kim", clr:"#fbbf24", ini:"K", ry: 345 },
-  { id:"sam", nm:"Sam", clr:"#a78bfa", ini:"S", ry: 357 },
-] as const;
-
-// ─── Bâtiment 3D ─────────────────────────────────────────────────────────────
-function Building({ b, isNight, isCurrent, onPress }: {
-  b: Bldg; isNight: boolean; isCurrent: boolean; onPress: () => void;
+// ─── Bâtiment SVG ─────────────────────────────────────────────────────────────
+function Building({ b, night, isCurrent, onPress }: {
+  b: Bldg; night: boolean; isCurrent: boolean;
+  onPress: () => void;
 }) {
-  const x  = b.x * S; const y = b.y * S;
-  const w  = b.w * S; const h = b.h * S;
-  const rH = 16 * S;
-  const sd = 6 * S;  // ombre 3D
+  const x   = wx(b.x);
+  const y   = wy(b.y);
+  const bw  = wx(b.w);
+  const bh  = wy(b.h);
+  const roofH = wy(b.tall ? 18 : 12);
+  const depthW = bw * 0.12;  // faux côté droit pour volume
 
-  // grille de fenêtres : 2 colonnes × 2 rangées
-  const winW = 11 * S; const winH = 9 * S;
-  const wins: [number,number][] = [
-    [x + w*0.20, y + rH + h*0.14],
-    [x + w*0.55, y + rH + h*0.14],
-    [x + w*0.20, y + rH + h*0.48],
-    [x + w*0.55, y + rH + h*0.48],
-  ];
+  // Fenêtres
+  const cols = b.tall ? 3 : 2;
+  const rows = b.tall ? 4 : 2;
+  const wW = wx(b.w / (cols * 3.2));
+  const wH = wy(b.h / (rows * 3.8));
+  const wins: [number, number][] = [];
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      wins.push([
+        x + bw * ((c + 0.7) / (cols + 0.4)),
+        y + roofH + bh * ((r + 0.5) / (rows + 0.8)),
+      ]);
+    }
+  }
 
-  // label centré sous le bâtiment
-  const lbW  = (b.label.length * 6.2 + 16) * S;
-  const lbH  = 16 * S;
-  const lbX  = x + w/2 - lbW/2;
-  const lbY  = y + h + 4 * S;
+  // Bâtiment spécial : parc (zone verte, pas de fenêtres)
+  if (b.slug === "park") {
+    return (
+      <G onPress={onPress}>
+        <Rect x={x} y={y} width={bw} height={bh} fill={night ? "#061206" : "#2E7D32"} rx={wy(8)} />
+        <Rect x={x+wx(4)} y={y+wy(4)} width={bw-wx(8)} height={bh-wy(8)}
+          fill={night ? "#0a1e0a" : "#388E3C"} rx={wy(6)} />
+        {/* Allée circulaire */}
+        <Ellipse cx={x+bw/2} cy={y+bh*0.55}
+          rx={bw*0.38} ry={bh*0.3}
+          fill="transparent" stroke={night?"#1c2c1c":"#81C784"} strokeWidth={wy(4)} />
+        {/* Fontaine */}
+        <Circle cx={x+bw/2} cy={y+bh*0.55} r={wy(14)} fill={night?"#0c1e30":"#1565C0"} opacity={0.9} />
+        <Circle cx={x+bw/2} cy={y+bh*0.55} r={wy(8)}  fill={night?"#1a3a5a":"#1E88E5"} />
+        <Circle cx={x+bw/2} cy={y+bh*0.55} r={wy(4)}  fill={night?"#1a4a6a":"#64B5F6"} />
+        {/* Jets fontaine */}
+        {[0,60,120,180,240,300].map((a,i) => {
+          const rd = a * Math.PI / 180;
+          return <Line key={`jet${i}`}
+            x1={x+bw/2} y1={y+bh*0.55}
+            x2={x+bw/2+Math.cos(rd)*wy(9)} y2={y+bh*0.55+Math.sin(rd)*wy(9)}
+            stroke={night?"#4a90b0":"#90CAF9"} strokeWidth={wy(1.5)} strokeLinecap="round" opacity={0.85}
+          />;
+        })}
+        {/* Label */}
+        <Rect x={x+bw*0.1} y={y+bh*0.82} width={bw*0.8} height={wy(13)}
+          fill="rgba(0,0,0,0.55)" rx={wy(4)} />
+        <SvgText x={x+bw/2} y={y+bh*0.82+wy(9.5)} textAnchor="middle"
+          fill={isCurrent?"#6EE7B7":"#E8F5E9"} fontSize={wy(6.5)} fontWeight="900">
+          {b.em} {b.label}
+        </SvgText>
+        {isCurrent && (
+          <Circle cx={x+bw/2} cy={y-wy(6)} r={wy(7)} fill="#34D39955" />
+        )}
+      </G>
+    );
+  }
 
   return (
     <G onPress={onPress}>
-      {/* ombre 3D */}
-      <Rect x={x+sd} y={y+sd} width={w} height={h} fill="rgba(0,0,0,0.30)" rx={5*S} />
+      {/* Ombre */}
+      <Rect x={x+wy(4)} y={y+roofH+wy(4)} width={bw} height={bh}
+        fill="rgba(0,0,0,0.25)" rx={wy(5)} />
 
-      {/* mur principal */}
-      <Rect x={x} y={y+rH} width={w} height={h-rH} fill={b.wall} rx={4*S} />
-
-      {/* toit */}
-      <Rect x={x} y={y}      width={w} height={rH+4*S} fill={b.roof} rx={4*S} />
-      <Rect x={x+3*S} y={y+3*S} width={w-6*S} height={7*S} fill={b.ra} rx={2*S} opacity={0.7} />
-
-      {/* auvent */}
-      {b.aw && (
-        <Polygon
-          points={`${x-5*S},${y+h*0.36} ${x+w+5*S},${y+h*0.36} ${x+w+10*S},${y+h*0.46} ${x-10*S},${y+h*0.46}`}
-          fill={b.aw} opacity={0.92}
-        />
+      {/* Toit */}
+      <Rect x={x} y={y} width={bw} height={roofH+wy(4)}
+        fill={b.roof} rx={wy(4)} />
+      {b.tall && (
+        <Rect x={x+bw*0.2} y={y+wy(2)} width={bw*0.6} height={roofH*0.5}
+          fill={b.accentColor} rx={wy(2)} opacity={0.3} />
       )}
 
-      {/* fenêtres */}
-      {wins.map(([wx,wy], i) => (
+      {/* Corps */}
+      <Rect x={x} y={y+roofH} width={bw} height={bh}
+        fill={b.wall} rx={wy(3)} />
+
+      {/* Face latérale (volume) */}
+      <Rect x={x+bw*(1-0.12)} y={y+roofH} width={bw*0.12} height={bh}
+        fill={b.wallDark} rx={wy(2)} />
+
+      {/* Bande décorative colorée en haut */}
+      <Rect x={x} y={y+roofH} width={bw*(1-0.12)} height={wy(4)}
+        fill={b.accentColor} opacity={0.45} rx={wy(1)} />
+
+      {/* Fenêtres */}
+      {wins.map(([wx_, wy_], i) => (
         <G key={i}>
-          <Rect x={wx-S} y={wy-S} width={winW+2*S} height={winH+2*S} fill={b.dark} rx={S} />
-          <Rect x={wx} y={wy} width={winW} height={winH}
-            fill={isNight ? b.win : b.win+"80"} rx={S}
-            opacity={isNight ? 0.95 : 0.65}
-          />
-          {isNight && (
-            <Rect x={wx+S} y={wy+S} width={3*S} height={winH*0.55} fill="rgba(255,255,255,0.22)" rx={S} />
+          <Rect x={wx_-wy(1)} y={wy_-wy(1)} width={wW+wy(2)} height={wH+wy(2)}
+            fill="rgba(0,0,0,0.35)" rx={wy(1.5)} />
+          <Rect x={wx_} y={wy_} width={wW} height={wH}
+            fill={b.accentColor} rx={wy(1.5)} opacity={night ? 0.9 : 0.45} />
+          {night && (
+            <Rect x={wx_+wy(1)} y={wy_+wy(1)} width={wy(2)} height={wH*0.5}
+              fill="rgba(255,255,255,0.28)" rx={wy(0.5)} />
           )}
         </G>
       ))}
 
-      {/* porte arrondie */}
-      <Rect x={x+w*0.39} y={y+h-18*S} width={15*S} height={18*S} fill={b.door} rx={7*S} opacity={0.95} />
-      <Circle cx={x+w*0.39+12*S} cy={y+h-9*S} r={1.5*S} fill="rgba(255,255,255,0.5)" />
+      {/* Porte */}
+      <Rect x={x+bw*0.38} y={y+roofH+bh-wy(17)} width={bw*0.22} height={wy(17)}
+        fill={b.accentColor} rx={wy(5)} opacity={0.85} />
 
-      {/* plaque enseigne */}
-      {b.sign && (
-        <>
-          <Rect x={x+w*0.12} y={y+h*0.62} width={w*0.76} height={11*S} fill="rgba(0,0,0,0.55)" rx={2*S} />
-          <SvgText
-            x={x+w/2} y={y+h*0.62+8*S}
-            textAnchor="middle"
-            fill={isNight && b.neon ? b.neon : "#e2e8f0"}
-            fontSize={7*S} fontWeight="900"
-          >{b.sign}</SvgText>
-        </>
-      )}
-
-      {/* néon nuit */}
-      {isNight && b.neon && (
-        <Rect x={x-3*S} y={y-3*S} width={w+6*S} height={h+6*S}
-          fill="transparent" stroke={b.neon} strokeWidth={2*S} rx={7*S} opacity={0.45}
-        />
-      )}
-
-      {/* contour position courante */}
-      {isCurrent && (
-        <>
-          <Rect x={x-4*S} y={y-4*S} width={w+8*S} height={h+8*S}
-            fill="transparent" stroke="#38c793" strokeWidth={3*S} rx={8*S} opacity={0.9}
-          />
-          <Rect x={x-8*S} y={y-8*S} width={w+16*S} height={h+16*S}
-            fill="transparent" stroke="#38c793" strokeWidth={1.5*S} rx={11*S} opacity={0.35}
-          />
-        </>
-      )}
-
-      {/* indicateur position joueur */}
-      {isCurrent && (
-        <>
-          <Circle cx={x+w/2} cy={y-2*S} r={9*S} fill="#38c79340" />
-          <Circle cx={x+w/2} cy={y-2*S} r={5*S} fill="#38c793cc" />
-          <Circle cx={x+w/2} cy={y-2*S} r={2.5*S} fill="#fff" />
-          <SvgText x={x+w/2} y={y-14*S} textAnchor="middle"
-            fill="#38c793" fontSize={7.5*S} fontWeight="900">TU ES ICI</SvgText>
-        </>
-      )}
-
-      {/* label bâtiment */}
-      <Rect x={lbX} y={lbY} width={lbW} height={lbH}
-        fill={isNight ? "rgba(0,0,0,0.72)" : "rgba(15,23,42,0.82)"}
-        rx={7*S}
-        stroke={isCurrent ? "#38c793" : "rgba(255,255,255,0.22)"}
-        strokeWidth={isCurrent ? 1.5*S : 0.8*S}
-      />
-      <SvgText x={x+w/2} y={lbY+11.5*S}
+      {/* Enseigne */}
+      <Rect x={x+bw*0.07} y={y+roofH+bh*0.56} width={bw*0.75} height={wy(12)}
+        fill="rgba(0,0,0,0.6)" rx={wy(3)}
+        stroke={night && b.neon ? b.neon+"66" : "rgba(255,255,255,0.10)"}
+        strokeWidth={wy(0.6)} />
+      <SvgText x={x+bw*0.07+bw*0.375} y={y+roofH+bh*0.56+wy(9.5)}
         textAnchor="middle"
-        fill={isCurrent ? "#8ee0bd" : "#fff"}
-        fontSize={9.5*S} fontWeight="900"
-      >{b.em} {b.label}</SvgText>
+        fill={night && b.neon ? b.neon : "#E2E8F0"}
+        fontSize={wy(6.2)} fontWeight="900">
+        {b.em} {b.label}
+      </SvgText>
+
+      {/* Néon halo nuit */}
+      {night && b.neon && (
+        <>
+          <Rect x={x-wy(2)} y={y-wy(2)} width={bw+wy(4)} height={bh+roofH+wy(4)}
+            fill="transparent" stroke={b.neon} strokeWidth={wy(1.8)} rx={wy(5)} opacity={0.55} />
+          <Rect x={x-wy(7)} y={y-wy(7)} width={bw+wy(14)} height={bh+roofH+wy(14)}
+            fill="transparent" stroke={b.neon} strokeWidth={wy(0.7)} rx={wy(9)} opacity={0.12} />
+        </>
+      )}
+
+      {/* Badge "ICI" */}
+      {isCurrent && (
+        <>
+          <Rect x={x-wy(3)} y={y-wy(3)} width={bw+wy(6)} height={bh+roofH+wy(6)}
+            fill="rgba(52,211,153,0.07)" stroke="#34D399" strokeWidth={wy(2.2)} rx={wy(6)} />
+          <Circle cx={x+bw/2} cy={y-wy(7)} r={wy(9)} fill="#34D39930" />
+          <Circle cx={x+bw/2} cy={y-wy(7)} r={wy(6)} fill="#34D399BB" />
+          <Circle cx={x+bw/2} cy={y-wy(7)} r={wy(3)} fill="#FFFFFF" />
+        </>
+      )}
     </G>
   );
 }
 
 // ─── Arbre ────────────────────────────────────────────────────────────────────
-function Tree({ x, y, r, pal }: { x: number; y: number; r: number; pal: Pal }) {
-  const px = x*S; const py = y*S; const pr = r*S;
+function Tree({ x, y, r, pal, variant = 0 }: { x: number; y: number; r: number; pal: Pal; variant?: number }) {
+  const px = wx(x); const py = wy(y); const pr = wy(r);
+  if (variant === 1) {
+    // Palmier
+    return (
+      <G>
+        <Rect x={px - wy(1.5)} y={py - pr * 0.8} width={wy(3)} height={pr * 1.2} fill={pal.trunk} rx={wy(1)} />
+        {[0, 45, 90, 135, 180, 225, 270, 315].map((a, i) => {
+          const rd = a * Math.PI / 180;
+          return <Line key={i}
+            x1={px} y1={py - pr * 0.7}
+            x2={px + Math.cos(rd) * pr * 1.2} y2={py - pr * 0.7 + Math.sin(rd) * pr * 0.6}
+            stroke={pal.treeM} strokeWidth={wy(2.5)} strokeLinecap="round" opacity={0.85}
+          />;
+        })}
+      </G>
+    );
+  }
   return (
     <G>
-      <Ellipse cx={px+3*S} cy={py+pr*0.5} rx={pr*0.9} ry={pr*0.28} fill="rgba(0,0,0,0.18)" />
-      <Rect x={px-2.5*S} y={py-pr*0.1} width={5*S} height={pr*0.9} fill={pal.trunk} />
-      <Circle cx={px} cy={py-pr*0.5} r={pr}     fill={pal.treeA} />
-      <Circle cx={px} cy={py-pr*0.75} r={pr*0.72} fill={pal.treeB} />
+      <Ellipse cx={px+wy(3)} cy={py+pr*0.6} rx={pr*1.1} ry={pr*0.28} fill="rgba(0,0,0,0.18)" />
+      <Rect x={px-wy(1.8)} y={py} width={wy(3.6)} height={pr*0.9} fill={pal.trunk} rx={wy(1)} />
+      <Circle cx={px} cy={py-pr*0.3} r={pr}       fill={pal.treeD} />
+      <Circle cx={px} cy={py-pr*0.55} r={pr*0.72} fill={pal.treeL} />
+      <Circle cx={px-pr*0.3} cy={py-pr*0.35} r={pr*0.45} fill={pal.treeM} opacity={0.6} />
     </G>
   );
 }
 
-// ─── NPC animé (corps + badge + bob) ─────────────────────────────────────────
-function NpcChar({ nm, clr, ini, roadY, isNight, delay }: {
-  nm: string; clr: string; ini: string; roadY: number; isNight: boolean; delay: number;
-}) {
-  const posX = useRef(new Animated.Value(MAP_W * (0.1 + Math.random() * 0.8))).current;
-  const posY = useRef(new Animated.Value(roadY * S - 12)).current;
-  const bobY = useRef(new Animated.Value(0)).current;
+// ─── Bateau ───────────────────────────────────────────────────────────────────
+function Boat({ x, y, color, dir = 1 }: { x: number; y: number; color: string; dir?: 1 | -1 }) {
+  const px = wx(x); const py = wy(y);
+  return (
+    <G>
+      <Polygon points={`${px},${py} ${px+dir*wx(22)},${py-wy(4)} ${px+dir*wx(22)},${py+wy(4)} ${px},${py+wy(7)}`}
+        fill={color} opacity={0.85} />
+      <Line x1={px+dir*wx(8)} y1={py} x2={px+dir*wx(8)} y2={py-wy(14)}
+        stroke="rgba(255,255,255,0.6)" strokeWidth={wy(1.2)} />
+      <Polygon points={`${px+dir*wx(8)},${py-wy(14)} ${px+dir*wx(18)},${py-wy(6)} ${px+dir*wx(8)},${py-wy(2)}`}
+        fill="rgba(255,255,255,0.5)" />
+    </G>
+  );
+}
+
+// ─── Phare ────────────────────────────────────────────────────────────────────
+function Lighthouse({ x, y, night }: { x: number; y: number; night: boolean }) {
+  const px = wx(x); const py = wy(y);
+  return (
+    <G>
+      {/* Base */}
+      <Polygon points={`${px-wx(7)},${py+wy(28)} ${px+wx(7)},${py+wy(28)} ${px+wx(4)},${py} ${px-wx(4)},${py}`}
+        fill="#E8E0D0" />
+      {/* Bandes rouges */}
+      {[0, 2, 4].map((i) => (
+        <Rect key={i} x={px-wx(5+i*0.3)} y={py+wy(i*9)} width={wx(10+i*0.6)} height={wy(4)}
+          fill="#E53935" opacity={0.7} />
+      ))}
+      {/* Tête */}
+      <Rect x={px-wx(5)} y={py-wy(10)} width={wx(10)} height={wy(12)} fill="#90A4AE" rx={wy(2)} />
+      <Rect x={px-wx(6)} y={py-wy(13)} width={wx(12)} height={wy(3)} fill="#546E7A" rx={wy(1)} />
+      {/* Lumière */}
+      {night && (
+        <>
+          <Circle cx={px} cy={py-wy(7)} r={wy(6)} fill="#FDD835" opacity={0.95} />
+          <Circle cx={px} cy={py-wy(7)} r={wy(18)} fill="#FDD835" opacity={0.08} />
+          <Circle cx={px} cy={py-wy(7)} r={wy(35)} fill="#FDD835" opacity={0.03} />
+        </>
+      )}
+    </G>
+  );
+}
+
+// ─── NPC animé ────────────────────────────────────────────────────────────────
+type NpcDef = { nm: string; clr: string; ini: string; zoneY: number; zoneH: number; startX: number };
+
+const NPC_DEFS: NpcDef[] = [
+  { nm:"Ava",   clr:"#10B981", ini:"A", zoneY:175, zoneH:12, startX:0.15 },
+  { nm:"Malik", clr:"#3B82F6", ini:"M", zoneY:295, zoneH:12, startX:0.35 },
+  { nm:"Noa",   clr:"#EC4899", ini:"N", zoneY:175, zoneH:12, startX:0.60 },
+  { nm:"Leila", clr:"#F59E0B", ini:"L", zoneY:295, zoneH:12, startX:0.75 },
+  { nm:"Yan",   clr:"#8B5CF6", ini:"Y", zoneY:405, zoneH:12, startX:0.25 },
+  { nm:"Sana",  clr:"#EF4444", ini:"S", zoneY:405, zoneH:12, startX:0.70 },
+  { nm:"Kim",   clr:"#06B6D4", ini:"K", zoneY:175, zoneH:12, startX:0.85 },
+  { nm:"Lena",  clr:"#A78BFA", ini:"L", zoneY:295, zoneH:12, startX:0.10 },
+];
+
+function NpcWalker({ def, night, delay }: { def: NpcDef; night: boolean; delay: number }) {
+  const posX = useRef(new Animated.Value(MAP_W * def.startX)).current;
+  const posY = useRef(new Animated.Value(wy(def.zoneY))).current;
+  const bob  = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(bobY, { toValue: -3, duration: 360, useNativeDriver: true }),
-        Animated.timing(bobY, { toValue: 0,  duration: 360, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
+    Animated.loop(Animated.sequence([
+      Animated.timing(bob, { toValue: -2.5, duration: 360, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
+      Animated.timing(bob, { toValue: 0,    duration: 360, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
+    ])).start();
+  }, [bob]);
 
   useEffect(() => {
     function wander() {
-      const nextX  = MAP_W * (0.06 + Math.random() * 0.88);
-      const spread = (Math.random() - 0.5) * 18 * S;
+      const nextX = MAP_W * (0.04 + Math.random() * 0.92);
+      const nextY = wy(def.zoneY) + (Math.random() - 0.5) * wy(def.zoneH);
       Animated.sequence([
         Animated.parallel([
-          Animated.timing(posX, { toValue: nextX,             duration: 3000 + Math.random()*4000, useNativeDriver: false }),
-          Animated.timing(posY, { toValue: roadY*S-12+spread, duration: 1400,                       useNativeDriver: false }),
+          Animated.timing(posX, { toValue: nextX, duration: 2800 + Math.random() * 3500, useNativeDriver: false, easing: Easing.inOut(Easing.quad) }),
+          Animated.timing(posY, { toValue: nextY, duration: 1200, useNativeDriver: false }),
         ]),
-        Animated.delay(1200 + Math.random()*2800),
+        Animated.delay(1000 + Math.random() * 2500),
       ]).start(wander);
     }
-    const t = setTimeout(wander, delay + Math.random()*1500);
+    const t = setTimeout(wander, delay);
     return () => clearTimeout(t);
-  }, []);
+  }, [def.zoneY, def.zoneH, delay, posX, posY]);
 
   return (
-    <Animated.View style={{
-      position: "absolute", left: posX, top: posY,
-      alignItems: "center", width: 24,
-      transform: [{ translateX: -12 }, { translateY: bobY }],
-      zIndex: 25,
-    }}>
+    <Animated.View
+      pointerEvents="none"
+      style={{ position:"absolute", left:posX, top:posY, alignItems:"center", width:28, transform:[{translateX:-14},{translateY:bob}], zIndex:30 }}>
+      <View style={{ position:"absolute", top:-3, left:-3, width:34, height:34, borderRadius:17, backgroundColor:def.clr, opacity:night?0.22:0.10 }} />
       <View style={{
-        width: 22, height: 22, borderRadius: 11,
-        backgroundColor: clr,
-        alignItems: "center", justifyContent: "center",
-        borderWidth: 2, borderColor: "rgba(255,255,255,0.35)",
-        shadowColor: clr, shadowOpacity: isNight ? 0.9 : 0.4, shadowRadius: isNight ? 6 : 3, elevation: 4,
+        width:26, height:26, borderRadius:13, backgroundColor:def.clr,
+        alignItems:"center", justifyContent:"center",
+        borderWidth:2, borderColor:"rgba(255,255,255,0.5)",
+        shadowColor:def.clr, shadowOpacity:night?0.9:0.45, shadowRadius:night?8:4, elevation:5,
       }}>
-        <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>{ini}</Text>
+        <Text style={{ color:"#fff", fontSize:10, fontWeight:"900" }}>{def.ini}</Text>
       </View>
       <View style={{
-        marginTop: 2, borderRadius: 4,
-        backgroundColor: isNight ? "rgba(0,0,0,0.75)" : "rgba(255,255,255,0.88)",
-        paddingHorizontal: 4, paddingVertical: 1,
+        marginTop:2, borderRadius:5, paddingHorizontal:5, paddingVertical:1.5,
+        backgroundColor:night?"rgba(2,8,20,0.88)":"rgba(255,255,255,0.92)",
+        borderWidth:1, borderColor:night?def.clr+"55":"rgba(0,0,0,0.06)",
       }}>
-        <Text style={{ fontSize: 8, fontWeight: "800", color: isNight ? clr : "#1e293b" }}>{nm}</Text>
+        <Text style={{ fontSize:8, fontWeight:"800", color:night?def.clr:"#0F172A" }}>{def.nm}</Text>
       </View>
     </Animated.View>
   );
 }
 
 // ─── Voiture animée ───────────────────────────────────────────────────────────
-function Car({ color, roadYUnit, dir, speed }: {
-  color: string; roadYUnit: number; dir: 1 | -1; speed: number;
-}) {
-  const posX = useRef(new Animated.Value(dir === 1 ? -32 : MAP_W + 32)).current;
+type CarDef = { color: string; roadY: number; dir: 1 | -1; speed: number };
+const CAR_DEFS: CarDef[] = [
+  { color:"#3B82F6", roadY:RH[0]-5,  dir:1,  speed:8800  },
+  { color:"#EF4444", roadY:RH[0]+5,  dir:-1, speed:10200 },
+  { color:"#10B981", roadY:RH[1]-5,  dir:1,  speed:9400  },
+  { color:"#F59E0B", roadY:RH[1]+5,  dir:-1, speed:7600  },
+  { color:"#8B5CF6", roadY:RH[2]-5,  dir:1,  speed:11000 },
+  { color:"#EC4899", roadY:RH[2]+5,  dir:-1, speed:8200  },
+  { color:"#06B6D4", roadY:RH[3]-5,  dir:1,  speed:9800  },
+];
+
+function MovingCar({ c, night }: { c: CarDef; night: boolean }) {
+  const posX = useRef(new Animated.Value(c.dir === 1 ? -40 : MAP_W + 40)).current;
 
   useEffect(() => {
     function drive() {
-      posX.setValue(dir === 1 ? -32 : MAP_W + 32);
+      posX.setValue(c.dir === 1 ? -40 : MAP_W + 40);
       Animated.timing(posX, {
-        toValue: dir === 1 ? MAP_W + 32 : -32,
-        duration: speed,
-        useNativeDriver: false,
-      }).start(() => setTimeout(drive, 1000 + Math.random() * 5000));
+        toValue: c.dir === 1 ? MAP_W + 40 : -40,
+        duration: c.speed, useNativeDriver: false, easing: Easing.linear
+      }).start(() => setTimeout(drive, 800 + Math.random() * 4000));
     }
-    const t = setTimeout(drive, Math.random() * speed);
+    const t = setTimeout(drive, Math.random() * c.speed * 0.9);
     return () => clearTimeout(t);
-  }, []);
-
-  const top = roadYUnit * S - 7;
+  }, [c.dir, c.speed, posX]);
 
   return (
-    <Animated.View style={{
-      position: "absolute", left: posX, top,
-      width: 28, height: 14, borderRadius: 4,
-      backgroundColor: color,
-      shadowColor: color, shadowOpacity: 0.5, shadowRadius: 4, elevation: 3,
-      transform: [{ scaleX: dir }],
-    }}>
-      <View style={{ position:"absolute", right: 3, top: 2.5, width: 9, height: 7, backgroundColor:"rgba(200,235,255,0.6)", borderRadius: 2 }} />
-      <View style={{ position:"absolute", left: 2, top: 4, width: 3, height: 3, backgroundColor:"#fffde7", borderRadius: 2 }} />
-      <View style={{ position:"absolute", left: 2, bottom: 4, width: 3, height: 3, backgroundColor:"#fffde7", borderRadius: 2 }} />
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position:"absolute", left:posX, top:wy(c.roadY)-7,
+        width:34, height:14, borderRadius:5, backgroundColor:c.color,
+        shadowColor:c.color, shadowOpacity:night?0.7:0.45, shadowRadius:night?8:4, elevation:4,
+        transform:[{scaleX:c.dir}],
+      }}>
+      {/* Vitre */}
+      <View style={{ position:"absolute", right:4, top:2.5, width:10, height:7, backgroundColor:"rgba(200,235,255,0.65)", borderRadius:2 }} />
+      {/* Phares */}
+      {night && <>
+        <View style={{ position:"absolute", left:2, top:3, width:3, height:3, backgroundColor:"#FFFDE7", borderRadius:2 }} />
+        <View style={{ position:"absolute", left:2, bottom:3, width:3, height:3, backgroundColor:"#FFFDE7", borderRadius:2 }} />
+      </>}
+      {/* Roues */}
+      <View style={{ position:"absolute", left:5, bottom:-3, width:7, height:5, backgroundColor:"#1a1a1a", borderRadius:2.5 }} />
+      <View style={{ position:"absolute", right:5, bottom:-3, width:7, height:5, backgroundColor:"#1a1a1a", borderRadius:2.5 }} />
     </Animated.View>
   );
 }
 
-// ─── Composant principal ──────────────────────────────────────────────────────
+// ─── Composant VillageMap ─────────────────────────────────────────────────────
 export function VillageMap({ currentSlug, onLocationPress }: {
   currentSlug: string;
   onLocationPress: (slug: string, label: string) => void;
 }) {
   const { hour, minutes } = useTimeContext();
-  const isNight = hour < 7 || hour >= 20;
-  const pal = mkPal(isNight);
+  const isNight = hour < 6 || hour >= 21;
+  const isDawn  = (hour >= 6 && hour < 8) || (hour >= 19 && hour < 21);
+  const pal = mkPal(isNight, isDawn);
+  const pulseAnim = useRef(new Animated.Value(0.6)).current;
+  const waveAnim  = useRef(new Animated.Value(0)).current;
+  const lightAnim = useRef(new Animated.Value(0)).current;
 
-  const glowAnim = useRef(new Animated.Value(0.5)).current;
   useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(glowAnim, { toValue: 1,   duration: 1800, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.5, duration: 1800, useNativeDriver: true }),
-      ])
-    ).start();
-  }, []);
-
-  // routes (world units) pour voitures
-  const R1 = 150; // route nord
-  const R2 = 348; // route sud
+    Animated.loop(Animated.sequence([
+      Animated.timing(pulseAnim, { toValue:1,   duration:1800, useNativeDriver:true }),
+      Animated.timing(pulseAnim, { toValue:0.6, duration:1800, useNativeDriver:true }),
+    ])).start();
+    Animated.loop(Animated.sequence([
+      Animated.timing(waveAnim,  { toValue:1, duration:3000, useNativeDriver:true }),
+      Animated.timing(waveAnim,  { toValue:0, duration:3000, useNativeDriver:true }),
+    ])).start();
+    if (isNight) {
+      Animated.loop(Animated.sequence([
+        Animated.timing(lightAnim, { toValue:1, duration:900, useNativeDriver:true }),
+        Animated.timing(lightAnim, { toValue:0, duration:900, useNativeDriver:true }),
+      ])).start();
+    }
+  }, [isNight, pulseAnim, waveAnim, lightAnim]);
 
   const timeStr = `${String(hour).padStart(2,"0")}:${String(minutes).padStart(2,"0")}`;
+  const currentBldg = BLDGS.find((b) => b.slug === currentSlug);
+
+  // Arbres dispersés
+  const treeList: Array<{ x: number; y: number; r: number; v: number }> = [
+    // Zone nord (entre route côtière et route principale)
+    {x:4,y:100,r:6,v:0},{x:16,y:94,r:5,v:0},{x:8,y:108,r:4,v:0},
+    // Côté des bâtiments nord
+    {x:82,y:92,r:5,v:0},{x:172,y:88,r:6,v:0},{x:280,y:100,r:5,v:0},
+    {x:462,y:96,r:5,v:0},{x:476,y:106,r:4,v:0},
+    // Rangées latérales (bandes de 4px entre routes verticales)
+    {x:93,y:220,r:5,v:0},{x:84,y:240,r:4,v:0},{x:90,y:260,r:5,v:0},
+    {x:185,y:225,r:5,v:0},{x:182,y:250,r:4,v:0},{x:188,y:275,r:5,v:0},
+    {x:277,y:220,r:5,v:0},{x:274,y:248,r:4,v:0},{x:280,y:268,r:5,v:0},
+    {x:369,y:222,r:5,v:0},{x:374,y:246,r:4,v:0},{x:368,y:272,r:5,v:0},
+    {x:461,y:220,r:6,v:0},{x:466,y:248,r:5,v:0},{x:460,y:270,r:5,v:0},
+    // Parc interne (s'ajoute aux éléments SVG du parc)
+    {x:12,y:215,r:6,v:0},{x:28,y:228,r:5,v:0},{x:14,y:242,r:6,v:0},
+    {x:30,y:255,r:4,v:0},{x:20,y:268,r:5,v:0},{x:44,y:280,r:5,v:0},
+    {x:160,y:215,r:6,v:0},{x:170,y:234,r:5,v:0},{x:162,y:252,r:6,v:0},
+    {x:168,y:270,r:5,v:0},
+    // Zone nuit (row sud extérieur)
+    {x:86,y:340,r:5,v:0},{x:92,y:356,r:4,v:0},{x:185,y:338,r:5,v:0},
+    {x:368,y:344,r:5,v:0},{x:376,y:360,r:4,v:0},
+    // Zone bottom
+    {x:200,y:450,r:6,v:0},{x:216,y:464,r:5,v:0},{x:228,y:452,r:6,v:0},
+    {x:310,y:448,r:5,v:0},{x:322,y:460,r:6,v:0},{x:400,y:448,r:5,v:0},
+    {x:420,y:460,r:6,v:0},{x:440,y:450,r:5,v:0},{x:460,y:464,r:6,v:0},
+    {x:480,y:452,r:5,v:0},{x:500,y:448,r:6,v:0},
+    // Palmiers côtiers
+    {x:22,y:54,r:8,v:1},{x:46,y:46,r:7,v:1},{x:68,y:52,r:8,v:1},
+    {x:92,y:44,r:7,v:1},{x:116,y:50,r:8,v:1},
+    // Côté eau (droite)
+    {x:350,y:30,r:7,v:1},{x:374,y:22,r:6,v:1},{x:400,y:28,r:7,v:1},
+    {x:424,y:18,r:6,v:1},{x:450,y:24,r:7,v:1},
+  ];
 
   return (
-    <View style={{ width: MAP_W, height: MAP_H, overflow:"hidden", borderRadius: 20, alignSelf:"center", borderWidth:1, borderColor:"rgba(255,255,255,0.15)" }}>
-
+    <View style={{
+      width:MAP_W, height:MAP_H, overflow:"hidden",
+      borderRadius:20, alignSelf:"center",
+      borderWidth:1.5,
+      borderColor: isNight ? "rgba(255,255,255,0.10)" : "rgba(255,255,255,0.45)",
+      shadowColor:"#000", shadowOpacity:0.45, shadowRadius:20, elevation:12,
+    }}>
       <Svg width={MAP_W} height={MAP_H}>
         <Defs>
           <LinearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0" stopColor={pal.skyA} />
-            <Stop offset="1" stopColor={pal.skyB} />
+            <Stop offset="0"   stopColor={pal.skyTop} />
+            <Stop offset="1"   stopColor={pal.skyBot} />
           </LinearGradient>
-          <LinearGradient id="roadGrad" x1="0" y1="0" x2="0" y2="1">
-            <Stop offset="0"   stopColor={pal.road} stopOpacity="0.7" />
-            <Stop offset="0.4" stopColor={pal.road} />
-            <Stop offset="0.6" stopColor={pal.road} />
-            <Stop offset="1"   stopColor={pal.road} stopOpacity="0.7" />
+          <LinearGradient id="water" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0"   stopColor={pal.water} />
+            <Stop offset="0.5" stopColor={pal.waterSurf} />
+            <Stop offset="1"   stopColor={pal.waterShim} />
           </LinearGradient>
+          <LinearGradient id="beach" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0"   stopColor={pal.beach} />
+            <Stop offset="1"   stopColor={pal.beachEdge} />
+          </LinearGradient>
+          <LinearGradient id="ground" x1="0" y1="0" x2="0" y2="1">
+            <Stop offset="0"   stopColor={pal.ground} />
+            <Stop offset="1"   stopColor={pal.groundMid} />
+          </LinearGradient>
+          <RadialGradient id="sunHalo" cx="50%" cy="50%" r="50%">
+            <Stop offset="0"   stopColor={pal.sun} stopOpacity="0.9" />
+            <Stop offset="0.6" stopColor={pal.sun} stopOpacity="0.25" />
+            <Stop offset="1"   stopColor="transparent" stopOpacity="0" />
+          </RadialGradient>
+          <ClipPath id="mapClip">
+            <Rect x={0} y={0} width={MAP_W} height={MAP_H} rx={20} />
+          </ClipPath>
         </Defs>
 
-        {/* ciel */}
-        <Rect x={0} y={0} width={380*S} height={MAP_H} fill="url(#sky)" />
+        {/* ── Ciel ── */}
+        <Rect x={0} y={0} width={MAP_W} height={MAP_H} fill="url(#sky)" clipPath="url(#mapClip)" />
 
-        {/* étoiles */}
+        {/* Étoiles nuit */}
         {isNight && [
-          [28,10],[75,7],[128,16],[192,5],[248,13],[308,8],[358,11],
-          [55,20],[152,4],[280,18],[342,7],[68,13],[222,9],
+          [28,8],[75,5],[140,11],[200,4],[258,10],[320,7],[370,9],[60,18],
+          [155,3],[290,15],[348,6],[70,14],[230,8],[320,20],[160,24],[400,12],
         ].map(([sx,sy],i) => (
-          <Circle key={`s${i}`} cx={sx*S} cy={sy*S} r={1.3*S} fill="#fff" opacity={0.35 + (i%3)*0.2} />
+          <Circle key={`star${i}`} cx={wx(sx)} cy={wy(sy)} r={wy(1.1+i%3*0.5)} fill="#fff" opacity={0.18+(i%4)*0.15} />
         ))}
 
-        {/* soleil / lune */}
-        <Circle cx={354*S} cy={24*S} r={15*S} fill={pal.sun} opacity={0.92} />
+        {/* Nuages jour */}
+        {!isNight && [
+          {cx:40, cy:16, r:10},{cx:60,cy:10,r:8},{cx:78,cy:16,r:11},
+          {cx:210,cy:12,r:9},{cx:228,cy:7,r:6},{cx:246,cy:12,r:8},
+          {cx:350,cy:20,r:10},{cx:368,cy:14,r:7},{cx:386,cy:20,r:9},
+        ].map((c,i) => (
+          <Circle key={`cl${i}`} cx={wx(c.cx)} cy={wy(c.cy)} r={wy(c.r)} fill="rgba(255,255,255,0.48)" />
+        ))}
+
+        {/* Soleil / Lune */}
+        <Circle cx={wx(490)} cy={wy(22)} r={wy(32)} fill="url(#sunHalo)" opacity={0.55} />
+        <Circle cx={wx(490)} cy={wy(22)} r={wy(14)} fill={pal.sun} opacity={0.95} />
         {isNight ? (
-          <>
-            <Circle cx={354*S} cy={24*S} r={26*S} fill={pal.sun} opacity={0.07} />
-            <Circle cx={359*S} cy={19*S} r={4*S}  fill="rgba(0,0,0,0.12)" />
-          </>
+          <Circle cx={wx(497)} cy={wy(17)} r={wy(5.5)} fill="rgba(5,10,24,0.25)" />
         ) : (
-          [0,45,90,135].map((a,i) => {
-            const rd = (a*Math.PI)/180;
-            return <Line key={`ray${i}`}
-              x1={354*S + Math.cos(rd)*18*S} y1={24*S + Math.sin(rd)*18*S}
-              x2={354*S + Math.cos(rd)*26*S} y2={24*S + Math.sin(rd)*26*S}
-              stroke="#fdd835" strokeWidth={2.5*S} strokeLinecap="round" opacity={0.65}
+          [0,45,90,135,180,225,270,315].map((a,i) => {
+            const rd = a * Math.PI / 180;
+            return <Line key={i}
+              x1={wx(490)+Math.cos(rd)*wy(17)} y1={wy(22)+Math.sin(rd)*wy(17)}
+              x2={wx(490)+Math.cos(rd)*wy(26)} y2={wy(22)+Math.sin(rd)*wy(26)}
+              stroke="#FDD835" strokeWidth={wy(1.8)} strokeLinecap="round" opacity={0.55}
             />;
           })
         )}
 
-        {/* terrain */}
-        <Rect x={0} y={42*S}  width={380*S} height={140*S} fill={pal.ground} />
-        <Rect x={0} y={200*S} width={380*S} height={130*S} fill={pal.ground} />
-        <Rect x={0} y={352*S} width={380*S} height={170*S} fill={pal.ground} />
+        {/* ── Zone EAU (top: y=0..60) ── */}
+        <Rect x={0} y={0} width={MAP_W} height={wy(60)} fill="url(#water)" />
+        {/* Reflets eau */}
+        {[20,60,110,160,220,280,340,390,450,500].map((rx_,i) => (
+          <Rect key={`ref${i}`} x={wx(rx_)} y={wy(15+i%3*10)} width={wx(30+i%4*8)} height={wy(2)}
+            fill="rgba(255,255,255,0.12)" rx={wy(1)} />
+        ))}
+        {/* Vagues animées (View overlay) */}
 
-        {/* parc centre-droit */}
-        <Rect x={172*S} y={200*S} width={202*S} height={130*S} fill={pal.park} rx={10*S} />
-        {/* allée parc */}
-        <Ellipse cx={273*S} cy={265*S} rx={62*S} ry={44*S}
-          fill="transparent" stroke={pal.swalk} strokeWidth={4.5*S} />
+        {/* ── Plage / promenade (y=60..76) ── */}
+        <Rect x={0} y={wy(60)} width={MAP_W} height={wy(16)} fill="url(#beach)" />
+        <Rect x={0} y={wy(73)} width={MAP_W} height={wy(4)} fill={pal.sidewalk} opacity={0.65} />
 
-        {/* marché centre-gauche */}
-        <Rect x={5*S} y={200*S} width={162*S} height={130*S} fill={pal.swalk} rx={8*S} opacity={0.45} />
+        {/* Phare */}
+        <Lighthouse x={462} y={28} night={isNight} />
 
-        {/* fontaine */}
-        <Circle cx={273*S} cy={265*S} r={22*S} fill={pal.water} />
-        <Circle cx={273*S} cy={265*S} r={14*S} fill={pal.wshim} opacity={0.7} />
-        <Circle cx={273*S} cy={265*S} r={6*S}  fill={isNight?"#1a5f8a":"#90caf9"} />
-        {[0,60,120,180,240,300].map((a,i) => {
-          const rd=(a*Math.PI)/180;
-          return <Line key={`jet${i}`}
-            x1={273*S} y1={265*S}
-            x2={273*S+Math.cos(rd)*11*S} y2={265*S+Math.sin(rd)*11*S}
-            stroke={pal.wshim} strokeWidth={2*S} strokeLinecap="round" opacity={0.75}
-          />;
-        })}
-        <SvgText x={273*S} y={293*S} textAnchor="middle"
-          fill={isNight?"#60a5fa":"#1565c0"} fontSize={7.5*S} fontWeight="700">⛲ Fontaine</SvgText>
+        {/* Bateaux */}
+        <Boat x={40}  y={30} color="#E53935" dir={1} />
+        <Boat x={150} y={20} color="#1565C0" dir={1} />
+        <Boat x={280} y={35} color="#FFFFFF"  dir={-1} />
+        <Boat x={360} y={18} color="#F9A825" dir={1} />
 
-        {/* étals marché */}
-        {[
-          {x:15,y:210,w:44,h:30,c:"#e74c3c",t:"🥦 Légumes"},
-          {x:68,y:210,w:44,h:30,c:"#f39c12",t:"🍎 Fruits"},
-          {x:121,y:210,w:38,h:30,c:"#27ae60",t:"🌿 Bio"},
-          {x:15,y:250,w:44,h:30,c:"#9b59b6",t:"👗 Mode"},
-          {x:68,y:250,w:44,h:30,c:"#2980b9",t:"📱 Tech"},
-          {x:121,y:250,w:38,h:30,c:"#c0392b",t:"🥖 Pain"},
-        ].map((st,i) => (
-          <G key={`stall${i}`}>
-            <Rect x={st.x*S} y={st.y*S} width={st.w*S} height={st.h*S} fill={st.c+"28"} rx={3*S} />
-            <Rect x={st.x*S} y={st.y*S} width={st.w*S} height={5*S}    fill={st.c}      rx={2*S} />
-            <SvgText x={(st.x+st.w/2)*S} y={(st.y+st.h/2+5)*S}
-              textAnchor="middle"
-              fill={isNight?"#e2e8f0":"#1e293b"}
-              fontSize={7*S} fontWeight="700">{st.t}</SvgText>
+        {/* ── Route côtière (y=76..94, route H[0]) ── */}
+        <Rect x={0} y={wy(RH[0]-RW/2)} width={MAP_W} height={wy(RW)} fill={pal.road} />
+        {/* Tirets médians */}
+        {Array.from({length:28},(_,i)=>i*20).map((lx,i)=>(
+          <Rect key={`rl0${i}`} x={wx(lx)} y={wy(RH[0])-wy(1.2)} width={wx(12)} height={wy(2.4)}
+            fill={pal.roadLine} rx={wy(1.2)} opacity={0.75} />
+        ))}
+
+        {/* ── Sol zone nord (y=94..190) ── */}
+        <Rect x={0} y={wy(94)} width={MAP_W} height={wy(96)} fill="url(#ground)" />
+
+        {/* ── Route principale (y=190..208, H[1]) ── */}
+        <Rect x={0} y={wy(RH[1]-RW/2)} width={MAP_W} height={wy(RW)} fill={pal.road} />
+        {Array.from({length:28},(_,i)=>i*20).map((lx,i)=>(
+          <Rect key={`rl1${i}`} x={wx(lx)} y={wy(RH[1])-wy(1.2)} width={wx(12)} height={wy(2.4)}
+            fill={pal.roadLine} rx={wy(1.2)} opacity={0.75} />
+        ))}
+        {/* Trottoir */}
+        <Rect x={0} y={wy(RH[1]+RW/2)} width={MAP_W} height={wy(5)} fill={pal.sidewalk} opacity={0.5} />
+
+        {/* ── Sol zone centre (y=208..310) ── */}
+        <Rect x={0} y={wy(208)} width={MAP_W} height={wy(102)} fill="url(#ground)" />
+
+        {/* ── Route sud (y=310..328, H[2]) ── */}
+        <Rect x={0} y={wy(RH[2]-RW/2)} width={MAP_W} height={wy(RW)} fill={pal.road} />
+        {Array.from({length:28},(_,i)=>i*20).map((lx,i)=>(
+          <Rect key={`rl2${i}`} x={wx(lx)} y={wy(RH[2])-wy(1.2)} width={wx(12)} height={wy(2.4)}
+            fill={pal.roadLine} rx={wy(1.2)} opacity={0.75} />
+        ))}
+        <Rect x={0} y={wy(RH[2]+RW/2)} width={MAP_W} height={wy(5)} fill={pal.sidewalk} opacity={0.5} />
+
+        {/* ── Sol zone sud (y=328..420) ── */}
+        <Rect x={0} y={wy(328)} width={MAP_W} height={wy(92)} fill="url(#ground)" />
+
+        {/* ── Boulevard résidentiel (y=420..438, H[3]) ── */}
+        <Rect x={0} y={wy(RH[3]-RW/2)} width={MAP_W} height={wy(RW)} fill={pal.road} />
+        {Array.from({length:28},(_,i)=>i*20).map((lx,i)=>(
+          <Rect key={`rl3${i}`} x={wx(lx)} y={wy(RH[3])-wy(1.2)} width={wx(12)} height={wy(2.4)}
+            fill={pal.roadLine} rx={wy(1.2)} opacity={0.75} />
+        ))}
+
+        {/* ── Sol zone bottom (y=438..520) ── */}
+        <Rect x={0} y={wy(438)} width={MAP_W} height={wy(82)} fill="url(#ground)" />
+
+        {/* ── Routes verticales ── */}
+        {RV.map((vx,i) => (
+          <G key={`rv${i}`}>
+            <Rect x={wx(vx-RW/2)} y={0} width={wx(RW)} height={MAP_H} fill={pal.road} opacity={0.8} />
+            {/* Tirets */}
+            {Array.from({length:30},(_,j)=>j*20).map((ly,j)=>(
+              <Rect key={`rvl${j}`} x={wx(vx)-wy(1.2)} y={wy(ly)} width={wy(2.4)} height={wy(12)}
+                fill={pal.roadLine} rx={wy(1.2)} opacity={0.6} />
+            ))}
           </G>
         ))}
 
-        {/* routes horizontales */}
-        <Rect x={0} y={R1*S} width={380*S} height={26*S} fill="url(#roadGrad)" />
-        <Rect x={0} y={R2*S} width={380*S} height={26*S} fill="url(#roadGrad)" />
-
-        {/* lignes centre routes */}
-        {[R1+13, R2+13].map((ly,ri) =>
-          [0,22,44,66,88,110,132,154,176,198,220,242,264,286,308,330,352].map((lx,i) => (
-            <Rect key={`rl${ri}-${i}`} x={lx*S} y={ly*S} width={16*S} height={2.5*S} fill={pal.roadL} opacity={0.7} />
-          ))
+        {/* ── Passages piétons aux intersections ── */}
+        {RV.map((vx,vi) =>
+          RH.map((ry,ri) =>
+            Array.from({length:5},(_,i)=>i*3.8).map((dy,i) => (
+              <Rect key={`cr${vi}-${ri}-${i}`}
+                x={wx(vx-RW/2+1)} y={wy(ry-RW/2+dy)} width={wx(RW-2)} height={wy(2.6)}
+                fill={pal.cross} rx={wy(0.8)} />
+            ))
+          )
         )}
 
-        {/* routes verticales */}
-        {[93, 185, 279].map((vx,i) => (
-          <Rect key={`vr${i}`} x={vx*S} y={0} width={10*S} height={MAP_H} fill={pal.road} opacity={0.8} />
-        ))}
+        {/* ── Rond-point central (intersection RV[2]×RH[1]) ── */}
+        <Circle cx={wx(RV[2])} cy={wy(RH[1])} r={wy(RW*0.78)}
+          fill={pal.road} stroke={pal.sidewalk} strokeWidth={wy(2)} opacity={0.95} />
+        <Circle cx={wx(RV[2])} cy={wy(RH[1])} r={wy(RW*0.38)}
+          fill={isNight?"#061208":"#2E7D32"} />
+        <Circle cx={wx(RV[2])} cy={wy(RH[1])} r={wy(RW*0.2)}
+          fill={isNight?"#0a1e10":"#388E3C"} opacity={0.7} />
 
-        {/* trottoirs */}
-        {[139,163,170,200,343,348,376,382].map((sy,i) => (
-          <Rect key={`sw${i}`} x={0} y={sy*S} width={380*S} height={6*S} fill={pal.swalk} opacity={0.6} />
+        {/* ── Parking (à droite de row bottom) ── */}
+        <Rect x={wx(200)} y={wy(440)} width={wx(100)} height={wy(60)}
+          fill={pal.sidewalk} rx={wy(6)} opacity={0.35} />
+        {[0,1,2,3].map(i=>(
+          <Rect key={`park${i}`} x={wx(207+i*23)} y={wy(444)} width={wx(18)} height={wy(22)}
+            fill={pal.road} rx={wy(3)} opacity={0.5} />
         ))}
+        <SvgText x={wx(250)} y={wy(484)} textAnchor="middle"
+          fill={pal.sidewalk} fontSize={wy(5.5)} fontWeight="700" opacity={0.6}>🅿️ Parking</SvgText>
 
-        {/* arbres */}
-        {[
-          {x:222,y:215,r:8},{x:244,y:228,r:7},{x:220,y:248,r:8},{x:244,y:262,r:7},
-          {x:221,y:276,r:7},{x:244,y:288,r:6},{x:360,y:220,r:7},{x:375,y:240,r:6},
-          {x:358,y:260,r:8},{x:374,y:278,r:6},{x:360,y:295,r:7},
-          {x:18,y:305,r:6},{x:35,y:316,r:7},{x:145,y:310,r:6},{x:160,y:300,r:7},
-          {x:372,y:105,r:6},{x:358,y:118,r:7},{x:374,y:132,r:6},
-        ].map((t,i) => (
-          <Tree key={`tree${i}`} x={t.x} y={t.y} r={t.r} pal={pal} />
-        ))}
-
-        {/* lampadaires nuit */}
-        {isNight && [96,188,282].map((lx,i) => (
+        {/* ── Lampadaires nuit ── */}
+        {isNight && RV.map((vx,i) => (
           <G key={`lamp${i}`}>
-            {[142, 340].map((ly,j) => (
-              <G key={`lp${j}`}>
-                <Rect x={(lx-1.5)*S} y={ly*S} width={3*S} height={14*S} fill="#64748b" />
-                <Circle cx={lx*S} cy={ly*S} r={6*S}  fill="#fbbf24" opacity={0.95} />
-                <Circle cx={lx*S} cy={ly*S} r={24*S} fill="#fbbf2415" />
+            {[RH[0]+RW/2+4, RH[1]+RW/2+4, RH[2]+RW/2+4, RH[3]+RW/2+4].map((ly,j) => (
+              <G key={j}>
+                <Polygon
+                  points={`${wx(vx-8)},${wy(ly+20)} ${wx(vx+8)},${wy(ly+20)} ${wx(vx+1.5)},${wy(ly)} ${wx(vx-1.5)},${wy(ly)}`}
+                  fill="rgba(251,191,36,0.14)" />
+                <Rect x={wx(vx-1)} y={wy(ly)} width={wx(2)} height={wy(11)} fill="#607D8B" rx={wy(0.8)} />
+                <Circle cx={wx(vx)} cy={wy(ly)} r={wy(5)} fill="#fbbf24" opacity={0.95} />
+                <Circle cx={wx(vx)} cy={wy(ly)} r={wy(14)} fill="#fbbf2412" />
               </G>
             ))}
           </G>
         ))}
 
-        {/* bâtiments */}
+        {/* ── Arbres ── */}
+        {treeList.map((t,i) => (
+          <Tree key={`tree${i}`} x={t.x} y={t.y} r={t.r} pal={pal} variant={t.v} />
+        ))}
+
+        {/* ── Bâtiments ── */}
         {BLDGS.map((b) => (
           <Building
-            key={b.slug} b={b}
-            isNight={isNight}
+            key={b.slug} b={b} night={isNight}
             isCurrent={currentSlug === b.slug}
             onPress={() => onLocationPress(b.slug, b.label)}
           />
         ))}
+
+        {/* ── Zone brume nuit en bas ── */}
+        {isNight && (
+          <Rect x={0} y={MAP_H*0.75} width={MAP_W} height={MAP_H*0.25}
+            fill="rgba(2,8,20,0.18)" />
+        )}
       </Svg>
 
-      {/* NPCs animés */}
-      {NPCS.map((n, i) => (
-        <NpcChar key={n.id} nm={n.nm} clr={n.clr} ini={n.ini}
-          roadY={n.ry} isNight={isNight} delay={i * 400} />
+      {/* ── Vagues animées (overlay View) ── */}
+      <Animated.View pointerEvents="none" style={{
+        position:"absolute", left:0, right:0, top:wy(40), height:wy(10),
+        opacity: waveAnim.interpolate({inputRange:[0,1],outputRange:[0.08,0.22]}),
+      }}>
+        {[0.1,0.3,0.55,0.75,0.9].map((x_,i) => (
+          <View key={i} style={{
+            position:"absolute", left:`${x_*100}%`, top:`${i*20}%`,
+            width:`${8+i*3}%`, height:wy(2), borderRadius:wy(1),
+            backgroundColor:"rgba(255,255,255,0.9)",
+          }} />
+        ))}
+      </Animated.View>
+
+      {/* ── NPCs ── */}
+      {NPC_DEFS.map((def,i) => (
+        <NpcWalker key={def.nm} def={def} night={isNight} delay={i * 450} />
       ))}
 
-      {/* Voitures */}
-      <Car color="#3498db" roadYUnit={R1+5}  dir={1}  speed={8500}  />
-      <Car color="#e74c3c" roadYUnit={R1+16} dir={-1} speed={10500} />
-      <Car color="#2ecc71" roadYUnit={R2+5}  dir={1}  speed={9200}  />
-      <Car color="#f39c12" roadYUnit={R2+16} dir={-1} speed={7800}  />
+      {/* ── Voitures ── */}
+      {CAR_DEFS.map((c,i) => (
+        <MovingCar key={i} c={c} night={isNight} />
+      ))}
 
-      {/* Badge heure */}
+      {/* ── HUD Heure ── */}
       <View style={{
-        position:"absolute", top:10, left:12,
-        backgroundColor: isNight ? "rgba(7,17,31,0.88)" : "rgba(255,255,255,0.88)",
-        borderRadius:12, paddingHorizontal:12, paddingVertical:7,
+        position:"absolute", top:10, left:10,
         flexDirection:"row", alignItems:"center", gap:8,
-        borderWidth:1, borderColor: isNight ? "rgba(251,191,36,0.35)" : "rgba(59,130,246,0.35)",
-        shadowColor: isNight ? "#fbbf24" : "#3b82f6", shadowOpacity:0.35, shadowRadius:8, elevation:4,
+        backgroundColor:isNight?"rgba(2,8,20,0.90)":"rgba(255,255,255,0.92)",
+        borderRadius:14, paddingHorizontal:12, paddingVertical:8,
+        borderWidth:1.5,
+        borderColor:isNight?"rgba(251,191,36,0.40)":"rgba(29,78,216,0.3)",
+        shadowColor:isNight?"#fbbf24":"#3B82F6", shadowOpacity:0.45, shadowRadius:10, elevation:8,
       }}>
-        <Text style={{ fontSize:16 }}>{isNight ? "🌙" : "☀️"}</Text>
+        <Text style={{ fontSize:18 }}>{isNight?"🌙":isDawn?"🌅":"☀️"}</Text>
         <View>
-          <Text style={{ color: isNight ? "#fbbf24" : "#1e40af", fontSize:13, fontWeight:"900" }}>{timeStr}</Text>
-          <Text style={{ color: isNight ? "#94a3b8" : "#475569", fontSize:9, fontWeight:"700" }}>
-            {isNight ? "Mode nuit" : "Mode jour"}
+          <Text style={{ color:isNight?"#FCD34D":isDawn?"#F97316":"#1D4ED8", fontSize:15, fontWeight:"900" }}>{timeStr}</Text>
+          <Text style={{ color:isNight?"#64748B":"#94A3B8", fontSize:9, fontWeight:"700" }}>
+            {isNight?"Nuit":isDawn?"Aube":"Journée"} · Neo Paris
           </Text>
         </View>
       </View>
 
-      {/* Badge lieu courant */}
-      {(() => {
-        const b = BLDGS.find(b => b.slug === currentSlug);
-        if (!b) return null;
-        return (
-          <View style={{
-            position:"absolute", top:10, right:12,
-            backgroundColor:"rgba(56,199,147,0.15)",
-            borderRadius:12, paddingHorizontal:10, paddingVertical:7,
-            flexDirection:"row", alignItems:"center", gap:6,
-            borderWidth:1, borderColor:"rgba(56,199,147,0.45)",
-          }}>
-            <Text style={{ fontSize:14 }}>{b.em}</Text>
-            <Text style={{ color:"#38c793", fontSize:11, fontWeight:"800" }}>{b.label}</Text>
+      {/* ── HUD Position ── */}
+      {currentBldg && (
+        <Animated.View style={{
+          position:"absolute", top:10, right:10,
+          flexDirection:"row", alignItems:"center", gap:8,
+          backgroundColor:isNight?"rgba(52,211,153,0.14)":"rgba(52,211,153,0.20)",
+          borderRadius:14, paddingHorizontal:12, paddingVertical:8,
+          borderWidth:1.5, borderColor:"rgba(52,211,153,0.50)",
+          shadowColor:"#34D399", shadowOpacity:0.50, shadowRadius:12, elevation:8,
+          opacity:pulseAnim,
+        }}>
+          <Text style={{ fontSize:16 }}>{currentBldg.em}</Text>
+          <View>
+            <Text style={{ color:"#34D399", fontSize:12, fontWeight:"900" }}>{currentBldg.label}</Text>
+            <Text style={{ color:"#6EE7B7", fontSize:9, fontWeight:"700" }}>📍 Position actuelle</Text>
           </View>
-        );
-      })()}
+        </Animated.View>
+      )}
+
+      {/* ── Légende zones ── */}
+      <View style={{
+        position:"absolute", bottom:0, left:0, right:0,
+        flexDirection:"row", justifyContent:"space-around", alignItems:"center",
+        backgroundColor:isNight?"rgba(2,8,20,0.80)":"rgba(5,15,40,0.72)",
+        paddingVertical:7, paddingHorizontal:8,
+        borderTopWidth:1, borderTopColor:"rgba(255,255,255,0.08)",
+      }}>
+        {[
+          {em:"🌊", label:"Côte"},
+          {em:"🏙️", label:"Centre"},
+          {em:"🌳", label:"Parc"},
+          {em:"🛍️", label:"Commerce"},
+          {em:"🎭", label:"Nuit"},
+          {em:"🏠", label:"Résidences"},
+        ].map((z) => (
+          <View key={z.label} style={{ flexDirection:"row", alignItems:"center", gap:3 }}>
+            <Text style={{ fontSize:11 }}>{z.em}</Text>
+            <Text style={{ color:"rgba(248,250,252,0.65)", fontSize:9, fontWeight:"700" }}>{z.label}</Text>
+          </View>
+        ))}
+      </View>
     </View>
   );
 }

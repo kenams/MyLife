@@ -152,6 +152,51 @@ export const locations: LocationSeed[] = [
     summary: "Le meilleur decor pour une sortie calme ou un date sobre.",
     costHint: "moyen",
     socialEnergy: 44
+  },
+  {
+    slug: "nightclub",
+    neighborhoodSlug: "central-district",
+    name: "Neo Club",
+    kind: "social",
+    summary: "La salle de nuit incontournable. Musique, danse, rencontres intenses et ambiance electrique.",
+    costHint: "premium",
+    socialEnergy: 90
+  },
+  {
+    slug: "library",
+    neighborhoodSlug: "midtown-residence",
+    name: "City Library",
+    kind: "wellness",
+    summary: "Espace calme pour etudier, lire et developper ses competences. Ideal pour progresser.",
+    costHint: "gratuit",
+    socialEnergy: 8
+  },
+  {
+    slug: "spa",
+    neighborhoodSlug: "riverside",
+    name: "Zenith Spa",
+    kind: "wellness",
+    summary: "Centre de bien-etre premium : sauna, massage, meditation. Recuperation maximale.",
+    costHint: "premium",
+    socialEnergy: 15
+  },
+  {
+    slug: "startup",
+    neighborhoodSlug: "studio-heights",
+    name: "Startup Lab",
+    kind: "work",
+    summary: "Espace de co-working tech. Reseau, projets ambitieux et opportunites a saisir.",
+    costHint: "moyen",
+    socialEnergy: 38
+  },
+  {
+    slug: "rooftop-bar",
+    neighborhoodSlug: "north-estates",
+    name: "Sky Lounge",
+    kind: "social",
+    summary: "Bar rooftop VIP avec vue panoramique. Cocktails, networking et soirees haut de gamme.",
+    costHint: "elite",
+    socialEnergy: 72
   }
 ];
 

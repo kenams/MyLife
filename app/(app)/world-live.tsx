@@ -42,7 +42,7 @@ const DISTRICTS: District[] = [
   { slug: "gym",        label: "Gym Pulse",      emoji: "💪", desc: "Fitness · Énergie · Performance",    color: "#1e0505", neon: "#f87171" },
   { slug: "restaurant", label: "Restaurant",     emoji: "🍽️", desc: "Gastronomie · Dates · Sorties",      color: "#250510", neon: "#f472b6" },
   { slug: "cinema",     label: "Cinéma Luma",    emoji: "🎬", desc: "Culture · Divertissement · Art",     color: "#030318", neon: "#818cf8" },
-  { slug: "club",       label: "Club Nuit",      emoji: "🎵", desc: "Soirées · Ambiance · Liberté",       color: "#120020", neon: "#c084fc", span: "wide" },
+  { slug: "nightclub",  label: "Club Nuit",      emoji: "🎵", desc: "Soirées · Ambiance · Liberté",       color: "#120020", neon: "#c084fc", span: "wide" },
 ];
 
 // NPC accent colors
@@ -121,7 +121,7 @@ function DistrictCard({
   function pressOut() { Animated.spring(scaleAnim, { toValue: 1,    useNativeDriver: true, speed: 60 }).start(); }
 
   return (
-    <Animated.View style={{ transform: [{ scale: scaleAnim }], flex: district.span === "wide" ? 2 : 1, minWidth: 150 }}>
+    <Animated.View style={{ transform: [{ scale: scaleAnim }], flex: 1 }}>
       <Pressable onPress={onTravel} onPressIn={pressIn} onPressOut={pressOut} style={{
         flex: 1,
         backgroundColor: district.color,
@@ -166,7 +166,7 @@ function DistrictCard({
               borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3,
               borderWidth: 1, borderColor: district.neon + "60",
             }}>
-              <Text style={{ color: district.neon, fontSize: 8, fontWeight: "900" }}>ICi</Text>
+              <Text style={{ color: district.neon, fontSize: 8, fontWeight: "900" }}>ICI</Text>
             </View>
           )}
         </View>
@@ -498,37 +498,61 @@ export default function WorldLiveScreen() {
         {/* ── Stats ville ── */}
         <View style={{ flexDirection: "row", gap: 8 }}>
           {[
-            { label: "En ligne",     value: `${onlineCount}`,     color: "#38c793" },
-            { label: "Bonne humeur", value: `${goodMoodCount}`,   color: "#f6b94f" },
-            { label: "Résidents",    value: `${npcs.length}`,     color: "#60a5fa" },
+            { label: "En ligne",     value: `${onlineCount}`,     color: "#38c793", icon: "🟢" },
+            { label: "Bonne humeur", value: `${goodMoodCount}`,   color: "#f6b94f", icon: "😊" },
+            { label: "Résidents",    value: `${npcs.length}`,     color: "#60a5fa", icon: "👥" },
           ].map((item) => (
             <View key={item.label} style={{
               flex: 1,
-              backgroundColor: item.color + "10",
-              borderRadius: 14, paddingVertical: 10, alignItems: "center",
-              borderWidth: 1, borderColor: item.color + "30",
+              backgroundColor: item.color + "12",
+              borderRadius: 16, paddingVertical: 12, paddingHorizontal: 8,
+              alignItems: "center", gap: 2,
+              borderWidth: 1, borderColor: item.color + "28",
             }}>
-              <Text style={{ color: item.color, fontWeight: "900", fontSize: 20 }}>{item.value}</Text>
-              <Text style={{ color: colors.muted, fontSize: 9, marginTop: 1 }}>{item.label}</Text>
+              <Text style={{ fontSize: 18 }}>{item.icon}</Text>
+              <Text style={{ color: item.color, fontWeight: "900", fontSize: 22, lineHeight: 26 }}>{item.value}</Text>
+              <Text style={{ color: colors.muted, fontSize: 9, fontWeight: "700", textAlign: "center" }}>{item.label}</Text>
             </View>
           ))}
         </View>
 
         {/* ── Grille quartiers ── */}
         <View>
-          <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 10 }}>
-            QUARTIERS
-          </Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
-            {DISTRICTS.map((d) => (
-              <DistrictCard
-                key={d.slug}
-                district={d}
-                npcsHere={npcsAt(d.slug)}
-                isCurrentLocation={currentLocation === d.slug}
-                onTravel={() => { travelTo(d.slug); }}
-                onNpcPress={(npc) => setSelectedNpc(npc)}
-              />
+          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
+              QUARTIERS
+            </Text>
+            {currentLocation && (() => {
+              const cur = DISTRICTS.find(d => d.slug === currentLocation);
+              return cur ? (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 5,
+                  backgroundColor: cur.neon + "18", borderRadius: 8,
+                  paddingHorizontal: 8, paddingVertical: 3,
+                  borderWidth: 1, borderColor: cur.neon + "40" }}>
+                  <Text style={{ fontSize: 11 }}>{cur.emoji}</Text>
+                  <Text style={{ color: cur.neon, fontSize: 9, fontWeight: "800" }}>{cur.label}</Text>
+                </View>
+              ) : null;
+            })()}
+          </View>
+          {/* 2 colonnes fixes */}
+          <View style={{ gap: 10 }}>
+            {Array.from({ length: Math.ceil(DISTRICTS.length / 2) }, (_, row) => (
+              <View key={row} style={{ flexDirection: "row", gap: 10 }}>
+                {DISTRICTS.slice(row * 2, row * 2 + 2).map((d) => (
+                  <View key={d.slug} style={{ flex: 1 }}>
+                    <DistrictCard
+                      district={d}
+                      npcsHere={npcsAt(d.slug)}
+                      isCurrentLocation={currentLocation === d.slug}
+                      onTravel={() => { travelTo(d.slug); }}
+                      onNpcPress={(npc) => setSelectedNpc(npc)}
+                    />
+                  </View>
+                ))}
+                {/* Padding si ligne impaire */}
+                {DISTRICTS.slice(row * 2, row * 2 + 2).length < 2 && <View style={{ flex: 1 }} />}
+              </View>
             ))}
           </View>
         </View>
