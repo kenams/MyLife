@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { Animated } from "react-native";
+import { Animated, StyleSheet } from "react-native";
 
 export function DuskOverlay() {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -22,13 +22,7 @@ export function DuskOverlay() {
   return (
     <Animated.View
       pointerEvents="none"
-      style={{
-        position: "absolute",
-        top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: "#0d0620",
-        opacity,
-        zIndex: 9999,
-      }}
+      style={[StyleSheet.absoluteFill, { backgroundColor: "#0d0620", opacity, zIndex: 9999 }]}
     />
   );
 }
