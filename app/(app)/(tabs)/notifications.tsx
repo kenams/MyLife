@@ -1,67 +1,87 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, ScrollView, Text, View } from "react-native";
 
 import { starterResidents } from "@/lib/game-engine";
 import { getActiveMissions, getMission } from "@/lib/missions";
 import { buildSmartNotifications, type SmartNotificationPriority } from "@/lib/smart-notifications";
-import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
+
+// ─── Light theme ──────────────────────────────────────────────────────────────
+const L = {
+  bg:        "#f5f7fa",
+  card:      "#ffffff",
+  text:      "#1e2a3a",
+  textSoft:  "#4a5568",
+  muted:     "#94a3b8",
+  border:    "#e8edf5",
+  primary:   "#6366f1",
+  primaryBg: "#eef2ff",
+  green:     "#10b981",
+  greenBg:   "#ecfdf5",
+  gold:      "#f59e0b",
+  goldBg:    "#fffbeb",
+  red:       "#ef4444",
+  redBg:     "#fef2f2",
+  blue:      "#3b82f6",
+  blueBg:    "#eff6ff",
+  pink:      "#ec4899",
+  pinkBg:    "#fdf2f8",
+  purple:    "#8b5cf6",
+  purpleBg:  "#f5f3ff",
+  teal:      "#14b8a6",
+  tealBg:    "#f0fdfa",
+  orange:    "#f97316",
+  orangeBg:  "#fff7ed",
+};
 
 const XP_PER_LEVEL = 200;
 
-const smartPriorityColor: Record<SmartNotificationPriority, string> = {
-  critical: "#ef4444",
-  high: "#f6b94f",
-  medium: "#60a5fa",
-  low: colors.muted
+type FilterKey = "all" | "urgent" | "social" | "work" | "health";
+
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: "all",    label: "Toutes"     },
+  { key: "urgent", label: "Urgentes"   },
+  { key: "social", label: "Relations"  },
+  { key: "work",   label: "Travail"    },
+  { key: "health", label: "Santé"      },
+];
+
+const PRIORITY_COLOR: Record<SmartNotificationPriority, string> = {
+  critical: L.red,
+  high:     L.orange,
+  medium:   L.blue,
+  low:      L.muted,
+};
+const PRIORITY_BG: Record<SmartNotificationPriority, string> = {
+  critical: L.redBg,
+  high:     L.orangeBg,
+  medium:   L.blueBg,
+  low:      L.bg,
+};
+const PRIORITY_LABEL: Record<SmartNotificationPriority, string> = {
+  critical: "URGENT",
+  high:     "Important",
+  medium:   "Info",
+  low:      "Conseil",
 };
 
-const notificationKindMeta: Record<string, { icon: keyof typeof Ionicons.glyphMap; color: string; label: string }> = {
-  needs: { icon: "pulse", color: "#ef4444", label: "Besoin" },
-  reward: { icon: "gift", color: "#38c793", label: "Gain" },
-  social: { icon: "people", color: "#60a5fa", label: "Social" },
-  work: { icon: "briefcase", color: "#f6b94f", label: "Travail" },
-  tip: { icon: "bulb", color: "#8b7cff", label: "Conseil" }
-};
-
-function SignalMetric({ label, value, color, icon }: { label: string; value: string; color: string; icon: keyof typeof Ionicons.glyphMap }) {
-  return (
-    <View style={{
-      flex: 1,
-      minWidth: 92,
-      backgroundColor: color + "12",
-      borderRadius: 14,
-      paddingHorizontal: 11,
-      paddingVertical: 10,
-      borderWidth: 1,
-      borderColor: color + "35",
-      gap: 6
-    }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-        <Ionicons name={icon as never} size={15} color={color} />
-        <Text style={{ color, fontSize: 15, fontWeight: "900" }}>{value}</Text>
-      </View>
-      <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: colors.textSoft, fontSize: 10, fontWeight: "800" }}>{label}</Text>
-    </View>
-  );
-}
-
-function DailyTaskRow({ emoji, label, done, urgency, detail, onPress }: {
+// ─── TaskCard ─────────────────────────────────────────────────────────────────
+function TaskCard({ emoji, label, done, urgency, detail, onPress }: {
   emoji: string; label: string; done: boolean;
   urgency: "ok" | "warn" | "critical"; detail: string; onPress: () => void;
 }) {
-  const col = done ? "#38c793" : urgency === "critical" ? "#ef4444" : urgency === "warn" ? "#f6b94f" : colors.muted;
-  const bg  = done ? "#38c79310" : urgency === "critical" ? "#ef444412" : urgency === "warn" ? "#f6b94f10" : "rgba(255,255,255,0.03)";
-  const border = done ? "#38c79330" : urgency === "critical" ? "#ef444435" : urgency === "warn" ? "#f6b94f30" : "rgba(255,255,255,0.06)";
+  const col = done ? L.green : urgency === "critical" ? L.red : urgency === "warn" ? L.gold : L.muted;
+  const bg  = done ? L.greenBg : urgency === "critical" ? L.redBg : urgency === "warn" ? L.goldBg : L.card;
+  const border = done ? L.green + "25" : urgency === "critical" ? L.red + "25" : urgency === "warn" ? L.gold + "25" : L.border;
 
   const pulseAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (urgency === "critical" && !done) {
       Animated.loop(Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.01, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 0.99, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1.01, duration: 800, useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0.99, duration: 800, useNativeDriver: true }),
       ])).start();
     }
   }, [urgency, done]);
@@ -69,36 +89,77 @@ function DailyTaskRow({ emoji, label, done, urgency, detail, onPress }: {
   return (
     <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
       <Pressable onPress={onPress} style={{
-        backgroundColor: bg, borderRadius: 14, padding: 13,
-        borderWidth: 1.5, borderColor: border,
+        backgroundColor: bg, borderRadius: 16, padding: 14,
+        borderWidth: 1, borderColor: border,
         flexDirection: "row", alignItems: "center", gap: 12,
+        shadowColor: col, shadowOpacity: done ? 0 : 0.06,
+        shadowRadius: 8, shadowOffset: { width: 0, height: 2 },
       }}>
-        <View style={{ width: 40, height: 40, borderRadius: 20,
-          backgroundColor: col + "20", alignItems: "center", justifyContent: "center",
-          borderWidth: 1.5, borderColor: col + "40" }}>
-          <Text style={{ fontSize: 20 }}>{emoji}</Text>
+        <View style={{ width: 44, height: 44, borderRadius: 14,
+          backgroundColor: col + "15", alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ fontSize: 22 }}>{emoji}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: done ? "#38c793" : col, fontWeight: "800", fontSize: 14 }}>{label}</Text>
-          <Text style={{ color: colors.muted, fontSize: 11, marginTop: 1 }}>{detail}</Text>
+          <Text style={{ color: done ? L.green : L.text, fontWeight: "700", fontSize: 14 }}>{label}</Text>
+          <Text style={{ color: L.muted, fontSize: 12, marginTop: 2 }}>{detail}</Text>
         </View>
-        <View style={{ alignItems: "flex-end", gap: 4 }}>
-          {done
-            ? <Text style={{ color: "#38c793", fontSize: 18 }}>✓</Text>
-            : <View style={{ backgroundColor: col + "20", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4,
-                borderWidth: 1, borderColor: col + "40" }}>
-                <Text style={{ color: col, fontSize: 10, fontWeight: "800" }}>
-                  {urgency === "critical" ? "URGENT" : urgency === "warn" ? "BIENTÔT" : "À FAIRE"}
-                </Text>
-              </View>
-          }
-        </View>
+        {done
+          ? <View style={{ width: 28, height: 28, borderRadius: 14,
+              backgroundColor: L.greenBg, borderWidth: 1, borderColor: L.green + "40",
+              alignItems: "center", justifyContent: "center" }}>
+              <Ionicons name="checkmark" size={14} color={L.green} />
+            </View>
+          : <View style={{ backgroundColor: col + "15", borderRadius: 8,
+              paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: col + "30" }}>
+              <Text style={{ color: col, fontSize: 10, fontWeight: "800" }}>
+                {urgency === "critical" ? "URGENT" : urgency === "warn" ? "Bientôt" : "À faire"}
+              </Text>
+            </View>
+        }
       </Pressable>
     </Animated.View>
   );
 }
 
-export default function QuetesTab() {
+// ─── NotifCard ───────────────────────────────────────────────────────────────
+function NotifCard({ title, body, priority, action, route, onAction }: {
+  title: string; body: string; priority: SmartNotificationPriority;
+  action: string; route: string; onAction?: () => void;
+}) {
+  const color = PRIORITY_COLOR[priority];
+  const bg    = PRIORITY_BG[priority];
+  return (
+    <Pressable onPress={() => router.push(route as never)}
+      style={{ backgroundColor: bg, borderRadius: 16, padding: 14,
+        borderWidth: 1, borderColor: color + "20",
+        flexDirection: "row", alignItems: "center", gap: 12,
+        shadowColor: color, shadowOpacity: 0.05,
+        shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }}>
+      <View style={{ width: 42, height: 42, borderRadius: 14, backgroundColor: color + "18",
+        alignItems: "center", justifyContent: "center" }}>
+        <Ionicons
+          name={priority === "critical" ? "alert-circle" : priority === "high" ? "flash" : priority === "medium" ? "information-circle" : "bulb"}
+          size={20} color={color}
+        />
+      </View>
+      <View style={{ flex: 1 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 2 }}>
+          <View style={{ backgroundColor: color + "18", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2 }}>
+            <Text style={{ color, fontSize: 9, fontWeight: "800" }}>{PRIORITY_LABEL[priority]}</Text>
+          </View>
+        </View>
+        <Text style={{ color: L.text, fontWeight: "700", fontSize: 14 }} numberOfLines={1}>{title}</Text>
+        <Text style={{ color: L.muted, fontSize: 12, marginTop: 2 }} numberOfLines={2}>{body}</Text>
+      </View>
+      <View style={{ backgroundColor: color, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7 }}>
+        <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>{action}</Text>
+      </View>
+    </Pressable>
+  );
+}
+
+// ─── Screen ──────────────────────────────────────────────────────────────────
+export default function NotificationsScreen() {
   const missionProgresses = useGameStore((s) => s.missionProgresses ?? []);
   const playerLevel       = useGameStore((s) => s.playerLevel ?? 1);
   const playerXp          = useGameStore((s) => s.playerXp ?? 0);
@@ -110,9 +171,11 @@ export default function QuetesTab() {
   const avatar            = useGameStore((s) => s.avatar);
   const relationships     = useGameStore((s) => s.relationships);
 
+  const [filter, setFilter] = useState<FilterKey>("all");
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
   useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 320, useNativeDriver: true }).start();
   }, []);
 
   const activeMissions  = getActiveMissions(missionProgresses, playerLevel);
@@ -121,348 +184,398 @@ export default function QuetesTab() {
   const xpInLevel       = playerXp % XP_PER_LEVEL;
   const xpPct           = (xpInLevel / XP_PER_LEVEL) * 100;
   const smartNotifs     = buildSmartNotifications({ avatar, stats, relationships, residents: starterResidents });
-  const topSmartSignal  = smartNotifs[0] ?? null;
-  const criticalSmart   = smartNotifs.filter((n) => n.priority === "critical").length;
-  const highSmart       = smartNotifs.filter((n) => n.priority === "high").length;
+  const topSignal       = smartNotifs[0] ?? null;
+  const criticalCount   = smartNotifs.filter((n) => n.priority === "critical").length;
 
-  // Tâches obligatoires quotidiennes
-  const hoursSinceEat  = stats.lastMealAt
+  // Tâches quotidiennes
+  const hoursSinceEat = stats.lastMealAt
     ? (Date.now() - new Date(stats.lastMealAt).getTime()) / 3_600_000 : 99;
-  const eatDone     = hoursSinceEat < 5;
-  const eatUrgency  = eatDone ? "ok" : hoursSinceEat > 7 ? "critical" : hoursSinceEat > 5 ? "warn" : "ok";
-
-  const sleepDone   = stats.energy >= 60;
-  const sleepUrgency: "ok" | "warn" | "critical" = sleepDone ? "ok" : stats.energy < 20 ? "critical" : stats.energy < 40 ? "warn" : "ok";
-
-  const hygieneDone   = stats.hygiene >= 50;
+  const eatDone      = hoursSinceEat < 5;
+  const eatUrgency   = eatDone ? "ok" : hoursSinceEat > 7 ? "critical" : "warn";
+  const sleepDone    = stats.energy >= 60;
+  const sleepUrgency: "ok" | "warn" | "critical" = sleepDone ? "ok" : stats.energy < 20 ? "critical" : "warn";
+  const hygieneDone  = stats.hygiene >= 50;
   const hygieneUrgency: "ok" | "warn" | "critical" = hygieneDone ? "ok" : stats.hygiene < 20 ? "critical" : "warn";
-
-  const workDone      = stats.discipline >= 50 || stats.money > 200;
-  const workUrgency: "ok" | "warn" | "critical"   = workDone ? "ok" : "warn";
-
-  const moodDone      = stats.mood >= 40;
-  const moodUrgency: "ok" | "warn" | "critical"   = moodDone ? "ok" : stats.mood < 20 ? "critical" : "warn";
+  const workDone     = stats.discipline >= 50 || stats.money > 200;
+  const workUrgency: "ok" | "warn" | "critical" = workDone ? "ok" : "warn";
+  const moodDone     = stats.mood >= 40;
+  const moodUrgency: "ok" | "warn" | "critical" = moodDone ? "ok" : stats.mood < 20 ? "critical" : "warn";
 
   const dailyTasks = [
-    { emoji: "🍽️", label: "Manger", done: eatDone, urgency: eatUrgency,
-      detail: eatDone ? `Dernier repas il y a ${Math.round(hoursSinceEat)}h` : hoursSinceEat > 6 ? `Ton personnage a faim.` : `Mange bientôt.`,
-      route: "/(app)/health" },
-    { emoji: "😴", label: "Dormir", done: sleepDone, urgency: sleepUrgency,
-      detail: sleepDone ? `Énergie : ${stats.energy}/100` : `Il faut récupérer.`,
-      route: "/(app)/health" },
-    { emoji: "🚿", label: "Hygiène", done: hygieneDone, urgency: hygieneUrgency,
-      detail: hygieneDone ? `Hygiène : ${stats.hygiene}/100` : `Va prendre une douche.`,
-      route: "/(app)/health" },
-    { emoji: "💼", label: "Travailler", done: workDone, urgency: workUrgency,
-      detail: workDone ? `Discipline : ${stats.discipline}/100` : `Travaille pour gagner des crédits.`,
-      route: "/(app)/work" },
-    { emoji: "😊", label: "Humeur", done: moodDone, urgency: moodUrgency,
-      detail: moodDone ? `Humeur : ${stats.mood}/100` : `Sors ou parle à quelqu'un.`,
-      route: "/(app)/(tabs)/world" },
+    { emoji: "🍽️", label: "Manger",    done: eatDone,     urgency: eatUrgency,
+      detail: eatDone ? `Repas il y a ${Math.round(hoursSinceEat)}h` : "Ton personnage a faim.",
+      route: "/(app)/health",    kind: "health" },
+    { emoji: "😴", label: "Dormir",    done: sleepDone,   urgency: sleepUrgency,
+      detail: sleepDone ? `Énergie : ${stats.energy}/100` : "Il faut récupérer.",
+      route: "/(app)/health",    kind: "health" },
+    { emoji: "🚿", label: "Hygiène",   done: hygieneDone, urgency: hygieneUrgency,
+      detail: hygieneDone ? `Hygiène : ${stats.hygiene}/100` : "Prends une douche.",
+      route: "/(app)/health",    kind: "health" },
+    { emoji: "💼", label: "Travailler", done: workDone,   urgency: workUrgency,
+      detail: workDone ? `Discipline : ${stats.discipline}/100` : "Travaille pour progresser.",
+      route: "/(app)/work",      kind: "work"   },
+    { emoji: "😊", label: "Humeur",    done: moodDone,   urgency: moodUrgency,
+      detail: moodDone ? `Humeur : ${stats.mood}/100` : "Sors ou parle à quelqu'un.",
+      route: "/(app)/(tabs)/world", kind: "health" },
   ] as const;
 
-  const doneTasks   = dailyTasks.filter((t) => t.done).length;
-  const criticalCnt = dailyTasks.filter((t) => !t.done && t.urgency === "critical").length;
-  const allDone     = doneTasks === dailyTasks.length;
+  const doneTasks    = dailyTasks.filter((t) => t.done).length;
+  const criticalTasks = dailyTasks.filter((t) => !t.done && t.urgency === "critical").length;
+  const allDone      = doneTasks === dailyTasks.length;
+
+  // Filtrage des tâches
+  const filteredTasks = filter === "all"    ? dailyTasks
+    : filter === "urgent" ? dailyTasks.filter((t) => !t.done && (t.urgency === "critical" || t.urgency === "warn"))
+    : filter === "work"   ? dailyTasks.filter((t) => t.kind === "work")
+    : filter === "health" ? dailyTasks.filter((t) => t.kind === "health")
+    : dailyTasks;
+
+  const filteredSmartNotifs = filter === "all"    ? smartNotifs
+    : filter === "urgent" ? smartNotifs.filter((n) => n.priority === "critical" || n.priority === "high")
+    : filter === "social" ? smartNotifs.filter((n) => n.kind === "social")
+    : filter === "work"   ? smartNotifs.filter((n) => n.kind === "work")
+    : filter === "health" ? smartNotifs.filter((n) => n.kind === "needs")
+    : smartNotifs;
+
+  const totalUnread = unreadNotifs.length + criticalCount;
 
   return (
-    <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-      <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} showsVerticalScrollIndicator={false}>
+    <Animated.View style={{ flex: 1, opacity: fadeAnim, backgroundColor: L.bg }}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
-        {/* Header */}
-        <View style={{ backgroundColor: "#060d18", paddingHorizontal: 20, paddingTop: 56, paddingBottom: 20,
-          borderBottomWidth: 1, borderBottomColor: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
-          <View style={{ position: "absolute", top: -20, right: -20, width: 120, height: 120, borderRadius: 60,
-            backgroundColor: "#f6b94f08" }} />
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 24 }}>🎯 Quêtes & Tâches</Text>
-          <Text style={{ color: colors.muted, fontSize: 12, marginTop: 3 }}>
-            Garde ton personnage stable, puis progresse.
-          </Text>
-
-          {/* XP bar */}
-          <View style={{ marginTop: 12, gap: 4 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: "#f6b94f", fontSize: 12, fontWeight: "800" }}>Niveau {playerLevel}</Text>
-              <Text style={{ color: colors.muted, fontSize: 11 }}>{xpInLevel}/{XP_PER_LEVEL} XP</Text>
+        {/* ── HEADER ── */}
+        <View style={{ backgroundColor: "#fff", paddingTop: 54, paddingBottom: 20, paddingHorizontal: 20,
+          borderBottomWidth: 1, borderBottomColor: L.border }}>
+          <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
+            <View>
+              <Text style={{ color: L.text, fontWeight: "900", fontSize: 26 }}>Notifications</Text>
+              <Text style={{ color: L.muted, fontSize: 13, marginTop: 2 }}>
+                Tout ce qui se passe dans ta vie
+              </Text>
             </View>
-            <View style={{ height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
-              <View style={{ height: 6, borderRadius: 3, width: `${xpPct}%`, backgroundColor: "#f6b94f" }} />
-            </View>
+            {totalUnread > 0 && (
+              <Pressable onPress={markAllRead}
+                style={{ backgroundColor: L.primaryBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8,
+                  borderWidth: 1, borderColor: L.primary + "30", flexDirection: "row", alignItems: "center", gap: 6 }}>
+                <View style={{ width: 18, height: 18, borderRadius: 9, backgroundColor: L.primary,
+                  alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>{totalUnread}</Text>
+                </View>
+                <Text style={{ color: L.primary, fontSize: 12, fontWeight: "700" }}>Tout lire</Text>
+              </Pressable>
+            )}
           </View>
 
-          {/* Daily progress */}
-          <View style={{ marginTop: 14, flexDirection: "row", alignItems: "center", gap: 12,
-            backgroundColor: allDone ? "#38c79312" : criticalCnt > 0 ? "#ef444412" : "#f6b94f0f",
-            borderRadius: 14, padding: 12,
-            borderWidth: 1, borderColor: allDone ? "#38c79340" : criticalCnt > 0 ? "#ef444430" : "#f6b94f30" }}>
-            <View style={{ width: 44, height: 44, borderRadius: 22,
-              backgroundColor: allDone ? "#38c79325" : criticalCnt > 0 ? "#ef444420" : "#f6b94f20",
-              alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 22 }}>{allDone ? "🏆" : criticalCnt > 0 ? "⚠️" : "📋"}</Text>
+          {/* XP + progression */}
+          <View style={{ backgroundColor: L.primaryBg, borderRadius: 16, padding: 14,
+            borderWidth: 1, borderColor: L.primary + "20" }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: L.primary,
+                  alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ color: "#fff", fontWeight: "900", fontSize: 11 }}>{playerLevel}</Text>
+                </View>
+                <Text style={{ color: L.primary, fontWeight: "700", fontSize: 13 }}>Niveau {playerLevel}</Text>
+              </View>
+              <Text style={{ color: L.muted, fontSize: 12 }}>{xpInLevel} / {XP_PER_LEVEL} XP</Text>
             </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: allDone ? "#38c793" : criticalCnt > 0 ? "#ef4444" : "#f6b94f",
-                fontWeight: "900", fontSize: 15 }}>
-                {allDone ? "Toutes les tâches complètes !" : `${doneTasks}/${dailyTasks.length} tâches aujourd'hui`}
-              </Text>
-              <Text style={{ color: colors.muted, fontSize: 11, marginTop: 1 }}>
-                {criticalCnt > 0 ? `${criticalCnt} tâche${criticalCnt > 1 ? "s" : ""} critique${criticalCnt > 1 ? "s" : ""} — pénalités actives` : "Reste actif pour garder tes bonus"}
-              </Text>
-            </View>
-            {/* mini dots */}
-            <View style={{ flexDirection: "row", gap: 5 }}>
-              {dailyTasks.map((t, i) => (
-                <View key={i} style={{ width: 8, height: 8, borderRadius: 4,
-                  backgroundColor: t.done ? "#38c793" : t.urgency === "critical" ? "#ef4444" : t.urgency === "warn" ? "#f6b94f" : "rgba(255,255,255,0.15)" }} />
-              ))}
+            <View style={{ height: 8, borderRadius: 4, backgroundColor: L.primary + "20", overflow: "hidden" }}>
+              <View style={{ height: 8, borderRadius: 4, width: `${xpPct}%`, backgroundColor: L.primary }} />
             </View>
           </View>
         </View>
 
-        <View style={{ padding: 16, gap: 16 }}>
-
-          {/* Synthese prioritaire */}
-          <View style={{ gap: 10 }}>
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-              <SignalMetric label="Critiques" value={`${criticalCnt + criticalSmart}`} color="#ef4444" icon="warning" />
-              <SignalMetric label="A traiter" value={`${highSmart + claimable.length}`} color="#f6b94f" icon="flash" />
-              <SignalMetric label="Non lues" value={`${unreadNotifs.length}`} color="#60a5fa" icon="notifications" />
+        {/* ── SIGNAL PRIORITAIRE ── */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+          {topSignal ? (
+            <Pressable onPress={() => router.push(topSignal.route as never)}
+              style={{ backgroundColor: PRIORITY_BG[topSignal.priority], borderRadius: 20, padding: 16,
+                borderWidth: 1.5, borderColor: PRIORITY_COLOR[topSignal.priority] + "30",
+                flexDirection: "row", alignItems: "center", gap: 14, marginBottom: 16,
+                shadowColor: PRIORITY_COLOR[topSignal.priority], shadowOpacity: 0.08,
+                shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }}>
+              <View style={{ width: 50, height: 50, borderRadius: 16,
+                backgroundColor: PRIORITY_COLOR[topSignal.priority] + "18",
+                alignItems: "center", justifyContent: "center" }}>
+                <Ionicons
+                  name={topSignal.priority === "critical" ? "alert-circle" : "navigate-circle"}
+                  size={26} color={PRIORITY_COLOR[topSignal.priority]}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: PRIORITY_COLOR[topSignal.priority], fontSize: 10, fontWeight: "800", marginBottom: 2 }}>
+                  PRIORITÉ MAINTENANT
+                </Text>
+                <Text style={{ color: L.text, fontSize: 15, fontWeight: "800" }} numberOfLines={1}>
+                  {topSignal.title}
+                </Text>
+                <Text style={{ color: L.muted, fontSize: 12, marginTop: 2 }} numberOfLines={2}>
+                  {topSignal.body}
+                </Text>
+              </View>
+              <View style={{ backgroundColor: PRIORITY_COLOR[topSignal.priority], borderRadius: 12,
+                paddingHorizontal: 12, paddingVertical: 9 }}>
+                <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>{topSignal.actionLabel}</Text>
+              </View>
+            </Pressable>
+          ) : (
+            <View style={{ backgroundColor: L.greenBg, borderRadius: 18, padding: 16,
+              borderWidth: 1, borderColor: L.green + "25", flexDirection: "row", alignItems: "center", gap: 14,
+              marginBottom: 16 }}>
+              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: L.green + "18",
+                alignItems: "center", justifyContent: "center" }}>
+                <Ionicons name="checkmark-circle" size={24} color={L.green} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: L.green, fontSize: 14, fontWeight: "800" }}>Tout est stable</Text>
+                <Text style={{ color: L.muted, fontSize: 12, marginTop: 2 }}>
+                  Aucune urgence pour le moment. Continue comme ça !
+                </Text>
+              </View>
             </View>
+          )}
+        </View>
 
-            {topSmartSignal ? (
-              <Pressable
-                onPress={() => router.push(topSmartSignal.route as any)}
-                style={{
-                  backgroundColor: smartPriorityColor[topSmartSignal.priority] + "12",
-                  borderRadius: 18,
-                  padding: 14,
-                  borderWidth: 1.5,
-                  borderColor: smartPriorityColor[topSmartSignal.priority] + "42",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 12
-                }}
-              >
-                <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: smartPriorityColor[topSmartSignal.priority] + "20", alignItems: "center", justifyContent: "center" }}>
-                  <Ionicons name={topSmartSignal.priority === "critical" ? "alert-circle" : "navigate-circle"} size={24} color={smartPriorityColor[topSmartSignal.priority]} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: smartPriorityColor[topSmartSignal.priority], fontSize: 11, fontWeight: "900" }}>PRIORITE MAINTENANT</Text>
-                  <Text numberOfLines={1} adjustsFontSizeToFit style={{ color: colors.text, fontSize: 15, fontWeight: "900", marginTop: 2 }}>{topSmartSignal.title}</Text>
-                  <Text numberOfLines={2} style={{ color: colors.textSoft, fontSize: 11, lineHeight: 15, marginTop: 2 }}>{topSmartSignal.body}</Text>
-                </View>
-                <View style={{ backgroundColor: smartPriorityColor[topSmartSignal.priority], borderRadius: 11, paddingHorizontal: 10, paddingVertical: 8 }}>
-                  <Text style={{ color: "#07111f", fontSize: 10, fontWeight: "900" }}>{topSmartSignal.actionLabel}</Text>
-                </View>
-              </Pressable>
-            ) : (
-              <View style={{ backgroundColor: "#38c79310", borderRadius: 18, padding: 14, borderWidth: 1, borderColor: "#38c79335", flexDirection: "row", alignItems: "center", gap: 12 }}>
-                <Ionicons name="checkmark-circle" size={28} color="#38c793" />
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: "#38c793", fontSize: 14, fontWeight: "900" }}>Tout est stable</Text>
-                  <Text style={{ color: colors.textSoft, fontSize: 11, marginTop: 2 }}>Aucune urgence intelligente pour le moment.</Text>
+        {/* ── FILTRES ── */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          style={{ paddingBottom: 4 }}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8, paddingBottom: 4 }}>
+          {FILTERS.map((f) => (
+            <Pressable key={f.key} onPress={() => setFilter(f.key)}
+              style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20,
+                backgroundColor: filter === f.key ? L.primary : L.card,
+                borderWidth: 1, borderColor: filter === f.key ? L.primary : L.border }}>
+              <Text style={{ color: filter === f.key ? "#fff" : L.textSoft,
+                fontSize: 13, fontWeight: "700" }}>
+                {f.label}
+              </Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+
+        <View style={{ padding: 16, gap: 20 }}>
+
+          {/* ── RÉCLAMATIONS ── */}
+          {claimable.length > 0 && (
+            <View>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                <Text style={{ color: L.text, fontSize: 15, fontWeight: "800" }}>Récompenses</Text>
+                <View style={{ backgroundColor: L.goldBg, borderRadius: 10,
+                  paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: L.gold + "30" }}>
+                  <Text style={{ color: L.gold, fontSize: 11, fontWeight: "800" }}>{claimable.length}</Text>
                 </View>
               </View>
-            )}
-          </View>
-
-          {/* Notifications intelligentes */}
-          <View style={{ gap: 10 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
-                NOTIFICATIONS INTELLIGENTES
-              </Text>
-              <Text style={{ color: colors.muted, fontSize: 11 }}>
-                {smartNotifs.length} signal{smartNotifs.length > 1 ? "s" : ""}
-              </Text>
+              <View style={{ gap: 8 }}>
+                {claimable.map((prog) => {
+                  const mission = getMission(prog.missionId);
+                  if (!mission) return null;
+                  const catColor = mission.category === "story" ? L.purple : mission.category === "weekly" ? L.gold : L.green;
+                  const catBg    = mission.category === "story" ? L.purpleBg : mission.category === "weekly" ? L.goldBg : L.greenBg;
+                  return (
+                    <View key={prog.missionId} style={{ backgroundColor: catBg, borderRadius: 16, padding: 14,
+                      borderWidth: 1, borderColor: catColor + "25",
+                      flexDirection: "row", alignItems: "center", gap: 12,
+                      shadowColor: catColor, shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }}>
+                      <Text style={{ fontSize: 26 }}>{mission.emoji}</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: L.text, fontWeight: "700", fontSize: 14 }}>{mission.title}</Text>
+                        <Text style={{ color: catColor, fontSize: 12, marginTop: 2 }}>
+                          +{mission.xpReward} XP · +{mission.moneyReward} crédits
+                        </Text>
+                      </View>
+                      <Pressable onPress={() => claimMission(prog.missionId)}
+                        style={{ backgroundColor: catColor, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 9 }}>
+                        <Text style={{ color: "#fff", fontWeight: "800", fontSize: 12 }}>Réclamer</Text>
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
             </View>
-            {smartNotifs.slice(0, 2).map((n) => {
-              const priorityColor = smartPriorityColor[n.priority];
-              return (
-                <Pressable
-                  key={n.id}
-                  onPress={() => router.push(n.route as any)}
-                  style={{
-                    backgroundColor: priorityColor + "10",
-                    borderRadius: 15,
-                    padding: 12,
-                    borderWidth: 1.5,
-                    borderColor: priorityColor + "35",
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 12
-                  }}>
-                  <View style={{ width: 38, height: 38, borderRadius: 19,
-                    backgroundColor: priorityColor + "20", alignItems: "center", justifyContent: "center",
-                    borderWidth: 1, borderColor: priorityColor + "45" }}>
-                    <Ionicons name={n.priority === "critical" ? "alert" : n.kind === "social" ? "heart" : "flash"} size={17} color={priorityColor} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text numberOfLines={1} style={{ color: colors.text, fontWeight: "900", fontSize: 14 }}>{n.title}</Text>
-                    <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 }}>{n.body}</Text>
-                  </View>
-                  <View style={{ backgroundColor: priorityColor + "18", borderRadius: 9,
-                    paddingHorizontal: 9, paddingVertical: 5, borderWidth: 1, borderColor: priorityColor + "35" }}>
-                    <Text style={{ color: priorityColor, fontSize: 10, fontWeight: "900" }}>{n.actionLabel}</Text>
-                  </View>
-                </Pressable>
-              );
-            })}
-          </View>
+          )}
 
-          {/* Tâches obligatoires */}
-          <View style={{ gap: 10 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
-                TÂCHES OBLIGATOIRES
-              </Text>
-              {criticalCnt > 0 && (
-                <View style={{ backgroundColor: "#ef444420", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3,
-                  borderWidth: 1, borderColor: "#ef444440" }}>
-                  <Text style={{ color: "#ef4444", fontSize: 9, fontWeight: "900" }}>{criticalCnt} CRITIQUE{criticalCnt > 1 ? "S" : ""}</Text>
+          {/* ── TÂCHES QUOTIDIENNES ── */}
+          <View>
+            <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Text style={{ color: L.text, fontSize: 15, fontWeight: "800" }}>Tâches du jour</Text>
+                <View style={{ backgroundColor: allDone ? L.greenBg : L.border, borderRadius: 10,
+                  paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1,
+                  borderColor: allDone ? L.green + "30" : L.border }}>
+                  <Text style={{ color: allDone ? L.green : L.muted, fontSize: 11, fontWeight: "800" }}>
+                    {doneTasks}/{dailyTasks.length}
+                  </Text>
+                </View>
+              </View>
+              {criticalTasks > 0 && (
+                <View style={{ backgroundColor: L.redBg, borderRadius: 8,
+                  paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: L.red + "25" }}>
+                  <Text style={{ color: L.red, fontSize: 10, fontWeight: "800" }}>
+                    {criticalTasks} CRITIQUE{criticalTasks > 1 ? "S" : ""}
+                  </Text>
                 </View>
               )}
             </View>
-            {dailyTasks.map((task) => (
-              <DailyTaskRow
-                key={task.label}
-                emoji={task.emoji}
-                label={task.label}
-                done={task.done}
-                urgency={task.urgency}
-                detail={task.detail}
-                onPress={() => router.push(task.route as any)}
-              />
-            ))}
+
+            {/* Barre de progression globale */}
+            <View style={{ backgroundColor: L.card, borderRadius: 14, padding: 12, marginBottom: 10,
+              borderWidth: 1, borderColor: L.border,
+              shadowColor: "rgba(0,0,0,0.04)", shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 6 }}>
+                <Text style={{ color: L.textSoft, fontSize: 12 }}>Progression journalière</Text>
+                <Text style={{ color: allDone ? L.green : L.primary, fontSize: 12, fontWeight: "700" }}>
+                  {Math.round((doneTasks / dailyTasks.length) * 100)}%
+                </Text>
+              </View>
+              <View style={{ height: 8, borderRadius: 4, backgroundColor: L.border, overflow: "hidden" }}>
+                <View style={{ height: 8, borderRadius: 4,
+                  width: `${(doneTasks / dailyTasks.length) * 100}%`,
+                  backgroundColor: allDone ? L.green : L.primary }} />
+              </View>
+              <View style={{ flexDirection: "row", gap: 5, marginTop: 8 }}>
+                {dailyTasks.map((t, i) => (
+                  <View key={i} style={{ flex: 1, height: 4, borderRadius: 2,
+                    backgroundColor: t.done ? L.green : t.urgency === "critical" ? L.red : t.urgency === "warn" ? L.gold : L.border }} />
+                ))}
+              </View>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              {(filteredTasks as typeof dailyTasks[number][]).map((task) => (
+                <TaskCard
+                  key={task.label}
+                  emoji={task.emoji}
+                  label={task.label}
+                  done={task.done}
+                  urgency={task.urgency}
+                  detail={task.detail}
+                  onPress={() => router.push(task.route as never)}
+                />
+              ))}
+            </View>
           </View>
 
-          {/* Missions à réclamer */}
-          {claimable.length > 0 && (
-            <View style={{ gap: 10 }}>
-              <Text style={{ color: "#38c793", fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
-                🎁 RÉCOMPENSES À RÉCLAMER ({claimable.length})
+          {/* ── SIGNAUX INTELLIGENTS ── */}
+          {filteredSmartNotifs.length > 0 && (
+            <View>
+              <Text style={{ color: L.text, fontSize: 15, fontWeight: "800", marginBottom: 10 }}>
+                Signaux intelligents
               </Text>
-              {claimable.map((prog) => {
-                const mission = getMission(prog.missionId);
-                if (!mission) return null;
-                const catColor = mission.category === "story" ? "#c084fc" : mission.category === "weekly" ? "#f6b94f" : "#38c793";
-                return (
-                  <View key={prog.missionId} style={{
-                    backgroundColor: catColor + "12", borderRadius: 16, padding: 14,
-                    borderWidth: 1.5, borderColor: catColor + "50",
-                    flexDirection: "row", alignItems: "center", gap: 12
-                  }}>
-                    <Text style={{ fontSize: 24 }}>{mission.emoji}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.text, fontWeight: "800", fontSize: 14 }}>{mission.title}</Text>
-                      <Text style={{ color: catColor, fontSize: 11 }}>+{mission.xpReward} XP · +{mission.moneyReward} cr</Text>
-                    </View>
-                    <Pressable onPress={() => claimMission(prog.missionId)}
-                      style={{ backgroundColor: catColor, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 8 }}>
-                      <Text style={{ color: "#000", fontWeight: "900", fontSize: 13 }}>Réclamer</Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
+              <View style={{ gap: 8 }}>
+                {filteredSmartNotifs.slice(0, 3).map((n) => (
+                  <NotifCard
+                    key={n.id}
+                    title={n.title}
+                    body={n.body}
+                    priority={n.priority}
+                    action={n.actionLabel}
+                    route={n.route}
+                  />
+                ))}
+              </View>
             </View>
           )}
 
-          {/* Missions actives */}
-          <View style={{ gap: 10 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-              <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
-                MISSIONS EN COURS
-              </Text>
-              <Pressable onPress={() => router.push("/(app)/missions")}>
-                <Text style={{ color: colors.accent, fontSize: 12, fontWeight: "700" }}>Tout voir →</Text>
-              </Pressable>
-            </View>
-            {activeMissions.slice(0, 2).map((mission) => {
-              const prog = missionProgresses.find((p) => p.missionId === mission.id);
-              const reqs = prog?.requirements ?? mission.requirements.map((r) => ({ ...r, current: 0 }));
-              const totalCount = reqs.reduce((s, r) => s + r.count, 0);
-              const doneCount  = reqs.reduce((s, r) => s + Math.min(r.current, r.count), 0);
-              const pct = totalCount > 0 ? (doneCount / totalCount) * 100 : 0;
-              const catColor = mission.category === "story" ? "#c084fc" : mission.category === "weekly" ? "#f6b94f" : "#38c793";
-              return (
-                <View key={mission.id} style={{ backgroundColor: catColor + "08", borderRadius: 14, padding: 13,
-                  borderWidth: 1, borderColor: catColor + "25", gap: 8 }}>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                    <Text style={{ fontSize: 20 }}>{mission.emoji}</Text>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: colors.text, fontWeight: "700", fontSize: 13 }}>{mission.title}</Text>
-                      <Text style={{ color: catColor, fontSize: 10 }}>+{mission.xpReward} XP</Text>
-                    </View>
-                    <Text style={{ color: catColor, fontWeight: "700", fontSize: 12 }}>{doneCount}/{totalCount}</Text>
-                  </View>
-                  <View style={{ height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.07)", overflow: "hidden" }}>
-                    <View style={{ height: 4, borderRadius: 2, width: `${pct}%`, backgroundColor: catColor }} />
-                  </View>
-                </View>
-              );
-            })}
-          </View>
-
-          {/* Alertes */}
-          {unreadNotifs.length > 0 && (
-            <View style={{ gap: 10 }}>
-              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-                <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
-                  ALERTES ({unreadNotifs.length})
-                </Text>
-                <Pressable onPress={markAllRead}>
-                  <Text style={{ color: colors.muted, fontSize: 11 }}>Tout lire</Text>
+          {/* ── MISSIONS EN COURS ── */}
+          {activeMissions.length > 0 && (
+            <View>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <Text style={{ color: L.text, fontSize: 15, fontWeight: "800" }}>Missions actives</Text>
+                <Pressable onPress={() => router.push("/(app)/missions" as never)}>
+                  <Text style={{ color: L.primary, fontSize: 12, fontWeight: "700" }}>Tout voir →</Text>
                 </Pressable>
               </View>
-              {unreadNotifs.slice(0, 3).map((n) => {
-                const meta = notificationKindMeta[n.kind] ?? notificationKindMeta.tip;
-                const kindColor = meta.color;
-                return (
-                  <View key={n.id} style={{ backgroundColor: kindColor + "0e", borderRadius: 12, padding: 12,
-                    borderWidth: 1, borderColor: kindColor + "25", flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
-                    <View style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: kindColor + "18", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: kindColor + "35" }}>
-                      <Ionicons name={meta.icon as never} size={14} color={kindColor} />
+              <View style={{ gap: 8 }}>
+                {activeMissions.slice(0, 2).map((mission) => {
+                  const prog = missionProgresses.find((p) => p.missionId === mission.id);
+                  const reqs = prog?.requirements ?? mission.requirements.map((r) => ({ ...r, current: 0 }));
+                  const total = reqs.reduce((s, r) => s + r.count, 0);
+                  const done  = reqs.reduce((s, r) => s + Math.min(r.current, r.count), 0);
+                  const pct   = total > 0 ? (done / total) * 100 : 0;
+                  const catColor = mission.category === "story" ? L.purple : mission.category === "weekly" ? L.gold : L.green;
+                  const catBg    = mission.category === "story" ? L.purpleBg : mission.category === "weekly" ? L.goldBg : L.greenBg;
+                  return (
+                    <View key={mission.id} style={{ backgroundColor: catBg, borderRadius: 16, padding: 14,
+                      borderWidth: 1, borderColor: catColor + "20", gap: 10 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                        <Text style={{ fontSize: 22 }}>{mission.emoji}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: L.text, fontWeight: "700", fontSize: 14 }}>{mission.title}</Text>
+                          <Text style={{ color: catColor, fontSize: 12 }}>+{mission.xpReward} XP</Text>
+                        </View>
+                        <Text style={{ color: catColor, fontWeight: "700", fontSize: 13 }}>{done}/{total}</Text>
+                      </View>
+                      <View style={{ height: 6, borderRadius: 3, backgroundColor: catColor + "20", overflow: "hidden" }}>
+                        <View style={{ height: 6, borderRadius: 3, width: `${pct}%`, backgroundColor: catColor }} />
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text numberOfLines={1} style={{ color: colors.text, fontWeight: "800", fontSize: 13 }}>{n.title}</Text>
-                      <Text numberOfLines={2} style={{ color: colors.muted, fontSize: 11, lineHeight: 15, marginTop: 2 }}>{n.body}</Text>
-                      <Text style={{ color: kindColor, fontSize: 9, fontWeight: "900", marginTop: 5 }}>{meta.label}</Text>
-                    </View>
-                    <Pressable onPress={() => markRead(n.id)} style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: "rgba(255,255,255,0.06)", alignItems: "center", justifyContent: "center" }}>
-                      <Ionicons name="checkmark" size={14} color={colors.textSoft} />
-                    </Pressable>
-                  </View>
-                );
-              })}
+                  );
+                })}
+              </View>
             </View>
           )}
 
-          {/* Raccourcis */}
-          <View style={{ flexDirection: "row", gap: 10 }}>
-            <Pressable onPress={() => router.push("/(app)/missions")}
-              style={{ flex: 1, backgroundColor: "rgba(56,199,147,0.08)", borderRadius: 14, padding: 14,
-                borderWidth: 1, borderColor: "rgba(56,199,147,0.2)", alignItems: "center", gap: 5 }}>
-              <Text style={{ fontSize: 22 }}>🎯</Text>
-              <Text style={{ color: "#38c793", fontWeight: "700", fontSize: 11, textAlign: "center" }}>Missions</Text>
-            </Pressable>
-            <Pressable onPress={() => router.push("/(app)/progression")}
-              style={{ flex: 1, backgroundColor: "rgba(246,185,79,0.08)", borderRadius: 14, padding: 14,
-                borderWidth: 1, borderColor: "rgba(246,185,79,0.2)", alignItems: "center", gap: 5 }}>
-              <Text style={{ fontSize: 22 }}>⚡</Text>
-              <Text style={{ color: "#f6b94f", fontWeight: "700", fontSize: 11, textAlign: "center" }}>Progression</Text>
-            </Pressable>
-            <Pressable onPress={() => router.push("/(app)/leaderboard")}
-              style={{ flex: 1, backgroundColor: "rgba(192,132,252,0.08)", borderRadius: 14, padding: 14,
-                borderWidth: 1, borderColor: "rgba(192,132,252,0.2)", alignItems: "center", gap: 5 }}>
-              <Text style={{ fontSize: 22 }}>🏆</Text>
-              <Text style={{ color: "#c084fc", fontWeight: "700", fontSize: 11, textAlign: "center" }}>Classement</Text>
-            </Pressable>
-            <Pressable onPress={() => router.push("/(app)/housing")}
-              style={{ flex: 1, backgroundColor: "rgba(96,165,250,0.08)", borderRadius: 14, padding: 14,
-                borderWidth: 1, borderColor: "rgba(96,165,250,0.2)", alignItems: "center", gap: 5 }}>
-              <Text style={{ fontSize: 22 }}>🏠</Text>
-              <Text style={{ color: "#60a5fa", fontWeight: "700", fontSize: 11, textAlign: "center" }}>Logement</Text>
-            </Pressable>
+          {/* ── ALERTES NON LUES ── */}
+          {unreadNotifs.length > 0 && (
+            <View>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <Text style={{ color: L.text, fontSize: 15, fontWeight: "800" }}>
+                  Alertes ({unreadNotifs.length})
+                </Text>
+                <Pressable onPress={markAllRead}>
+                  <Text style={{ color: L.muted, fontSize: 12 }}>Tout lire</Text>
+                </Pressable>
+              </View>
+              <View style={{ gap: 8 }}>
+                {unreadNotifs.slice(0, 4).map((n) => {
+                  const kindColor = n.kind === "social" ? L.blue : n.kind === "reward" ? L.green : n.kind === "work" ? L.gold : L.red;
+                  const kindBg    = n.kind === "social" ? L.blueBg : n.kind === "reward" ? L.greenBg : n.kind === "work" ? L.goldBg : L.redBg;
+                  return (
+                    <View key={n.id} style={{ backgroundColor: L.card, borderRadius: 16, padding: 12,
+                      borderWidth: 1, borderColor: L.border, borderLeftWidth: 3, borderLeftColor: kindColor,
+                      flexDirection: "row", gap: 12, alignItems: "flex-start",
+                      shadowColor: "rgba(0,0,0,0.04)", shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: kindBg,
+                        alignItems: "center", justifyContent: "center" }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: kindColor }} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ color: L.text, fontWeight: "700", fontSize: 14 }} numberOfLines={1}>{n.title}</Text>
+                        <Text style={{ color: L.muted, fontSize: 12, marginTop: 2 }} numberOfLines={2}>{n.body}</Text>
+                      </View>
+                      <Pressable onPress={() => markRead(n.id)}
+                        style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: L.border,
+                          alignItems: "center", justifyContent: "center" }}>
+                        <Ionicons name="checkmark" size={14} color={L.muted} />
+                      </Pressable>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          )}
+
+          {/* ── RACCOURCIS ── */}
+          <View>
+            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 10 }}>
+              NAVIGUER
+            </Text>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+              {[
+                { emoji: "🎯", label: "Missions",    route: "/(app)/missions",    color: L.green,  bg: L.greenBg  },
+                { emoji: "⚡", label: "Progression", route: "/(app)/progression", color: L.primary, bg: L.primaryBg },
+                { emoji: "🏆", label: "Classement",  route: "/(app)/leaderboard", color: L.gold,   bg: L.goldBg   },
+                { emoji: "🏠", label: "Logement",    route: "/(app)/housing",     color: L.teal,   bg: L.tealBg   },
+              ].map((item) => (
+                <Pressable key={item.route} onPress={() => router.push(item.route as never)}
+                  style={{ flex: 1, minWidth: 80, backgroundColor: item.bg, borderRadius: 16,
+                    paddingVertical: 14, alignItems: "center", gap: 5,
+                    borderWidth: 1, borderColor: item.color + "25" }}>
+                  <Text style={{ fontSize: 22 }}>{item.emoji}</Text>
+                  <Text style={{ color: item.color, fontSize: 12, fontWeight: "700" }}>{item.label}</Text>
+                </Pressable>
+              ))}
+            </View>
           </View>
 
         </View>
