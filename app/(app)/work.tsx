@@ -1,3 +1,4 @@
+import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -322,7 +323,7 @@ export default function WorkScreen() {
               <ShiftProgressBar
                 durationSec={workSession.durationSec}
                 color={jobColor}
-                onDone={completeWorkShift}
+                onDone={() => { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); completeWorkShift(); }}
               />
               <View style={{ flexDirection: "row", gap: 20 }}>
                 <Text style={{ color: L.green, fontWeight: "700", fontSize: 13 }}>+{workSession.earnedCoins} cr</Text>

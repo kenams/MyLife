@@ -3,6 +3,8 @@ import { router } from "expo-router";
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, ScrollView, Text, View } from "react-native";
 
+import type { ShiftRecord } from "@/lib/types";
+
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getAvatarVisual } from "@/lib/avatar-visual";
 import { getHousingTier } from "@/lib/housing";
@@ -113,6 +115,77 @@ function AssetCard({ emoji, label, value, color, bg }: {
   );
 }
 
+// ─── WeekBar ─────────────────────────────────────────────────────────────────
+function WeekBar({ value, max, label, isToday }: {
+  value: number; max: number; label: string; isToday?: boolean;
+}) {
+  const BAR_HEIGHT = 64;
+  const barAnim = useRef(new Animated.Value(0)).current;
+  const pct = max > 0 ? value / max : 0;
+  useEffect(() => {
+    Animated.timing(barAnim, {
+      toValue: pct * BAR_HEIGHT,
+      duration: 700,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: false,
+    }).start();
+  }, [pct, barAnim]);
+  return (
+    <View style={{ flex: 1, alignItems: "center", gap: 4 }}>
+      <View style={{ height: BAR_HEIGHT, justifyContent: "flex-end", width: "100%" }}>
+        <Animated.View style={{
+          height: barAnim, borderRadius: 6,
+          backgroundColor: isToday ? L.primary : L.primary + "55",
+        }} />
+      </View>
+      <Text style={{ color: isToday ? L.primary : L.muted, fontSize: 9, fontWeight: isToday ? "800" : "400" }}>
+        {label}
+      </Text>
+      {value > 0 && (
+        <Text style={{ color: L.muted, fontSize: 8 }}>{value}</Text>
+      )}
+    </View>
+  );
+}
+
+function WeekChart({ history }: { history: ShiftRecord[] }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const todayMs = today.getTime();
+  const DAY_SHORT = ["D", "L", "M", "M", "J", "V", "S"];
+
+  const days = Array.from({ length: 7 }, (_, i) => todayMs - (6 - i) * 86_400_000);
+  const earned = days.map((dayStart) =>
+    history
+      .filter((r) => { const t = new Date(r.completedAt).getTime(); return t >= dayStart && t < dayStart + 86_400_000; })
+      .reduce((sum, r) => sum + r.earnedCoins, 0)
+  );
+  const max = Math.max(...earned, 1);
+
+  return (
+    <View style={{ backgroundColor: L.card, borderRadius: 20, padding: 16,
+      shadowColor: L.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+      borderWidth: 1, borderColor: L.border }}>
+      <Text style={{ color: L.text, fontSize: 15, fontWeight: "800", marginBottom: 2 }}>Progression 7 jours</Text>
+      <Text style={{ color: L.muted, fontSize: 11, marginBottom: 16 }}>Revenus journaliers (crédits)</Text>
+      <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 5 }}>
+        {earned.map((val, i) => {
+          const d = new Date(days[i]);
+          return (
+            <WeekBar
+              key={i}
+              value={val}
+              max={max}
+              label={DAY_SHORT[d.getDay()]}
+              isToday={days[i] === todayMs}
+            />
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 // ─── ProfileScreen ────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
   const session          = useGameStore((s) => s.avatar);
@@ -128,6 +201,7 @@ export default function ProfileScreen() {
   const premiumTier      = useGameStore((s) => s.premiumTier);
   const activeBoosts     = useGameStore((s) => s.activeBoosts);
   const moneyTransfers   = useGameStore((s) => s.moneyTransfers);
+  const shiftHistory     = useGameStore((s) => s.shiftHistory);
   const playerXp         = useGameStore((s) => s.playerXp ?? 0);
   const playerLevel      = useGameStore((s) => s.playerLevel ?? 1);
   const housingTier      = useGameStore((s) => s.housingTier);
@@ -295,6 +369,9 @@ export default function ProfileScreen() {
             <StatBar label="Fitness"     value={stats.fitness}         icon="💪"  color={L.green}   bg={L.greenBg} />
             <StatBar label="Discipline"  value={stats.discipline}      icon="🎯"  color={L.primary} bg={L.primaryBg} />
           </View>
+
+          {/* ── PROGRESSION 7 JOURS ── */}
+          <WeekChart history={shiftHistory} />
 
           {/* ── POSSESSIONS ── */}
           <View>

@@ -80,12 +80,13 @@ const CRITICAL_THRESHOLD = 18;
 const WARN_THRESHOLD = 30;
 
 export function useLocalNotifications() {
-  const stats       = useGameStore((s) => s.stats);
-  const avatar      = useGameStore((s) => s.avatar);
-  const session     = useGameStore((s) => s.session);
-  const invitations = useGameStore((s) => s.invitations);
-  const dailyEvent  = useGameStore((s) => s.dailyEvent);
-  const relationships = useGameStore((s) => s.relationships);
+  const stats            = useGameStore((s) => s.stats);
+  const avatar           = useGameStore((s) => s.avatar);
+  const session          = useGameStore((s) => s.session);
+  const invitations      = useGameStore((s) => s.invitations);
+  const dailyEvent       = useGameStore((s) => s.dailyEvent);
+  const relationships    = useGameStore((s) => s.relationships);
+  const missionProgresses = useGameStore((s) => s.missionProgresses);
   const hasPermission    = useRef(false);
   const lastAlertRef     = useRef<Record<string, number>>({});
   const dailyScheduled   = useRef(false);
@@ -187,6 +188,11 @@ export function useLocalNotifications() {
     if (stats.fitness < CRITICAL_THRESHOLD)        alert("fitness-low",         "Forme physique en berne",     "Une marche ou 20 min de sport.");
     if (stats.health < 30)                         alert("health-low",          "Santé dégradée",              "Mange sainement, dors suffisamment.");
     if (stats.discipline < CRITICAL_THRESHOLD)     alert("discipline-low",      "Discipline en chute",         "Reprends une tâche simple maintenant.");
+    // Repas
+    if (stats.lastMealAt) {
+      const hoursSince = (now - new Date(stats.lastMealAt).getTime()) / 3_600_000;
+      if (hoursSince > 7) alert("meal-7h", "Dernier repas il y a +7h", "Prends le temps de manger quelque chose.");
+    }
     // Finances
     if (stats.money < 30)                          alert("money-low",           "Budget critique",             "Moins de 30 crédits. Travaille dès que possible.");
     else if (stats.money < 60)                     alert("money-moderate",      "Budget limité",               "60 crédits — pense à planifier tes dépenses.");
@@ -199,4 +205,20 @@ export function useLocalNotifications() {
     if (stats.socialRankScore >= 80)               alert("rank-high",           "Rang social élevé",           "Tu attires maintenant des profils de qualité.");
     if (stats.attractiveness >= 75)                alert("attractiveness-high", "Image au sommet",             "Cohérence, forme et hygiène font leur effet.");
   }, [stats]);
+
+  // Missions claimables
+  useEffect(() => {
+    if (IS_WEB || !hasPermission.current) return;
+    const claimable = missionProgresses.filter((m) => m.status === "completed");
+    if (claimable.length === 0) return;
+    const now = Date.now();
+    if (now - (lastAlertRef.current["missions-claimable"] ?? 0) > 30 * 60 * 1000) {
+      lastAlertRef.current["missions-claimable"] = now;
+      void scheduleLocalNotification(
+        `${claimable.length} mission${claimable.length > 1 ? "s" : ""} à réclamer`,
+        "Va dans Missions pour récupérer tes récompenses.",
+        1
+      );
+    }
+  }, [missionProgresses]);
 }

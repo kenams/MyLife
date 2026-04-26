@@ -2,7 +2,9 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
+import { View } from "react-native";
 
+import { DuskOverlay } from "@/components/dusk-overlay";
 import { useAuthListener } from "@/hooks/use-auth-listener";
 
 function AuthGate() {
@@ -15,9 +17,12 @@ export default function RootLayout() {
 
   return (
     <QueryClientProvider client={queryClient}>
-      <StatusBar style="light" />
-      <AuthGate />
-      <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
+      <View style={{ flex: 1 }}>
+        <StatusBar style="light" />
+        <AuthGate />
+        <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
+        <DuskOverlay />
+      </View>
     </QueryClientProvider>
   );
 }

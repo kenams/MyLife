@@ -1,4 +1,5 @@
 "use client";
+import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Modal, Pressable, ScrollView, Text, View } from "react-native";
@@ -172,16 +173,28 @@ function DailyEventModal({ visible, onClose }: { visible: boolean; onClose: () =
 function NeedTile({ emoji, label, value, color, bg }: {
   emoji: string; label: string; value: number; color: string; bg: string;
 }) {
-  const pct     = Math.max(0, Math.min(100, value));
-  const urgent  = pct < 25;
-  const warn    = pct < 45;
+  const pct          = Math.max(0, Math.min(100, value));
+  const urgent       = pct < 25;
+  const warn         = pct < 45;
   const displayColor = urgent ? L.red : warn ? L.gold : color;
   const displayBg    = urgent ? L.redBg : warn ? L.goldBg : bg;
 
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!urgent) { pulse.setValue(1); return; }
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.035, duration: 650, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1,     duration: 650, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [urgent, pulse]);
+
   return (
-    <View style={{ flex: 1, minWidth: 130, backgroundColor: displayBg, borderRadius: 18,
+    <Animated.View style={{ flex: 1, minWidth: 130, backgroundColor: displayBg, borderRadius: 18,
       padding: 14, borderWidth: 1, borderColor: displayColor + "25", gap: 8,
-      shadowColor: displayColor, shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }}>
+      shadowColor: displayColor, shadowOpacity: urgent ? 0.14 : 0.06, shadowRadius: 8,
+      shadowOffset: { width: 0, height: 2 }, transform: [{ scale: pulse }] }}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Text style={{ fontSize: 20 }}>{emoji}</Text>
         <Text style={{ color: displayColor, fontSize: 20, fontWeight: "900" }}>{Math.round(pct)}</Text>
@@ -190,7 +203,7 @@ function NeedTile({ emoji, label, value, color, bg }: {
       <View style={{ height: 6, borderRadius: 3, backgroundColor: displayColor + "20", overflow: "hidden" }}>
         <View style={{ height: 6, borderRadius: 3, width: `${pct}%` as `${number}%`, backgroundColor: displayColor }} />
       </View>
-    </View>
+    </Animated.View>
   );
 }
 
@@ -200,8 +213,12 @@ function ActionButton({ action, onPress, disabled, primary }: {
 }) {
   const color = CAT_COLOR[action.category];
   const bg    = CAT_BG[action.category];
+  function handlePress() {
+    void Haptics.impactAsync(primary ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
+    onPress();
+  }
   return (
-    <Pressable onPress={onPress} disabled={disabled}
+    <Pressable onPress={handlePress} disabled={disabled}
       style={{ flex: 1, minWidth: 145, borderRadius: 18, padding: 14, gap: 8,
         backgroundColor: primary ? color : bg,
         borderWidth: 1, borderColor: primary ? color : color + "30",
