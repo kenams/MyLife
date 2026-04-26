@@ -371,7 +371,7 @@ function createTestAccountState(preset: TestAccountPreset = "balanced") {
   const runtime = createInitialRuntime();
   const createdAt = nowIso();
   const avatar: AvatarProfile = {
-    displayName: "Kenan",
+    displayName: "Kah",
     ageRange: "26-30",
     gender: "Homme",
     originStyle: "Mediterranee",

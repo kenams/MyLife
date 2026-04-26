@@ -8,7 +8,7 @@ export default function AvatarScreen() {
   const completeAvatar = useGameStore((s) => s.completeAvatar);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#f5f7fa" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: "#e8edf5" }}>
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 40 }} showsVerticalScrollIndicator={false}>
 
         <View style={{ alignItems: "center", gap: 8, marginBottom: 24 }}>
@@ -20,7 +20,7 @@ export default function AvatarScreen() {
             <Text style={{ fontSize: 34 }}>🧬</Text>
           </View>
           <Text style={{ color: "#1e2a3a", fontWeight: "900", fontSize: 24 }}>Crée ton identité</Text>
-          <Text style={{ color: "#94a3b8", fontSize: 13, textAlign: "center", lineHeight: 18 }}>
+          <Text style={{ color: "#8fa3b8", fontSize: 13, textAlign: "center", lineHeight: 18 }}>
             Ton avatar définit ton rythme, ton image et ta façon d'entrer dans le monde.
           </Text>
         </View>

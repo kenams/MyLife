@@ -12,8 +12,8 @@ import { getActionTimeScore, useTimeContext } from "@/lib/time-context";
 import { useGameStore } from "@/stores/game-store";
 
 const L = {
-  bg: "#f5f7fa", card: "#ffffff", border: "#e8edf5",
-  text: "#1e2a3a", textSoft: "#4a5568", muted: "#94a3b8",
+  bg: "#e8edf5", card: "#f0f4fa", border: "#ccd4e0",
+  text: "#1e2a3a", textSoft: "#4a5568", muted: "#8fa3b8",
   primary: "#6366f1", primaryBg: "#eef2ff",
   green: "#10b981", greenBg: "#ecfdf5",
   gold: "#f59e0b", goldBg: "#fffbeb",

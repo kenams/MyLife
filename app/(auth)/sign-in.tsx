@@ -5,8 +5,8 @@ import { Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from "reac
 import { useGameStore } from "@/stores/game-store";
 
 const L = {
-  bg: "#f5f7fa", card: "#ffffff", border: "#e8edf5",
-  text: "#1e2a3a", textSoft: "#4a5568", muted: "#94a3b8",
+  bg: "#e8edf5", card: "#f0f4fa", border: "#ccd4e0",
+  text: "#1e2a3a", textSoft: "#4a5568", muted: "#8fa3b8",
   primary: "#6366f1", primaryBg: "#eef2ff",
   green: "#10b981", greenBg: "#ecfdf5",
   red: "#ef4444", redBg: "#fef2f2",
@@ -199,7 +199,7 @@ export default function SignInScreen() {
               Compte local simple, sans e-mail ni validation
             </Text>
             <View style={{ gap: 8 }}>
-              <ActionBtn label="Compte simple — Kenan" onPress={() => handleLoadTestAccount("balanced")} />
+              <ActionBtn label="Compte simple — Kah" onPress={() => handleLoadTestAccount("balanced")} />
               <ActionBtn label="🔥 Profil sous pression" onPress={() => handleLoadTestAccount("burnout")} variant="secondary" />
               <ActionBtn label="💕 Profil date & social" onPress={() => handleLoadTestAccount("romantic")} variant="secondary" />
               <ActionBtn label="🌆 Mode test live complet" onPress={() => handleLoadTestAccount("live")} />

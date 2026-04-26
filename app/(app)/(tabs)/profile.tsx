@@ -13,13 +13,13 @@ import { useGameStore } from "@/stores/game-store";
 
 // ─── Light theme local ────────────────────────────────────────────────────────
 const L = {
-  bg:         "#f5f7fa",
-  card:       "#ffffff",
+  bg:         "#e8edf5",
+  card:       "#f0f4fa",
   cardAlt:    "#f8faff",
   text:       "#1e2a3a",
   textSoft:   "#4a5568",
-  muted:      "#94a3b8",
-  border:     "#e8edf5",
+  muted:      "#8fa3b8",
+  border:     "#ccd4e0",
   primary:    "#6366f1",
   primaryBg:  "#eef2ff",
   green:      "#10b981",

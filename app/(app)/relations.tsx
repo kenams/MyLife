@@ -17,8 +17,8 @@ import type { RelationshipRecord } from "@/lib/types";
 import { useGameStore, worldLocations } from "@/stores/game-store";
 
 const L = {
-  bg: "#f5f7fa", card: "#ffffff", border: "#e8edf5",
-  text: "#1e2a3a", textSoft: "#4a5568", muted: "#94a3b8",
+  bg: "#e8edf5", card: "#f0f4fa", border: "#ccd4e0",
+  text: "#1e2a3a", textSoft: "#4a5568", muted: "#8fa3b8",
   primary: "#6366f1", primaryBg: "#eef2ff",
   green: "#10b981", greenBg: "#ecfdf5",
   gold: "#f59e0b", goldBg: "#fffbeb",
@@ -30,7 +30,7 @@ const L = {
 const QUALITY_COLOR: Record<NonNullable<RelationshipRecord["quality"]>, string> = {
   inspirante: "#10b981",
   stable:     "#3b82f6",
-  neutre:     "#94a3b8",
+  neutre:     "#8fa3b8",
   fatigante:  "#f59e0b",
   toxique:    "#ef4444",
 };

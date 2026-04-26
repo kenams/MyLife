@@ -163,7 +163,7 @@ export default function WelcomeScreen() {
 
         {/* Sign in */}
         <Pressable onPress={() => router.push("/(auth)/sign-in")}>
-          <Text style={{ color: "#94a3b8", fontSize: 13 }}>
+          <Text style={{ color: "#8fa3b8", fontSize: 13 }}>
             Déjà un compte ?{" "}
             <Text style={{ color: slide.color, fontWeight: "700" }}>Se connecter</Text>
           </Text>
