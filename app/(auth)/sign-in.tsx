@@ -2,8 +2,15 @@ import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from "react-native";
 
-import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
+
+const L = {
+  bg: "#f5f7fa", card: "#ffffff", border: "#e8edf5",
+  text: "#1e2a3a", textSoft: "#4a5568", muted: "#94a3b8",
+  primary: "#6366f1", primaryBg: "#eef2ff",
+  green: "#10b981", greenBg: "#ecfdf5",
+  red: "#ef4444", redBg: "#fef2f2",
+};
 
 type Tab = "signin" | "signup" | "reset";
 
@@ -13,11 +20,16 @@ function ActionBtn({ label, onPress, disabled, variant = "primary" }: {
   const isPrimary = variant === "primary";
   return (
     <Pressable onPress={onPress} disabled={disabled}
-      style={{ backgroundColor: isPrimary ? colors.accent + "20" : "rgba(255,255,255,0.06)",
+      style={{
+        backgroundColor: isPrimary ? L.primary : L.bg,
         borderRadius: 14, padding: 14, alignItems: "center",
-        borderWidth: 1.5, borderColor: isPrimary ? colors.accent + "60" : "rgba(255,255,255,0.1)",
-        opacity: disabled ? 0.5 : 1 }}>
-      <Text style={{ color: isPrimary ? colors.accent : colors.muted, fontWeight: "800", fontSize: 14 }}>
+        borderWidth: 1.5, borderColor: isPrimary ? L.primary : L.border,
+        opacity: disabled ? 0.5 : 1,
+        shadowColor: isPrimary ? L.primary : "transparent",
+        shadowOpacity: 0.2, shadowRadius: 8,
+        shadowOffset: { width: 0, height: 3 }, elevation: isPrimary ? 3 : 0,
+      }}>
+      <Text style={{ color: isPrimary ? "#fff" : L.textSoft, fontWeight: "800", fontSize: 14 }}>
         {label}
       </Text>
     </Pressable>
@@ -85,35 +97,42 @@ export default function SignInScreen() {
     router.replace("/(app)/(tabs)/home");
   }
 
+  const inputStyle = {
+    backgroundColor: L.card, borderRadius: 12, paddingHorizontal: 16,
+    paddingVertical: 13, color: L.text, fontSize: 14,
+    borderWidth: 1.5, borderColor: L.border,
+  };
+
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: "#050b18" }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: L.bg }}>
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 60, gap: 20 }} showsVerticalScrollIndicator={false}>
 
         {/* Hero */}
-        <View style={{ alignItems: "center", gap: 10, paddingBottom: 10 }}>
-          <View style={{ width: 72, height: 72, borderRadius: 36,
-            backgroundColor: colors.accent + "20", borderWidth: 2, borderColor: colors.accent + "50",
-            alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 36 }}>🌆</Text>
+        <View style={{ alignItems: "center", gap: 12, paddingBottom: 10 }}>
+          <View style={{ width: 80, height: 80, borderRadius: 40,
+            backgroundColor: L.primaryBg, borderWidth: 2.5, borderColor: L.primary + "40",
+            alignItems: "center", justifyContent: "center",
+            shadowColor: L.primary, shadowOpacity: 0.15, shadowRadius: 16,
+            shadowOffset: { width: 0, height: 4 }, elevation: 4 }}>
+            <Text style={{ fontSize: 38 }}>🌆</Text>
           </View>
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 28, letterSpacing: -0.5 }}>MyLife</Text>
-          <Text style={{ color: colors.muted, fontSize: 13, textAlign: "center" }}>
+          <Text style={{ color: L.text, fontWeight: "900", fontSize: 28, letterSpacing: -0.5 }}>MyLife</Text>
+          <Text style={{ color: L.muted, fontSize: 13, textAlign: "center" }}>
             Entre dans ton espace de vie simulé
           </Text>
         </View>
 
         {/* Tabs */}
-        <View style={{ flexDirection: "row", gap: 6, backgroundColor: "rgba(255,255,255,0.05)",
-          borderRadius: 14, padding: 4 }}>
+        <View style={{ flexDirection: "row", gap: 4, backgroundColor: L.card,
+          borderRadius: 14, padding: 4, borderWidth: 1, borderColor: L.border }}>
           {(["signin", "signup", "reset"] as Tab[]).map((t) => {
             const active = tab === t;
-            const label = t === "signin" ? "Connexion" : t === "signup" ? "Inscription" : "Mot de passe";
+            const label  = t === "signin" ? "Connexion" : t === "signup" ? "Inscription" : "Mot de passe";
             return (
               <Pressable key={t} onPress={() => { setTab(t); clearMessages(); }}
-                style={{ flex: 1, paddingVertical: 10, borderRadius: 12, alignItems: "center",
-                  backgroundColor: active ? colors.accent + "20" : "transparent",
-                  borderWidth: active ? 1 : 0, borderColor: colors.accent + "60" }}>
-                <Text style={{ color: active ? colors.accent : colors.muted, fontWeight: "700", fontSize: 12 }}>
+                style={{ flex: 1, paddingVertical: 10, borderRadius: 10, alignItems: "center",
+                  backgroundColor: active ? L.primaryBg : "transparent" }}>
+                <Text style={{ color: active ? L.primary : L.muted, fontWeight: "700", fontSize: 12 }}>
                   {label}
                 </Text>
               </Pressable>
@@ -121,44 +140,38 @@ export default function SignInScreen() {
           })}
         </View>
 
-        {/* Form */}
+        {/* Formulaire */}
         <View style={{ gap: 12 }}>
           <TextInput
             value={email} onChangeText={setEmail} placeholder="Adresse e-mail"
-            placeholderTextColor={colors.muted} keyboardType="email-address" autoCapitalize="none"
-            style={{ backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 12, paddingHorizontal: 16,
-              paddingVertical: 13, color: colors.text, fontSize: 14, borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.1)" }}
+            placeholderTextColor={L.muted} keyboardType="email-address" autoCapitalize="none"
+            style={inputStyle}
           />
           {tab !== "reset" && (
             <TextInput
               value={password} onChangeText={setPassword} placeholder="Mot de passe"
-              placeholderTextColor={colors.muted} secureTextEntry autoCapitalize="none"
-              style={{ backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 12, paddingHorizontal: 16,
-                paddingVertical: 13, color: colors.text, fontSize: 14, borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.1)" }}
+              placeholderTextColor={L.muted} secureTextEntry autoCapitalize="none"
+              style={inputStyle}
             />
           )}
           {tab === "signup" && (
             <TextInput
               value={confirm} onChangeText={setConfirm} placeholder="Confirmer le mot de passe"
-              placeholderTextColor={colors.muted} secureTextEntry autoCapitalize="none"
-              style={{ backgroundColor: "rgba(255,255,255,0.06)", borderRadius: 12, paddingHorizontal: 16,
-                paddingVertical: 13, color: colors.text, fontSize: 14, borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.1)" }}
+              placeholderTextColor={L.muted} secureTextEntry autoCapitalize="none"
+              style={inputStyle}
             />
           )}
 
           {error ? (
-            <View style={{ backgroundColor: "rgba(255,100,100,0.1)", borderRadius: 10, padding: 12,
-              borderWidth: 1, borderColor: "rgba(255,100,100,0.25)" }}>
-              <Text style={{ color: "#ff8d8d", fontSize: 13 }}>⚠ {error}</Text>
+            <View style={{ backgroundColor: L.redBg, borderRadius: 10, padding: 12,
+              borderWidth: 1, borderColor: "#fca5a5" }}>
+              <Text style={{ color: L.red, fontSize: 13 }}>⚠ {error}</Text>
             </View>
           ) : null}
           {success ? (
-            <View style={{ backgroundColor: "rgba(56,199,147,0.1)", borderRadius: 10, padding: 12,
-              borderWidth: 1, borderColor: "rgba(56,199,147,0.25)" }}>
-              <Text style={{ color: "#38c793", fontSize: 13 }}>✓ {success}</Text>
+            <View style={{ backgroundColor: L.greenBg, borderRadius: 10, padding: 12,
+              borderWidth: 1, borderColor: "#6ee7b7" }}>
+              <Text style={{ color: L.green, fontSize: 13 }}>✓ {success}</Text>
             </View>
           ) : null}
 
@@ -175,16 +188,18 @@ export default function SignInScreen() {
 
         {/* Démarrage rapide */}
         {tab === "signin" && (
-          <View style={{ backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 18, padding: 16,
-            gap: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
-            <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
+          <View style={{ backgroundColor: L.card, borderRadius: 18, padding: 16,
+            gap: 10, borderWidth: 1, borderColor: L.border,
+            shadowColor: "rgba(99,102,241,0.08)", shadowOpacity: 1,
+            shadowRadius: 12, shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
+            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
               DÉMARRAGE RAPIDE
             </Text>
-            <Text style={{ color: colors.muted, fontSize: 12 }}>
-              Compte local simple, sans e-mail ni validation Gmail
+            <Text style={{ color: L.textSoft, fontSize: 12 }}>
+              Compte local simple, sans e-mail ni validation
             </Text>
             <View style={{ gap: 8 }}>
-              <ActionBtn label="Compte simple - Kenan" onPress={() => handleLoadTestAccount("balanced")} />
+              <ActionBtn label="Compte simple — Kenan" onPress={() => handleLoadTestAccount("balanced")} />
               <ActionBtn label="🔥 Profil sous pression" onPress={() => handleLoadTestAccount("burnout")} variant="secondary" />
               <ActionBtn label="💕 Profil date & social" onPress={() => handleLoadTestAccount("romantic")} variant="secondary" />
               <ActionBtn label="🌆 Mode test live complet" onPress={() => handleLoadTestAccount("live")} />
