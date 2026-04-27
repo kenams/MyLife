@@ -238,8 +238,45 @@ export function createStatsFromAvatar(avatar?: AvatarProfile | null): AvatarStat
   });
 }
 
+const NOTIFICATION_DIGEST_PREFIX = "notification-digest";
+
+export function compactNotificationFeed(items: NotificationItem[], maxUnread = 5) {
+  const unread = items.filter((item) => !item.read);
+  if (unread.length <= maxUnread) return items.slice(0, 30);
+
+  const digestDate = nowIso().slice(0, 10);
+  const digestId = `${NOTIFICATION_DIGEST_PREFIX}-${digestDate}`;
+  const existingDigest = items.find((item) => item.id === digestId);
+  const keptUnread = unread.slice(0, Math.max(1, maxUnread - 1));
+  const mutedUnread = unread.slice(keptUnread.length);
+  const mutedIds = new Set(mutedUnread.map((item) => item.id));
+  const importantTitles = keptUnread.map((item) => item.title).slice(0, 2).join(" / ");
+  const digest: NotificationItem = {
+    id: digestId,
+    kind: "tip",
+    title: "Resume des alertes",
+    body: `${mutedUnread.length} alertes regroupees. Priorite: ${importantTitles || "ouvre le centre de notifications"}.`,
+    createdAt: existingDigest?.createdAt ?? nowIso(),
+    read: false
+  };
+
+  const compacted = items
+    .filter((item) => item.id !== digestId)
+    .map((item) => mutedIds.has(item.id) ? { ...item, read: true } : item);
+
+  return [digest, ...compacted].slice(0, 30);
+}
+
 export function appendNotification(items: NotificationItem[], notification: NotificationItem) {
-  return [notification, ...items].slice(0, 30);
+  const recentDuplicate = items.some((item) =>
+    !item.read &&
+    item.kind === notification.kind &&
+    item.title === notification.title &&
+    Math.abs(new Date(notification.createdAt).getTime() - new Date(item.createdAt).getTime()) < 6 * 60 * 60 * 1000
+  );
+
+  if (recentDuplicate) return compactNotificationFeed(items);
+  return compactNotificationFeed([notification, ...items].slice(0, 30));
 }
 
 export function appendFeed(items: LifeFeedItem[], item: LifeFeedItem) {
@@ -349,7 +386,7 @@ export function buildAutomaticNotifications(stats: AvatarStats, existing: Notifi
     });
   }
 
-  return notifications.slice(0, 30);
+  return compactNotificationFeed(notifications.slice(0, 30));
 }
 
 // ─── Resident Social Feed ────────────────────────────────────────────────────

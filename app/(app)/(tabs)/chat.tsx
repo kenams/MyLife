@@ -8,7 +8,7 @@ import { getAvatarVisual, getNpcVisual } from "@/lib/avatar-visual";
 import { activities, starterResidents } from "@/lib/game-engine";
 import { getBestProfileMatches } from "@/lib/profile-matching";
 import { buildSocialHubSnapshot, relationshipScore } from "@/lib/social-hub";
-import type { Conversation, NpcState, Room, RoomMessage } from "@/lib/types";
+import type { Conversation, DatePlan, InvitationRecord, LoveRoomMomentKind, NpcState, RelationshipRecord, Room, RoomMessage } from "@/lib/types";
 import { useGameStore } from "@/stores/game-store";
 
 // ─── Light theme ──────────────────────────────────────────────────────────────
@@ -38,10 +38,24 @@ const L = {
   shadow:    "rgba(99,102,241,0.08)",
 };
 
-type Tab = "contacts" | "rooms" | "lounge";
+type Tab = "contacts" | "rooms" | "lounge" | "love";
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
 const WIZZ_TOKEN = "[[WIZZ]]";
+const WORLD_ROOM_IDS = [
+  "room-lounge-global",
+  "room-city-neo-paris",
+  "room-city-neo-newyork",
+  "room-city-neo-tokyo",
+  "room-city-neo-london",
+  "room-city-neo-bamako",
+];
+const LOVE_MOMENTS: Array<{ key: LoveRoomMomentKind; label: string; icon: IconName }> = [
+  { key: "question", label: "Question", icon: "heart" },
+  { key: "challenge", label: "Defi", icon: "sparkles" },
+  { key: "memory", label: "Souvenir", icon: "bookmark" },
+  { key: "vibe", label: "Ambiance", icon: "musical-notes" },
+];
 const EMOJI_SHORTCUTS = ["😀", "😂", "😍", "🔥", "👍", "👀", "💯", "✨", "☕", "🎮", "💬", "❤️"];
 const REACTION_SHORTCUTS = ["❤️", "😂", "👍", "🔥"];
 const MSN_NUDGES = ["Tu es là ?", "Réponds quand tu peux.", "Je viens d'arriver.", "On se capte dans une room ?"];
@@ -50,6 +64,31 @@ function relColor(score: number) {
   if (score >= 60) return L.green;
   if (score >= 35) return L.gold;
   return L.muted;
+}
+
+function loveRoomAccess(input: {
+  residentId: string;
+  relationships: RelationshipRecord[];
+  conversations: Conversation[];
+  invitations: InvitationRecord[];
+  datePlans: DatePlan[];
+}) {
+  const resident = starterResidents.find((item) => item.id === input.residentId);
+  const relationship = input.relationships.find((item) => item.residentId === input.residentId);
+  const conversation = input.conversations.find((item) => item.kind === "direct" && item.peerId === input.residentId);
+  const messageCount = conversation?.messages.filter((item) => item.kind === "message").length ?? 0;
+  const acceptedInvitations = input.invitations.filter((item) =>
+    item.residentId === input.residentId && item.status === "accepted"
+  ).length;
+  const dateSignal = input.datePlans.filter((item) =>
+    item.residentId === input.residentId && (item.status === "accepted" || item.status === "completed")
+  ).length;
+  const score = relationship?.score ?? 0;
+  const romantic = resident?.lookingFor.includes("relation amoureuse") ?? false;
+  const progress = Math.min(100, Math.round(score * 0.72 + Math.min(10, messageCount) * 3 + acceptedInvitations * 8 + dateSignal * 12));
+  const unlocked = romantic && score >= 58 && (progress >= 76 || relationship?.status === "crush" || relationship?.status === "relation");
+
+  return { resident, relationship, score, progress, romantic, unlocked, messageCount, acceptedInvitations, dateSignal };
 }
 
 function Dot({ online }: { online: boolean }) {
@@ -340,9 +379,16 @@ function MemberRail({ me, online, invite }: { me: string; online: NpcState[]; in
   );
 }
 
-function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcState | null; back: () => void }) {
+function ConversationView({ conv, npc, back, openRoom }: { conv: Conversation; npc: NpcState | null; back: () => void; openRoom: (roomId: string) => void }) {
   const sendMessage          = useGameStore((x) => x.sendMessage);
   const markConversationRead = useGameStore((x) => x.markConversationRead);
+  const sendInvitation       = useGameStore((x) => x.sendInvitation);
+  const proposeDate          = useGameStore((x) => x.proposeDate);
+  const openLoveRoom         = useGameStore((x) => x.openLoveRoom);
+  const relationships        = useGameStore((x) => x.relationships);
+  const conversations        = useGameStore((x) => x.conversations);
+  const invitations          = useGameStore((x) => x.invitations);
+  const datePlans            = useGameStore((x) => x.datePlans);
   const avatar               = useGameStore((x) => x.avatar);
   const session              = useGameStore((x) => x.session);
   const [input, setInput]    = useState("");
@@ -354,6 +400,9 @@ function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcSta
   const name                 = info?.name ?? conv.title;
   const me                   = avatar?.displayName ?? "Moi";
   const myId                 = session?.email ?? "local";
+  const loveAccess           = npc
+    ? loveRoomAccess({ residentId: npc.id, relationships, conversations, invitations, datePlans })
+    : null;
 
   useEffect(() => {
     markConversationRead(conv.id);
@@ -375,6 +424,25 @@ function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcSta
     startTyping(clean.includes(WIZZ_TOKEN) ? 520 : 1050);
   }
   function send() { post(input); setInput(""); }
+  function inviteCoffee() {
+    if (!npc) return post("Tu veux faire une activite ensemble ?");
+    sendInvitation(npc.id, "coffee-meetup");
+    post("Je t'ai envoye une invitation cafe.");
+  }
+  function proposeCoffeeDate() {
+    if (!npc) return post("On se fait un rendez-vous simple ?");
+    proposeDate(npc.id, name, "coffee");
+    post("Je te propose un rendez-vous cafe, simple et public.");
+  }
+  function enterLoveRoom() {
+    if (!npc) return;
+    const result = openLoveRoom(npc.id);
+    if (result.ok && result.room) {
+      openRoom(result.room.id);
+      return;
+    }
+    post(result.error ?? "La Love Room n'est pas encore debloquee.");
+  }
   function sendWizz() { post(`${WIZZ_TOKEN} Wizz ! ${name.split(" ")[0]}, tu es là ?`); }
 
   return (
@@ -388,7 +456,9 @@ function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcSta
           color={npc?.presenceOnline ? L.green : L.muted} />}
       >
         <Tools actions={[
-          { label: "Inviter",    icon: "person-add",     active: true, onPress: () => post("Tu veux me rejoindre dans une room ?") },
+          { label: "Inviter",    icon: "person-add",     active: true, onPress: inviteCoffee },
+          { label: "Date",       icon: "calendar",       onPress: proposeCoffeeDate },
+          { label: "Love",       icon: "heart",          active: loveAccess?.unlocked, onPress: enterLoveRoom },
           { label: "Fichiers",   icon: "folder-open",    onPress: () => post("Je t'envoie une idée à tester.") },
           { label: "Vidéo",      icon: "videocam",       onPress: () => post("On lance un appel vidéo ?") },
           { label: "Wizz",       icon: "flash",          active: true, onPress: sendWizz },
@@ -403,6 +473,15 @@ function ConversationView({ conv, npc, back }: { conv: Conversation; npc: NpcSta
           action="Room"
           onPress={() => post("Je crée une room, tu me rejoins ?")}
         />
+        {loveAccess && (
+          <InfoPanel
+            icon={loveAccess.unlocked ? "heart" : "lock-closed"}
+            title={loveAccess.unlocked ? "Love Room disponible" : "Love Room verrouillee"}
+            body={`Affinite ${loveAccess.progress}% - ${loveAccess.messageCount} messages. ${loveAccess.unlocked ? "Espace prive debloque." : "Parle, invite et fais des activites pour l'ouvrir."}`}
+            action={loveAccess.unlocked ? "Entrer" : `${loveAccess.progress}%`}
+            onPress={loveAccess.unlocked ? enterLoveRoom : () => post("On doit encore monter notre affinite avant la Love Room.")}
+          />
+        )}
         <ScrollView ref={scroll} style={{ flex: 1 }}
           contentContainerStyle={s.msgList} showsVerticalScrollIndicator={false}>
           {conv.messages.length === 0 && (
@@ -441,6 +520,7 @@ function RoomView({ id, name, back }: { id: string; name: string; back: () => vo
   const avatar           = useGameStore((x) => x.avatar);
   const session          = useGameStore((x) => x.session);
   const inviteNpcToRoom  = useGameStore((x) => x.inviteNpcToRoom);
+  const playLoveRoomMoment = useGameStore((x) => x.playLoveRoomMoment);
   const room             = rooms.find((r) => r.id === id);
   const online           = npcs.filter((n) => n.presenceOnline);
   const me               = avatar?.displayName ?? "Moi";
@@ -469,6 +549,10 @@ function RoomView({ id, name, back }: { id: string; name: string; back: () => vo
     startTyping(clean.includes(WIZZ_TOKEN) ? 600 : 1200);
   }
   function send() { post(input); setInput(""); }
+  function playMoment(moment: LoveRoomMomentKind) {
+    playLoveRoomMoment(id, moment);
+    startTyping(900);
+  }
   function sendWizz() { post(`${WIZZ_TOKEN} Wizz collectif ! Qui est là ?`); }
 
   return (
@@ -485,6 +569,18 @@ function RoomView({ id, name, back }: { id: string; name: string; back: () => vo
           { label: "Activités",  icon: "sparkles",   onPress: () => post("Activité de groupe ?") },
           { label: "Jeux",       icon: "game-controller", onPress: () => post("Mini-jeu social ?") },
         ]} />
+        {room?.kind === "love" && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}
+            style={s.invites} contentContainerStyle={{ gap: 10, padding: 12 }}>
+            {LOVE_MOMENTS.map((moment) => (
+              <Pressable key={moment.key} onPress={() => playMoment(moment.key)}
+                style={[s.loveMoment, { borderColor: L.pink + "30", backgroundColor: L.pinkBg }]}>
+                <Ionicons name={moment.icon} size={16} color={L.pink} />
+                <Text style={[s.loveMomentText, { color: L.pink }]}>{moment.label}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
         {invite && (
           <ScrollView horizontal showsHorizontalScrollIndicator={false}
             style={s.invites} contentContainerStyle={{ gap: 12, padding: 12 }}>
@@ -559,13 +655,14 @@ function ContactRow({ c, npc, score, open }: { c: Conversation; npc: NpcState | 
 
 function RoomRow({ room, last, open }: { room: Room; last?: RoomMessage; open: () => void }) {
   const prv = room.kind === "private";
+  const love = room.kind === "love";
   return (
-    <Pressable onPress={open} style={[s.rowCard, prv && { backgroundColor: L.purpleBg, borderColor: L.purple + "30" }]}>
+    <Pressable onPress={open} style={[s.rowCard, prv && { backgroundColor: L.purpleBg, borderColor: L.purple + "30" }, love && { backgroundColor: L.pinkBg, borderColor: L.pink + "30" }]}>
       <View style={[s.roomIcon, {
-        backgroundColor: prv ? L.purpleBg : L.primaryBg,
-        borderColor: prv ? L.purple + "35" : L.primary + "30"
+        backgroundColor: love ? L.pinkBg : prv ? L.purpleBg : L.primaryBg,
+        borderColor: love ? L.pink + "35" : prv ? L.purple + "35" : L.primary + "30"
       }]}>
-        <Ionicons name={prv ? "lock-closed" : "people"} size={20} color={prv ? L.purple : L.primary} />
+        <Ionicons name={love ? "heart" : prv ? "lock-closed" : "people"} size={20} color={love ? L.pink : prv ? L.purple : L.primary} />
       </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <View style={s.rowTop}>
@@ -590,8 +687,10 @@ export default function ChatScreen() {
   const createPrivateRoom     = useGameStore((x) => x.createPrivateRoom);
   const respondRoomInvite     = useGameStore((x) => x.respondRoomInvite);
   const invitations           = useGameStore((x) => x.invitations);
+  const datePlans             = useGameStore((x) => x.datePlans);
   const respondInvitation     = useGameStore((x) => x.respondInvitation);
   const startDirectConversation = useGameStore((x) => x.startDirectConversation);
+  const openLoveRoom          = useGameStore((x) => x.openLoveRoom);
   const avatar                = useGameStore((x) => x.avatar);
   const roomMessages          = useGameStore((x) => x.roomMessages);
   const [tab, setTab]         = useState<Tab>("contacts");
@@ -612,6 +711,10 @@ export default function ChatScreen() {
       conv={openConv}
       npc={openConv.peerId ? npcs.find((n) => n.id === openConv.peerId) ?? null : null}
       back={() => setConvId(null)}
+      openRoom={(id) => {
+        setConvId(null);
+        setRoomId(id);
+      }}
     />
   );
   if (roomId) {
@@ -629,11 +732,23 @@ export default function ChatScreen() {
   const unread         = hub.unreadTotal;
   const loungeLast     = hub.loungeLastMessage;
   const topMatches     = getBestProfileMatches(avatar, starterResidents, relationships).slice(0, 3);
+  const worldRooms     = WORLD_ROOM_IDS
+    .map((id) => rooms.find((room) => room.id === id))
+    .filter((room): room is Room => Boolean(room));
+  const loveCandidates = starterResidents
+    .filter((resident) => resident.lookingFor.includes("relation amoureuse"))
+    .map((resident) => ({
+      resident,
+      access: loveRoomAccess({ residentId: resident.id, relationships, conversations, invitations, datePlans }),
+      room: rooms.find((room) => room.id === `love-${resident.id}`)
+    }))
+    .sort((a, b) => b.access.progress - a.access.progress);
 
   const tabMeta: Record<Tab, { label: string; icon: IconName; badge: number }> = {
     contacts: { label: "Contacts", icon: "person",  badge: unread          },
     rooms:    { label: "Rooms",    icon: "people",   badge: pendingRooms.length },
-    lounge:   { label: "Ville",    icon: "globe",    badge: 0               },
+    lounge:   { label: "Monde",    icon: "globe",    badge: 0               },
+    love:     { label: "Love",     icon: "heart",    badge: loveCandidates.filter((item) => item.access.unlocked).length },
   };
 
   function makeRoom() {
@@ -644,6 +759,10 @@ export default function ChatScreen() {
     const existing = conversations.find((c) => c.kind === "direct" && c.peerId === residentId);
     startDirectConversation(residentId, residentName);
     setConvId(existing?.id ?? `dm-${residentId}`);
+  }
+  function enterLove(residentId: string) {
+    const result = openLoveRoom(residentId);
+    if (result.ok && result.room) setRoomId(result.room.id);
   }
 
   return (
@@ -706,7 +825,7 @@ export default function ChatScreen() {
 
         {/* Tabs */}
         <View style={s.tabs}>
-          {(["contacts", "rooms", "lounge"] as Tab[]).map((key) => (
+          {(["contacts", "rooms", "lounge", "love"] as Tab[]).map((key) => (
             <Pressable key={key} onPress={() => setTab(key)} style={[s.tab, tab === key && s.tabActive]}>
               <Ionicons name={tabMeta[key].icon} size={14} color={tab === key ? L.primary : L.muted} />
               <Text style={{ color: tab === key ? L.primary : L.muted, fontSize: 12, fontWeight: "800" }}>
@@ -769,7 +888,7 @@ export default function ChatScreen() {
               <Text style={s.section}>EN LIGNE</Text>
               {hub.friendOnline.length === 0 && (
                 <InfoPanel icon="person" title="Aucun proche en ligne" body="Les contacts restent accessibles dans Messages. Rejoins le lounge pour trouver du monde."
-                  action="Lounge" onPress={() => setRoomId("room-lounge-global")} />
+                  action="Monde" onPress={() => setRoomId("room-lounge-global")} />
               )}
               {hub.friendOnline.map((npc) => {
                 const c = conversations.find((conv) => conv.peerId === npc.id);
@@ -826,8 +945,8 @@ export default function ChatScreen() {
                   <Ionicons name="globe" size={26} color={L.teal} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.loungeTitle}>Lounge ville</Text>
-                  <Text style={s.loungeBody}>Chat public, residents, rooms et présence live.</Text>
+                  <Text style={s.loungeTitle}>Chat Monde</Text>
+                  <Text style={s.loungeBody}>Global, villes, rooms et presence live.</Text>
                   {loungeLast && (
                     <Text style={s.loungeLast} numberOfLines={2}>{loungeLast.authorName}: {loungeLast.body}</Text>
                   )}
@@ -837,6 +956,10 @@ export default function ChatScreen() {
                   <Text style={s.loungeBtnText}>Entrer</Text>
                 </Pressable>
               </View>
+              <Text style={s.section}>SALONS MONDE</Text>
+              {worldRooms.map((room) => (
+                <RoomRow key={room.id} room={room} last={(roomMessages[room.id] ?? []).at(-1)} open={() => setRoomId(room.id)} />
+              ))}
               <Text style={s.section}>DERNIERS MESSAGES</Text>
               {(roomMessages["room-lounge-global"] ?? []).slice(-10).reverse().map((m) =>
                 m.kind === "system" ? null : (
@@ -846,6 +969,51 @@ export default function ChatScreen() {
                   </View>
                 )
               )}
+            </View>
+          )}
+
+          {tab === "love" && (
+            <View>
+              <View style={s.loveHero}>
+                <View style={s.loveHeroIcon}>
+                  <Ionicons name="heart" size={24} color={L.pink} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.loveHeroTitle}>Love Rooms</Text>
+                  <Text style={s.loveHeroBody}>
+                    Acces bloque tant qu'il n'y a pas assez d'affinite, de messages reciproques et d'activites partagees.
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={s.section}>ACCES</Text>
+              {loveCandidates.map(({ resident, access, room }) => {
+                const npc = npcs.find((item) => item.id === resident.id) ?? null;
+                return (
+                  <View key={resident.id} style={[s.loveCandidate, access.unlocked && { borderColor: L.pink + "40", backgroundColor: L.pinkBg }]}>
+                    {npc ? <NpcFace npc={npc} size={48} /> : <PlayerFace name={resident.name} size={48} />}
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={s.rowTop}>
+                        <Text style={s.rowTitle} numberOfLines={1}>{resident.name}</Text>
+                        <Text style={{ color: access.unlocked ? L.pink : L.muted, fontSize: 11, fontWeight: "900" }}>
+                          {access.progress}%
+                        </Text>
+                      </View>
+                      <View style={s.loveProgress}>
+                        <View style={{ width: `${access.progress}%`, height: 6, borderRadius: 3, backgroundColor: access.unlocked ? L.pink : L.gold }} />
+                      </View>
+                      <Text style={s.preview} numberOfLines={1}>
+                        {access.unlocked ? "Match relationnel debloque" : `Messages ${access.messageCount} - activites ${access.acceptedInvitations + access.dateSignal}`}
+                      </Text>
+                    </View>
+                    <Pressable
+                      onPress={() => access.unlocked ? enterLove(resident.id) : openMatch(resident.id, resident.name)}
+                      style={[s.loveAction, { backgroundColor: access.unlocked ? L.pink : L.primary }]}>
+                      <Text style={s.loveActionText}>{access.unlocked ? (room ? "Entrer" : "Creer") : "DM"}</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
             </View>
           )}
 
@@ -979,6 +1147,16 @@ const s = StyleSheet.create({
   loungeBtnText:      { color: "#fff", fontSize: 12, fontWeight: "800" },
   publicMsg:          { padding: 11, borderRadius: 12, backgroundColor: L.card, borderWidth: 1, borderColor: L.border, marginBottom: 8 },
   publicAuthor:       { color: L.primary, fontSize: 11, fontWeight: "800" },
+  loveMoment:         { minWidth: 96, height: 42, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 10 },
+  loveMomentText:     { fontSize: 12, fontWeight: "800" },
+  loveHero:           { backgroundColor: L.pinkBg, borderRadius: 18, borderWidth: 1, borderColor: L.pink + "25", padding: 16, marginBottom: 14, flexDirection: "row", gap: 12, alignItems: "center" },
+  loveHeroIcon:       { width: 48, height: 48, borderRadius: 16, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: L.pink + "25" },
+  loveHeroTitle:      { color: L.text, fontSize: 16, fontWeight: "900" },
+  loveHeroBody:       { color: L.textSoft, fontSize: 12, marginTop: 3, lineHeight: 17 },
+  loveCandidate:      { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 16, backgroundColor: L.card, borderWidth: 1, borderColor: L.border, marginBottom: 8 },
+  loveProgress:       { height: 6, borderRadius: 3, backgroundColor: L.border, overflow: "hidden", marginTop: 5 },
+  loveAction:         { minWidth: 64, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
+  loveActionText:     { color: "#fff", fontSize: 11, fontWeight: "900" },
   infoPanel:          { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 12, marginTop: 8, marginBottom: 6, padding: 12, borderRadius: 14, backgroundColor: L.primaryBg, borderWidth: 1, borderColor: L.primary + "20" },
   infoIcon:           { width: 32, height: 32, borderRadius: 10, backgroundColor: L.primaryBg, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: L.primary + "30" },
   infoTitle:          { color: L.text, fontSize: 12, fontWeight: "800" },

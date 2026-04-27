@@ -1,5 +1,5 @@
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Modal,
@@ -10,8 +10,12 @@ import {
 } from "react-native";
 
 import { VillageMap } from "@/components/village-map";
+import { WorldLiveMap, cityById, cityForNpc } from "@/components/world-live-map";
+import { IsoCityMap } from "@/components/iso-city-map";
+import { getAvatarVisual } from "@/lib/avatar-visual";
 import { buildCityIntel } from "@/lib/city-intelligence";
 import { buildMapEvents, eventByLocation } from "@/lib/map-events";
+import type { NpcState, RelationshipRecord } from "@/lib/types";
 import { useGameStore, worldLocations } from "@/stores/game-store";
 
 // ─── Thème ────────────────────────────────────────────────────────────────────
@@ -172,7 +176,7 @@ function LocationPanel({
   slug, currentSlug, npcs, event, onTravel, onClose,
 }: {
   slug: string; currentSlug: string;
-  npcs: import("@/lib/types").NpcState[];
+  npcs: NpcState[];
   event?: ReturnType<typeof buildMapEvents>[number];
   onTravel: (slug: string) => void;
   onClose: () => void;
@@ -282,7 +286,172 @@ function LocationPanel({
 
 // ─── Écran principal ──────────────────────────────────────────────────────────
 
+const DATE_VENUES = [
+  { slug: "cafe", label: "Cafe", tint: L.green },
+  { slug: "park", label: "Parc", tint: L.green },
+  { slug: "restaurant", label: "Restaurant", tint: L.orange },
+  { slug: "cinema", label: "Cinema", tint: L.blue },
+];
+
+function PersonPanel({
+  npc,
+  relationship,
+  npcRelation,
+  onStartDate,
+  onZoomDistrict,
+  onClose,
+  onInteract,
+}: {
+  npc: NpcState;
+  relationship?: RelationshipRecord;
+  npcRelation?: import("@/lib/types").NpcRelation;
+  onStartDate: (venueSlug: string) => void;
+  onZoomDistrict: () => void;
+  onClose: () => void;
+  onInteract?: () => void;
+}) {
+  const loc = worldLocations.find((item) => item.slug === npc.locationSlug);
+  const score = relationship?.score ?? 0;
+  const scoreColor = score >= 65 ? L.green : score >= 35 ? L.gold : L.blue;
+  const statusLabel = npc.presenceOnline ? "En ligne" : "Recent";
+  const relationLevel = npcRelation?.level ?? "inconnu";
+  const relationScore = npcRelation?.score ?? 0;
+  const RELATION_COLOR: Record<string, string> = {
+    inconnu: L.muted, contact: L.blue, ami: L.green, confiant: L.gold, complice: "#ec4899",
+  };
+
+  return (
+    <View style={{
+      backgroundColor: L.card,
+      borderTopLeftRadius: 28, borderTopRightRadius: 28,
+      borderWidth: 1, borderColor: L.border,
+      padding: 20, paddingBottom: 36, gap: 16,
+      shadowColor: "rgba(0,0,0,0.12)",
+      shadowOpacity: 1, shadowRadius: 24,
+      shadowOffset: { width: 0, height: -4 },
+    }}>
+      <View style={{ width: 40, height: 4, borderRadius: 2,
+        backgroundColor: L.border, alignSelf: "center", marginBottom: 4 }} />
+
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+        <View style={{ width: 56, height: 56, borderRadius: 18,
+          backgroundColor: scoreColor + "22", borderWidth: 2, borderColor: scoreColor,
+          alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: scoreColor, fontSize: 18, fontWeight: "900" }}>
+            {npc.name.slice(0, 2).toUpperCase()}
+          </Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: L.text, fontSize: 19, fontWeight: "900" }}>{npc.name}</Text>
+          <Text style={{ color: L.textSoft, fontSize: 12, fontWeight: "700", marginTop: 2 }}>
+            {statusLabel} - {loc?.name ?? npc.locationSlug}
+          </Text>
+        </View>
+        <View style={{ backgroundColor: scoreColor + "18", borderRadius: 12,
+          paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: scoreColor + "55" }}>
+          <Text style={{ color: scoreColor, fontSize: 13, fontWeight: "900" }}>{score}</Text>
+          <Text style={{ color: L.muted, fontSize: 9, fontWeight: "800" }}>lien</Text>
+        </View>
+      </View>
+
+      {/* NPC Relation bar */}
+      <View style={{ backgroundColor: L.bg, borderRadius: 14, padding: 12,
+        borderWidth: 1, borderColor: L.border, gap: 8 }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
+          <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1 }}>RELATION NPC</Text>
+          <View style={{ backgroundColor: RELATION_COLOR[relationLevel] + "20", borderRadius: 8,
+            paddingHorizontal: 8, paddingVertical: 3 }}>
+            <Text style={{ color: RELATION_COLOR[relationLevel], fontSize: 10, fontWeight: "800" }}>
+              {relationLevel.toUpperCase()}
+            </Text>
+          </View>
+        </View>
+        <View style={{ height: 6, borderRadius: 3, backgroundColor: L.border, overflow: "hidden" }}>
+          <View style={{ height: 6, borderRadius: 3,
+            width: `${relationScore}%` as `${number}%`,
+            backgroundColor: RELATION_COLOR[relationLevel] }} />
+        </View>
+        <Text style={{ color: L.muted, fontSize: 11 }}>
+          {npcRelation?.totalInteractions ?? 0} interaction(s) · Score {relationScore}/100
+        </Text>
+      </View>
+
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        {[
+          { label: "Humeur", value: npc.mood, color: L.green },
+          { label: "Energie", value: npc.energy, color: L.gold },
+          { label: "Niv.", value: npc.level, color: L.primary },
+        ].map((item) => (
+          <View key={item.label} style={{ flex: 1, borderRadius: 14,
+            backgroundColor: L.bg, borderWidth: 1, borderColor: L.border,
+            padding: 10 }}>
+            <Text style={{ color: L.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase" }}>{item.label}</Text>
+            <Text style={{ color: item.color, fontSize: 16, fontWeight: "900", marginTop: 2 }}>{item.value}</Text>
+          </View>
+        ))}
+      </View>
+
+      <View style={{ gap: 8 }}>
+        <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Simuler un RDV</Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+          {DATE_VENUES.map((venue) => (
+            <Pressable
+              key={venue.slug}
+              onPress={() => onStartDate(venue.slug)}
+              style={{
+                flexGrow: 1,
+                minWidth: 130,
+                height: 44,
+                borderRadius: 14,
+                backgroundColor: venue.tint,
+                alignItems: "center",
+                justifyContent: "center",
+              }}>
+              <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "900" }}>{venue.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      <View style={{ flexDirection: "row", gap: 8 }}>
+        {onInteract && (
+          <Pressable onPress={onInteract}
+            style={{ flex: 1, height: 44, borderRadius: 14,
+              backgroundColor: RELATION_COLOR[relationLevel] + "20",
+              borderWidth: 1, borderColor: RELATION_COLOR[relationLevel] + "40",
+              alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: RELATION_COLOR[relationLevel], fontSize: 13, fontWeight: "800" }}>
+              💬 Interagir +5
+            </Text>
+          </Pressable>
+        )}
+        <Pressable onPress={onClose}
+          style={{ flex: 1, height: 44, borderRadius: 14, borderWidth: 1.5,
+            borderColor: L.border, alignItems: "center",
+            justifyContent: "center", backgroundColor: L.bg }}>
+          <Text style={{ color: L.textSoft, fontSize: 13, fontWeight: "700" }}>Fermer</Text>
+        </Pressable>
+      </View>
+      <Pressable onPress={onZoomDistrict}
+        style={{ height: 48, borderRadius: 14,
+          alignItems: "center", justifyContent: "center", backgroundColor: L.primary }}>
+        <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "900" }}>Voir le quartier</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+type SimulatedDateRoute = {
+  id: string;
+  npcName: string;
+  cityId: string;
+  fromSlug: string;
+  venueSlug: string;
+  status: "moving" | "confirmed";
+};
+
 export default function WorldScreen() {
+  const avatar              = useGameStore((s) => s.avatar);
   const stats               = useGameStore((s) => s.stats);
   const currentLocationSlug = useGameStore((s) => s.currentLocationSlug);
   const travelTo            = useGameStore((s) => s.travelTo);
@@ -291,10 +460,30 @@ export default function WorldScreen() {
   const relationships       = useGameStore((s) => s.relationships);
   const housingTier         = useGameStore((s) => s.housingTier);
   const playerLevel         = useGameStore((s) => s.playerLevel);
+  const worldEvent          = useGameStore((s) => s.worldEvent);
+  const worldEventJoined    = useGameStore((s) => s.worldEventJoined ?? false);
+  const joinWorldEvent      = useGameStore((s) => s.joinWorldEvent);
+  const npcRelations        = useGameStore((s) => s.npcRelations ?? []);
+  const updateNpcRelation   = useGameStore((s) => s.updateNpcRelation);
 
   const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
+  const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
+  const [currentCityId, setCurrentCityId] = useState("neo-paris");
+  const [focusedCityId, setFocusedCityId] = useState<string | null>(null);
+  const [districtSlug, setDistrictSlug] = useState<string | null>(null);
+  const [districtCityId, setDistrictCityId] = useState("neo-paris");
+  const [dateRoute, setDateRoute] = useState<SimulatedDateRoute | null>(null);
   const [travelingTo, setTravelingTo]   = useState<string | null>(null);
+  const [mapMode, setMapMode] = useState<"world" | "iso" | "district">("iso");
   const travelAnim = useRef(new Animated.Value(0)).current;
+  const dateTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+
+  useEffect(() => {
+    return () => {
+      dateTimers.current.forEach(clearTimeout);
+      dateTimers.current = [];
+    };
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
@@ -304,7 +493,7 @@ export default function WorldScreen() {
     }, [tickNpcs])
   );
 
-  const npcsByLoc = npcs.reduce<Record<string, import("@/lib/types").NpcState[]>>((acc, n) => {
+  const npcsByLoc = npcs.reduce<Record<string, NpcState[]>>((acc, n) => {
     if (!acc[n.locationSlug]) acc[n.locationSlug] = [];
     acc[n.locationSlug].push(n);
     return acc;
@@ -321,16 +510,55 @@ export default function WorldScreen() {
   const currentLocStyle  = KIND_STYLE[currentLoc?.kind ?? "public"] ?? KIND_STYLE.public;
   const currentNpcs      = npcsByLoc[currentLocationSlug] ?? [];
   const activeNeighborhood = NEIGHBORHOODS.find((n) => n.slugs.includes(currentLocationSlug));
+  const selectedNpc = selectedNpcId ? npcs.find((npc) => npc.id === selectedNpcId) : null;
+  const selectedNpcCity = selectedNpc ? cityForNpc(selectedNpc) : null;
+  const selectedRelationship = selectedNpc
+    ? relationships.find((relationship) => relationship.residentId === selectedNpc.id)
+    : undefined;
 
   const handleTravel = (slug: string) => {
     if (slug === currentLocationSlug) return;
+    const targetCityId = districtSlug ? districtCityId : focusedCityId ?? currentCityId;
     setTravelingTo(slug);
     travelAnim.setValue(0);
     Animated.timing(travelAnim, { toValue: 1, duration: 750, useNativeDriver: false }).start(() => {
       travelTo(slug);
+      setCurrentCityId(targetCityId);
       setTravelingTo(null);
       travelAnim.setValue(0);
     });
+  };
+
+  const handleStartDate = (npc: NpcState, venueSlug: string) => {
+    const id = `date-route-${Date.now()}-${npc.id}`;
+    const city = cityForNpc(npc);
+    dateTimers.current.forEach(clearTimeout);
+    dateTimers.current = [];
+    setSelectedSlug(null);
+    setSelectedNpcId(npc.id);
+    setFocusedCityId(city.id);
+    setDateRoute({
+      id,
+      npcName: npc.name,
+      cityId: city.id,
+      fromSlug: npc.locationSlug,
+      venueSlug,
+      status: "moving",
+    });
+
+    const confirmTimer = setTimeout(() => {
+      travelTo(venueSlug, { cost: 6, energyCost: 4, modeLabel: "RDV" });
+      setCurrentCityId(city.id);
+      setDateRoute((current) =>
+        current?.id === id ? { ...current, status: "confirmed" } : current
+      );
+    }, 1550);
+
+    const clearTimer = setTimeout(() => {
+      setDateRoute((current) => (current?.id === id ? null : current));
+    }, 6500);
+
+    dateTimers.current = [confirmTimer, clearTimer];
   };
 
   const moneyColor = stats.money >= 200 ? L.gold : stats.money >= 80 ? L.green : L.red;
@@ -352,6 +580,8 @@ export default function WorldScreen() {
 
   const travelingLoc   = travelingTo ? worldLocations.find((l) => l.slug === travelingTo) : null;
   const travelBarWidth = travelAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+  const districtLoc = districtSlug ? worldLocations.find((l) => l.slug === districtSlug) : null;
+  const districtCity = cityById(districtCityId);
 
   return (
     <View style={{ flex: 1, backgroundColor: L.bg }}>
@@ -386,12 +616,140 @@ export default function WorldScreen() {
 
         <View style={{ height: 0 }} />
 
-        {/* ── Carte ville ────────────────────────────────────── */}
-        <VillageMap
-          currentSlug={currentLocationSlug}
-          events={mapEvents}
-          onLocationPress={(slug) => setSelectedSlug(slug)}
-        />
+        {/* ── Toggle vues + Carte ───────────────────────────── */}
+        <View style={{ width: "100%", maxWidth: 1180, paddingHorizontal: 12, gap: 10 }}>
+
+          {/* Sélecteur de vue */}
+          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+            {[
+              { id: "iso",      label: "🏙️ Isométrique", desc: "Vue 2.5D" },
+              { id: "world",    label: "🌍 Monde",        desc: "Carte globe" },
+              { id: "district", label: "🗺️ Quartier",     desc: "Vue détail" },
+            ].map((mode) => {
+              const active = mapMode === mode.id || (mode.id === "district" && districtSlug !== null);
+              return (
+                <Pressable
+                  key={mode.id}
+                  onPress={() => {
+                    if (mode.id === "iso") {
+                      setMapMode("iso");
+                      setDistrictSlug(null);
+                    } else if (mode.id === "world") {
+                      setMapMode("world");
+                      setDistrictSlug(null);
+                    } else {
+                      setMapMode("district");
+                      if (!districtSlug) setDistrictSlug(currentLocationSlug);
+                    }
+                  }}
+                  style={{
+                    flex: 1, borderRadius: 14, paddingVertical: 10,
+                    alignItems: "center",
+                    backgroundColor: active ? L.primary : L.card,
+                    borderWidth: 1, borderColor: active ? L.primary : L.border,
+                  }}>
+                  <Text style={{ color: active ? "#fff" : L.textSoft, fontSize: 11, fontWeight: "900" }}>
+                    {mode.label}
+                  </Text>
+                  <Text style={{ color: active ? "rgba(255,255,255,0.6)" : L.muted, fontSize: 9, marginTop: 1 }}>
+                    {mode.desc}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
+          {/* ── Vue ISO ─────────────────────────────────────── */}
+          {(mapMode === "iso" && !districtSlug) && (
+            <View style={{ borderRadius: 20, overflow: "hidden",
+              shadowColor: "#6366f1", shadowOpacity: 0.18, shadowRadius: 24,
+              shadowOffset: { width: 0, height: 4 } }}>
+              <IsoCityMap
+                currentSlug={currentLocationSlug}
+                npcs={npcs}
+                onTravel={(slug) => handleTravel(slug)}
+                onDistrictPress={(slug) => {
+                  setSelectedSlug(slug);
+                }}
+              />
+            </View>
+          )}
+
+          {/* ── Vue Monde ────────────────────────────────────── */}
+          {(mapMode === "world" && !districtSlug) && (
+            <WorldLiveMap
+              currentSlug={currentLocationSlug}
+              avatarName={avatar?.displayName ?? "Vous"}
+              avatarVisual={avatar ? getAvatarVisual(avatar) : null}
+              npcs={npcs}
+              relationships={relationships}
+              events={mapEvents}
+              currentCityId={currentCityId}
+              focusedCityId={focusedCityId}
+              selectedNpcId={selectedNpcId}
+              dateRoute={dateRoute}
+              onCityPress={(cityId) => {
+                setSelectedNpcId(null);
+                setSelectedSlug(null);
+                setFocusedCityId(cityId);
+              }}
+              onBackToWorld={() => {
+                setFocusedCityId(null);
+                setSelectedNpcId(null);
+              }}
+              onLocationPress={(slug) => {
+                setSelectedNpcId(null);
+                setSelectedSlug(slug);
+              }}
+              onPersonPress={(npcId) => {
+                setSelectedSlug(null);
+                setSelectedNpcId(npcId);
+                const npc = npcs.find((item) => item.id === npcId);
+                if (npc) setFocusedCityId(cityForNpc(npc).id);
+              }}
+              onZoomToDistrict={(cityId, slug) => {
+                setSelectedSlug(null);
+                setFocusedCityId(cityId);
+                setDistrictCityId(cityId);
+                setDistrictSlug(slug);
+                setMapMode("district");
+              }}
+            />
+          )}
+
+          {/* ── Vue Quartier ──────────────────────────────────── */}
+          {(mapMode === "district" || districtSlug) && (
+            <View style={{ gap: 10 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Pressable
+                  onPress={() => {
+                    setDistrictSlug(null);
+                    setMapMode("iso");
+                  }}
+                  style={{ height: 38, borderRadius: 12, paddingHorizontal: 14,
+                    alignItems: "center", justifyContent: "center",
+                    backgroundColor: L.primary }}>
+                  <Text style={{ color: "#fff", fontSize: 12, fontWeight: "900" }}>← Iso</Text>
+                </Pressable>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: L.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase" }}>QUARTIER</Text>
+                  <Text numberOfLines={1} style={{ color: L.text, fontSize: 14, fontWeight: "900" }}>
+                    {districtCity.name} — {districtLoc?.name ?? districtSlug ?? currentLocationSlug}
+                  </Text>
+                </View>
+              </View>
+              <VillageMap
+                currentSlug={districtSlug ?? currentLocationSlug}
+                cityName={districtCity.name}
+                events={mapEvents}
+                onLocationPress={(slug) => {
+                  setDistrictSlug(slug);
+                  setSelectedSlug(slug);
+                }}
+              />
+            </View>
+          )}
+        </View>
 
         {/* ── Barre info joueur ──────────────────────────────── */}
         <View style={{ width: "100%", maxWidth: 1180, flexDirection: "row", alignItems: "center", gap: 10,
@@ -482,11 +840,64 @@ export default function WorldScreen() {
           </View>
         )}
 
+        {/* ── Événement Mondial ────────────────────────────── */}
+        {worldEvent && (
+          <Pressable
+            onPress={() => !worldEventJoined && joinWorldEvent()}
+            style={{ width: "100%", maxWidth: 1180, marginTop: 12,
+              backgroundColor: worldEventJoined ? L.card : "#ecfdf5",
+              borderRadius: 18, padding: 14,
+              borderWidth: 1, borderColor: worldEventJoined ? L.border : "#10b981" + "40",
+              flexDirection: "row", alignItems: "center", gap: 12 }}>
+            <View style={{ width: 46, height: 46, borderRadius: 15,
+              backgroundColor: "#10b981" + "20", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 22 }}>{worldEvent.emoji}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: worldEventJoined ? L.muted : "#10b981", fontSize: 10, fontWeight: "800", letterSpacing: 1 }}>
+                🌍 {worldEvent.city.name.toUpperCase()} · ÉVÉNEMENT MONDIAL
+              </Text>
+              <Text numberOfLines={1} style={{ color: L.text, fontSize: 13, fontWeight: "800", marginTop: 1 }}>
+                {worldEvent.title}
+              </Text>
+              <Text style={{ color: L.gold, fontSize: 11, fontWeight: "700", marginTop: 2 }}>
+                +{worldEvent.xpReward} XP · +{worldEvent.moneyReward} cr · +{worldEvent.moodBonus} humeur
+              </Text>
+            </View>
+            {worldEventJoined ? (
+              <View style={{ backgroundColor: L.greenBg, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+                <Text style={{ color: L.green, fontWeight: "800", fontSize: 11 }}>✓ Rejoint</Text>
+              </View>
+            ) : (
+              <View style={{ backgroundColor: L.green, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
+                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 11 }}>Rejoindre</Text>
+              </View>
+            )}
+          </Pressable>
+        )}
+
         {/* ── Lieux utiles ─────────────────────────────────── */}
         <View style={{ width: "100%", maxWidth: 1180, marginTop: 14, gap: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
             <Text style={{ color: L.text, fontSize: 14, fontWeight: "900" }}>Lieux utiles</Text>
-            <Text style={{ color: L.muted, fontSize: 11 }}>Touchez la map ou un lieu</Text>
+            <View style={{ flexDirection: "row", gap: 6 }}>
+              <Pressable onPress={() => router.push("/(app)/world-social" as never)}
+                style={{ flexDirection: "row", alignItems: "center", gap: 4,
+                  backgroundColor: "#020b18", borderRadius: 10,
+                  paddingHorizontal: 10, paddingVertical: 6,
+                  borderWidth: 1, borderColor: "rgba(59,130,246,0.4)" }}>
+                <Text style={{ fontSize: 11 }}>🌍</Text>
+                <Text style={{ color: "#60a5fa", fontSize: 11, fontWeight: "800" }}>Carte</Text>
+              </Pressable>
+              <Pressable onPress={() => router.push("/(app)/world-live" as never)}
+                style={{ flexDirection: "row", alignItems: "center", gap: 4,
+                  backgroundColor: "#120020", borderRadius: 10,
+                  paddingHorizontal: 10, paddingVertical: 6,
+                  borderWidth: 1, borderColor: "#c084fc55" }}>
+                <Text style={{ fontSize: 11 }}>🏙️</Text>
+                <Text style={{ color: "#c084fc", fontSize: 11, fontWeight: "800" }}>Néon</Text>
+              </Pressable>
+            </View>
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 12 }}>
@@ -588,6 +999,42 @@ export default function WorldScreen() {
                 event={mapEventsByLocation[selectedSlug]}
                 onTravel={handleTravel}
                 onClose={() => setSelectedSlug(null)}
+              />
+            )}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
+      <Modal
+        visible={selectedNpc !== null}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedNpcId(null)}>
+        <Pressable
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
+          onPress={() => setSelectedNpcId(null)}>
+          <Pressable onPress={(e) => e.stopPropagation()}>
+            {selectedNpc && (
+              <PersonPanel
+                npc={selectedNpc}
+                relationship={selectedRelationship}
+                npcRelation={npcRelations.find((r) => r.npcId === selectedNpc.id)}
+                onStartDate={(venueSlug) => {
+                  handleStartDate(selectedNpc, venueSlug);
+                  setSelectedNpcId(null);
+                }}
+                onZoomDistrict={() => {
+                  const city = selectedNpcCity ?? cityForNpc(selectedNpc);
+                  setFocusedCityId(city.id);
+                  setDistrictCityId(city.id);
+                  setDistrictSlug(selectedNpc.locationSlug);
+                  setSelectedNpcId(null);
+                }}
+                onInteract={() => {
+                  updateNpcRelation(selectedNpc.id, 5, selectedNpc.name);
+                  setSelectedNpcId(null);
+                }}
+                onClose={() => setSelectedNpcId(null)}
               />
             )}
           </Pressable>

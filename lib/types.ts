@@ -457,7 +457,8 @@ export type StudySessionInput = {
   xpPerSession: number;
 };
 
-export type RoomKind = "public" | "private" | "event" | "secret";
+export type RoomKind = "public" | "private" | "event" | "secret" | "love";
+export type LoveRoomMomentKind = "question" | "challenge" | "memory" | "vibe";
 
 // Room éphémère — messages auto-supprimés après 2h, max 4 personnes
 export type SecretRoom = {
@@ -504,6 +505,24 @@ export type RoomMessage = {
   body: string;
   createdAt: string;
   kind: "message" | "system" | "emote";
+};
+
+// ─── Daily Quests ─────────────────────────────────────────────────────────────
+export type { DailyQuest, QuestCategory } from "@/lib/daily-quests";
+
+// ─── World Events ─────────────────────────────────────────────────────────────
+export type { WorldEvent, WorldEventKind, WorldEventCity } from "@/lib/world-events";
+
+// ─── Inventory ────────────────────────────────────────────────────────────────
+export type { InventoryItem, ShopItem, ItemCategory } from "@/lib/inventory";
+
+// ─── NPC Relations ────────────────────────────────────────────────────────────
+export type NpcRelation = {
+  npcId: string;
+  score: number;          // 0-100
+  level: "inconnu" | "contact" | "ami" | "confiant" | "complice";
+  lastInteractionAt: string;
+  totalInteractions: number;
 };
 
 export type RoomMember = {

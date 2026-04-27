@@ -165,12 +165,14 @@ export function useLocalNotifications() {
     if (IS_WEB || !hasPermission.current) return;
 
     const now = Date.now();
-    const COOLDOWN_MS = 30 * 60 * 1000;
+    const COOLDOWN_MS = 6 * 60 * 60 * 1000;
+    const GLOBAL_COOLDOWN_MS = 4 * 60 * 60 * 1000;
+    if (now - (lastAlertRef.current["global-health-summary"] ?? 0) < GLOBAL_COOLDOWN_MS) return;
+    const candidates: Array<{ key: string; title: string; body: string; delay: number }> = [];
     const canAlert = (key: string) => now - (lastAlertRef.current[key] ?? 0) > COOLDOWN_MS;
     const alert = (key: string, title: string, body: string, delay = 0) => {
       if (!canAlert(key)) return;
-      lastAlertRef.current[key] = now;
-      void scheduleLocalNotification(title, body, delay);
+      candidates.push({ key, title, body, delay });
     };
 
     // Besoins vitaux
@@ -204,6 +206,17 @@ export function useLocalNotifications() {
     // Objectifs imminents
     if (stats.socialRankScore >= 80)               alert("rank-high",           "Rang social élevé",           "Tu attires maintenant des profils de qualité.");
     if (stats.attractiveness >= 75)                alert("attractiveness-high", "Image au sommet",             "Cohérence, forme et hygiène font leur effet.");
+    if (candidates.length === 0) return;
+    const top = candidates[0];
+    lastAlertRef.current["global-health-summary"] = now;
+    candidates.slice(0, 4).forEach((item) => {
+      lastAlertRef.current[item.key] = now;
+    });
+    void scheduleLocalNotification(
+      candidates.length > 1 ? `MyLife - ${candidates.length} signaux regroupes` : top.title,
+      candidates.length > 1 ? `${top.title}: ${top.body}` : top.body,
+      Math.min(top.delay, 2)
+    );
   }, [stats]);
 
   // Missions claimables

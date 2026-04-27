@@ -1,4 +1,3 @@
-import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -11,6 +10,7 @@ import {
 } from "react-native";
 
 import { jobs } from "@/lib/game-engine";
+import { hapticSuccess } from "@/lib/safe-haptics";
 import { getActionTimeScore, useTimeContext } from "@/lib/time-context";
 import type { ShiftRecord } from "@/lib/types";
 import { useGameStore } from "@/stores/game-store";
@@ -323,7 +323,7 @@ export default function WorkScreen() {
               <ShiftProgressBar
                 durationSec={workSession.durationSec}
                 color={jobColor}
-                onDone={() => { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); completeWorkShift(); }}
+                onDone={() => { hapticSuccess(); completeWorkShift(); }}
               />
               <View style={{ flexDirection: "row", gap: 20 }}>
                 <Text style={{ color: L.green, fontWeight: "700", fontSize: 13 }}>+{workSession.earnedCoins} cr</Text>

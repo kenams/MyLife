@@ -612,8 +612,8 @@ function NpcWalker({ def, hour, night, delay }: { def: NpcDef; hour: number; nig
 
   useEffect(() => {
     Animated.loop(Animated.sequence([
-      Animated.timing(bob, { toValue: -2.5, duration: 360, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
-      Animated.timing(bob, { toValue: 0,    duration: 360, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
+      Animated.timing(bob, { toValue: -2.5, duration: 360, useNativeDriver: false, easing: Easing.inOut(Easing.sin) }),
+      Animated.timing(bob, { toValue: 0,    duration: 360, useNativeDriver: false, easing: Easing.inOut(Easing.sin) }),
     ])).start();
   }, [bob]);
 
@@ -712,8 +712,9 @@ function MovingCar({ c, night }: { c: CarDef; night: boolean }) {
 }
 
 // ─── Composant VillageMap ─────────────────────────────────────────────────────
-export function VillageMap({ currentSlug, events = [], onLocationPress }: {
+export function VillageMap({ currentSlug, cityName = "Neo Paris", events = [], onLocationPress }: {
   currentSlug: string;
+  cityName?: string;
   events?: MapEvent[];
   onLocationPress: (slug: string, label: string) => void;
 }) {
@@ -1042,7 +1043,7 @@ export function VillageMap({ currentSlug, events = [], onLocationPress }: {
         <View>
           <Text style={{ color:isNight?"#FCD34D":isDawn?"#F97316":"#1D4ED8", fontSize:15, fontWeight:"900" }}>{timeStr}</Text>
           <Text style={{ color:isNight?"#64748B":"#94A3B8", fontSize:9, fontWeight:"700" }}>
-            {weatherEmoji} {isNight?"Nuit":isDawn?"Aube":"Journée"} · Neo Paris
+            {weatherEmoji} {isNight?"Nuit":isDawn?"Aube":"Journée"} · {cityName}
           </Text>
         </View>
       </View>

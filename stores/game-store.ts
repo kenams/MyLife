@@ -18,7 +18,7 @@ import {
   logSocialTransferToSupabase,
   syncStudyProgressToSupabase
 } from "@/lib/supabase-sync";
-import type { BoostItem, CosmeticItem, MoneyTransfer, NpcState, PremiumTier, Room, RoomInvite, RoomKind, RoomMessage, SecretRoom, SecretMessage, StudyProgress, StudySessionInput } from "@/lib/types";
+import type { BoostItem, CosmeticItem, LoveRoomMomentKind, MoneyTransfer, NpcState, PremiumTier, Room, RoomInvite, RoomKind, RoomMessage, SecretRoom, SecretMessage, StudyProgress, StudySessionInput } from "@/lib/types";
 import { computeWealthScore, getHousingTier, getMaxAffordableHousing, type HousingTierId } from "@/lib/housing";
 import {
   activities,
@@ -32,6 +32,7 @@ import {
   appendNotification,
   buildDatePlan,
   buildAutomaticNotifications,
+  compactNotificationFeed,
   buildResidentVisitMessage,
   checkStreakMilestone,
   createFeedFromAction,
@@ -52,6 +53,13 @@ import {
   updateRelationshipScore
 } from "@/lib/game-engine";
 import { buildAdvice, detectLifePattern, getMomentumState, getSocialRankLabel, RANK_ORDER } from "@/lib/selectors";
+import { checkQuestCompletion, generateDailyQuests, getTodayQuestKey } from "@/lib/daily-quests";
+import type { DailyQuest } from "@/lib/daily-quests";
+import { generateWorldEvent, isWorldEventActive } from "@/lib/world-events";
+import type { WorldEvent } from "@/lib/world-events";
+import { applyItemEffect, getItemById, SHOP_ITEMS } from "@/lib/inventory";
+import type { InventoryItem } from "@/lib/inventory";
+import type { NpcRelation } from "@/lib/types";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
   AvatarProfile,
@@ -71,20 +79,89 @@ import type {
 
 type TestAccountPreset = "balanced" | "burnout" | "romantic" | "live";
 
+const WORLD_CHAT_ROOMS: Array<Omit<Room, "createdAt">> = [
+  {
+    id: "room-city-neo-paris",
+    name: "Neo Paris Live",
+    kind: "public" as RoomKind,
+    code: "PARIS",
+    ownerId: "system",
+    ownerName: "Systeme",
+    locationSlug: "cafe",
+    memberCount: 18,
+    maxMembers: 120,
+    description: "Chat de ville pour Neo Paris : sorties, rencontres, humeur du quartier.",
+    isActive: true
+  },
+  {
+    id: "room-city-neo-newyork",
+    name: "Neo NewYork Live",
+    kind: "public" as RoomKind,
+    code: "NYORK",
+    ownerId: "system",
+    ownerName: "Systeme",
+    locationSlug: "nightclub",
+    memberCount: 22,
+    maxMembers: 120,
+    description: "Chat de ville pour Neo NewYork : business, nightlife, rencontres rapides.",
+    isActive: true
+  },
+  {
+    id: "room-city-neo-tokyo",
+    name: "Neo Tokyo Live",
+    kind: "public" as RoomKind,
+    code: "TOKYO",
+    ownerId: "system",
+    ownerName: "Systeme",
+    locationSlug: "residence-luxe",
+    memberCount: 16,
+    maxMembers: 120,
+    description: "Chat de ville pour Neo Tokyo : calme, style, tech et rendez-vous discrets.",
+    isActive: true
+  },
+  {
+    id: "room-city-neo-london",
+    name: "Neo London Live",
+    kind: "public" as RoomKind,
+    code: "LONDON",
+    ownerId: "system",
+    ownerName: "Systeme",
+    locationSlug: "library",
+    memberCount: 14,
+    maxMembers: 120,
+    description: "Chat de ville pour Neo London : culture, reseau et discussions longues.",
+    isActive: true
+  },
+  {
+    id: "room-city-neo-bamako",
+    name: "Neo Bamako Live",
+    kind: "public" as RoomKind,
+    code: "BAMAKO",
+    ownerId: "system",
+    ownerName: "Systeme",
+    locationSlug: "park",
+    memberCount: 19,
+    maxMembers: 120,
+    description: "Chat de ville pour Neo Bamako : ambiance, musique, famille sociale et quartier vivant.",
+    isActive: true
+  }
+];
+
 const DEFAULT_ROOMS: Array<Omit<Room, "createdAt">> = [
   {
     id: "room-lounge-global",
-    name: "Lounge - La ville",
+    name: "Chat Monde",
     kind: "public" as RoomKind,
-    code: "LOUNGE",
+    code: "WORLD",
     ownerId: "system",
     ownerName: "Système",
     locationSlug: "cafe",
-    memberCount: 6,
-    maxMembers: 100,
+    memberCount: 64,
+    maxMembers: 500,
     description: "Chat public de la ville - tout le monde peut écrire ici.",
     isActive: true
   },
+  ...WORLD_CHAT_ROOMS,
   {
     id: "room-home-suite",
     name: "Home Suite",
@@ -303,6 +380,8 @@ type GameState = {
   leaveRoom: (roomId: string) => void;
   sendRoomMessage: (roomId: string, body: string) => void;
   createPrivateRoom: (name: string) => Room;
+  openLoveRoom: (residentId: string) => { ok: boolean; room?: Room; error?: string };
+  playLoveRoomMoment: (roomId: string, moment: LoveRoomMomentKind) => void;
   inviteNpcToRoom: (roomId: string, residentId: string) => void;
   respondRoomInvite: (inviteId: string, status: "accepted" | "declined") => void;
   // Secret Rooms — éphémères, max 4, messages 2h TTL
@@ -313,7 +392,83 @@ type GameState = {
   leaveSecretRoom: (roomId: string) => void;
   sendSecretMessage: (roomId: string, body: string) => void;
   purgeExpiredSecretRooms: () => void;
+  // ── Daily Quests ────────────────────────────────────────────────────────────
+  dailyQuests: DailyQuest[];
+  questLastRefreshDate: string | null;
+  completeQuest: (questId: string) => void;
+  claimQuestReward: (questId: string) => void;
+  markQuestAction: (actionId: string) => void;
+  // ── World Events ────────────────────────────────────────────────────────────
+  worldEvent: WorldEvent | null;
+  worldEventJoined: boolean;
+  joinWorldEvent: () => void;
+  // ── Inventory & Shop ────────────────────────────────────────────────────────
+  inventory: InventoryItem[];
+  buyItem: (itemId: string) => { ok: boolean; error?: string };
+  useItem: (itemId: string) => { ok: boolean; error?: string };
+  // ── NPC Relations ───────────────────────────────────────────────────────────
+  npcRelations: NpcRelation[];
+  updateNpcRelation: (npcId: string, delta: number, npcName?: string) => void;
 };
+
+const LOVE_ROOM_MOMENTS: Record<LoveRoomMomentKind, { title: string; userLine: string; reply: string; scoreGain: number; moodGain: number }> = {
+  question: {
+    title: "Question complicite",
+    userLine: "Question complicite : raconte-moi un moment qui t'a marque recemment.",
+    reply: "J'aime ce format. Ca donne une vraie conversation, pas juste du bruit.",
+    scoreGain: 4,
+    moodGain: 3
+  },
+  challenge: {
+    title: "Defi a deux",
+    userLine: "Defi a deux : on choisit chacun une activite et on compare l'ambiance.",
+    reply: "Defi accepte. Si tu tiens le rythme, ca peut devenir notre rituel.",
+    scoreGain: 5,
+    moodGain: 4
+  },
+  memory: {
+    title: "Souvenir",
+    userLine: "Souvenir ajoute : le meilleur moment de notre derniere sortie.",
+    reply: "C'est exactement le genre de detail qui reste. Je le garde.",
+    scoreGain: 6,
+    moodGain: 5
+  },
+  vibe: {
+    title: "Ambiance",
+    userLine: "Ambiance changee : lumiere douce, musique calme, discussion sans pression.",
+    reply: "La vibe est bonne. On peut rester la un moment.",
+    scoreGain: 4,
+    moodGain: 5
+  }
+};
+
+function getLoveRoomAccess(state: GameState, residentId: string) {
+  const resident = starterResidents.find((item) => item.id === residentId);
+  const relationship = state.relationships.find((item) => item.residentId === residentId);
+  const conversation = state.conversations.find((item) => item.kind === "direct" && item.peerId === residentId);
+  const messageCount = conversation?.messages.filter((item) => item.kind === "message").length ?? 0;
+  const acceptedInvitations = state.invitations.filter((item) =>
+    item.residentId === residentId && item.status === "accepted"
+  ).length;
+  const dateSignal = state.datePlans.filter((item) =>
+    item.residentId === residentId && (item.status === "accepted" || item.status === "completed")
+  ).length;
+  const baseScore = relationship?.score ?? 0;
+  const romantic = resident?.lookingFor.includes("relation amoureuse") ?? false;
+  const interactionScore = Math.min(100, Math.round(baseScore * 0.72 + Math.min(10, messageCount) * 3 + acceptedInvitations * 8 + dateSignal * 12));
+  const unlocked = romantic && baseScore >= 58 && (interactionScore >= 76 || relationship?.status === "crush" || relationship?.status === "relation");
+
+  return {
+    resident,
+    relationship,
+    messageCount,
+    interactionScore,
+    unlocked,
+    reason: romantic
+      ? `Affinite ${interactionScore}%. Il faut parler, faire des activites et garder un lien reciproque.`
+      : "Ce profil n'est pas dans une intention love room."
+  };
+}
 
 function initialState() {
   const runtime = createInitialRuntime();
@@ -356,6 +511,12 @@ function initialState() {
     secretRooms: [] as SecretRoom[],
     secretMessages: {} as Record<string, SecretMessage[]>,
     supabaseAvatarId: null as string | null,
+    dailyQuests: [] as DailyQuest[],
+    questLastRefreshDate: null as string | null,
+    worldEvent: null as WorldEvent | null,
+    worldEventJoined: false,
+    inventory: [] as InventoryItem[],
+    npcRelations: [] as NpcRelation[],
     avatar: null as AvatarProfile | null,
     dailyEvent: null as DailyEvent | null,
     lastKnownRank: null as SocialRank | null,
@@ -1246,6 +1407,9 @@ function withActionApplied(state: GameState, action: LifeActionId): Partial<Game
     newPlayerLevel
   );
 
+  // Daily quests progress
+  const updatedQuests = checkQuestCompletion(state.dailyQuests ?? [], action);
+
   return {
     stats: nextStats,
     dailyGoals: nextGoals,
@@ -1255,6 +1419,7 @@ function withActionApplied(state: GameState, action: LifeActionId): Partial<Game
     playerXp: newPlayerXp,
     playerLevel: newPlayerLevel,
     missionProgresses: updatedProgresses,
+    dailyQuests: updatedQuests,
   };
 }
 
@@ -1588,10 +1753,23 @@ export const useGameStore = create<GameState>()(
             state.joinedRooms
           );
 
+          // ── Daily Quests refresh ──────────────────────────────────────────
+          const questKey = getTodayQuestKey();
+          const questsNeedRefresh = state.questLastRefreshDate !== questKey;
+          const dailyQuests = questsNeedRefresh
+            ? generateDailyQuests(penaltyStats)
+            : (state.dailyQuests ?? []);
+
+          // ── World Event refresh ───────────────────────────────────────────
+          const existingEvent = state.worldEvent;
+          const eventIsToday = existingEvent && new Date(existingEvent.startsAt).toDateString() === today;
+          const worldEvent = eventIsToday ? existingEvent : generateWorldEvent();
+          const worldEventJoined = eventIsToday ? (state.worldEventJoined ?? false) : false;
+
           return {
             stats: normalizeStats(penaltyStats),
             advice: buildAdvice(penaltyStats),
-            notifications: penaltyNotif,
+            notifications: compactNotificationFeed(penaltyNotif),
             invitations,
             datePlans,
             dailyEvent,
@@ -1600,7 +1778,11 @@ export const useGameStore = create<GameState>()(
             wealthScore: newWealthScore,
             rooms,
             joinedRooms,
-            ...(goalsNeedReset ? { lastDailyGoalResetAt: today } : {})
+            dailyQuests,
+            worldEvent,
+            worldEventJoined,
+            ...(goalsNeedReset ? { lastDailyGoalResetAt: today } : {}),
+            ...(questsNeedRefresh ? { questLastRefreshDate: questKey } : {}),
           };
         }),
       performAction: (action) => set((state) => withActionApplied(state, action)),
@@ -2873,13 +3055,15 @@ export const useGameStore = create<GameState>()(
 
       sendRoomMessage: (roomId, body) => {
         const state = get();
+        const cleanBody = body.trim();
+        if (!cleanBody) return;
         const authorId   = state.session?.email ?? "local";
         const authorName = state.avatar?.displayName ?? "Moi";
         const msg: RoomMessage = {
           id:         `rm-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           authorId,
           authorName,
-          body:       body.trim(),
+          body:       cleanBody,
           createdAt:  nowIso(),
           kind:       "message",
         };
@@ -2910,9 +3094,9 @@ export const useGameStore = create<GameState>()(
           roomId,
           roomName: room?.name ?? "Room",
           playerName: authorName,
-          playerMessage: body,
+          playerMessage: cleanBody,
           onlineNpcs: state.npcs.filter((n) => n.presenceOnline),
-          maxReplies: room?.kind === "private" ? 2 : 3
+          maxReplies: room?.kind === "private" || room?.kind === "love" ? 2 : 3
         });
 
         set((s) => ({
@@ -2920,6 +3104,25 @@ export const useGameStore = create<GameState>()(
             ...s.roomMessages,
             [roomId]: [...(s.roomMessages[roomId] ?? []), msg, ...npcReplies, ...aiReplies].slice(-200),
           },
+          ...(room?.kind === "love" && room.id.startsWith("love-")
+            ? (() => {
+                const residentId = room.id.replace("love-", "");
+                const resident = starterResidents.find((item) => item.id === residentId);
+                if (!resident) return {};
+                const nextStats = normalizeStats({
+                  ...s.stats,
+                  mood: s.stats.mood + 2,
+                  sociability: s.stats.sociability + 3,
+                  lastDecayAt: nowIso(),
+                  lastSocialAt: nowIso()
+                });
+                return {
+                  stats: nextStats,
+                  advice: buildAdvice(nextStats),
+                  relationships: updateRelationshipScore(s.relationships, residentId, 3, nextStats, resident.reputation, "crush")
+                };
+              })()
+            : {})
         }));
       },
 
@@ -2955,6 +3158,136 @@ export const useGameStore = create<GameState>()(
           }]},
         }));
         return room;
+      },
+
+      openLoveRoom: (residentId) => {
+        const state = get();
+        const access = getLoveRoomAccess(state, residentId);
+        const resident = access.resident ?? starterResidents.find((item) => item.id === residentId);
+        if (!resident) return { ok: false, error: "Profil introuvable." };
+        if (!access.unlocked) return { ok: false, error: access.reason };
+
+        const existing = state.rooms.find((room) => room.id === `love-${residentId}`);
+        if (existing) {
+          return { ok: true, room: existing };
+        }
+
+        const ownerName = state.avatar?.displayName ?? "Moi";
+        const ownerId = state.session?.email ?? "local";
+        const room: Room = {
+          id: `love-${residentId}`,
+          name: `Love Room - ${resident.name}`,
+          kind: "love",
+          code: `LOVE${residentId.slice(0, 2).toUpperCase()}`,
+          ownerId,
+          ownerName,
+          locationSlug: resident.locationSlug,
+          memberCount: 2,
+          maxMembers: 2,
+          description: "Espace prive debloque par affinite, messages reciproques et activites partagees.",
+          createdAt: nowIso(),
+          isActive: true
+        };
+
+        const createdAt = nowIso();
+        const systemMessages: RoomMessage[] = [
+          {
+            id: `love-open-${Date.now()}`,
+            authorId: "system",
+            authorName: "MyLife",
+            body: `Love Room debloquee avec ${resident.name}. Ici, chaque moment renforce ou casse la vibe.`,
+            createdAt,
+            kind: "system"
+          },
+          {
+            id: `love-${residentId}-hello-${Date.now()}`,
+            authorId: residentId,
+            authorName: resident.name,
+            body: "Ok, on a notre espace. Fais-moi vivre un vrai moment, pas juste des messages automatiques.",
+            createdAt: new Date(Date.now() + 900).toISOString(),
+            kind: "message"
+          }
+        ];
+
+        set((s) => ({
+          rooms: [room, ...s.rooms].slice(0, 80),
+          joinedRooms: s.joinedRooms.includes(room.id) ? s.joinedRooms : [...s.joinedRooms, room.id],
+          roomMessages: {
+            ...s.roomMessages,
+            [room.id]: systemMessages
+          },
+          relationships: updateRelationshipScore(
+            s.relationships,
+            residentId,
+            8,
+            s.stats,
+            resident.reputation,
+            "crush"
+          )
+        }));
+
+        return { ok: true, room };
+      },
+
+      playLoveRoomMoment: (roomId, moment) => {
+        const state = get();
+        const room = state.rooms.find((item) => item.id === roomId && item.kind === "love");
+        const residentId = roomId.startsWith("love-") ? roomId.replace("love-", "") : null;
+        const resident = residentId ? starterResidents.find((item) => item.id === residentId) : null;
+        const config = LOVE_ROOM_MOMENTS[moment];
+        if (!room || !resident || !config) return;
+
+        const createdAt = nowIso();
+        const messages: RoomMessage[] = [
+          {
+            id: `love-moment-${moment}-${Date.now()}`,
+            authorId: "self",
+            authorName: state.avatar?.displayName ?? "Moi",
+            body: config.userLine,
+            createdAt,
+            kind: "emote"
+          },
+          {
+            id: `love-reply-${moment}-${Date.now()}`,
+            authorId: resident.id,
+            authorName: resident.name,
+            body: config.reply,
+            createdAt: new Date(Date.now() + 850).toISOString(),
+            kind: "message"
+          }
+        ];
+
+        const nextStats = normalizeStats({
+          ...state.stats,
+          mood: state.stats.mood + config.moodGain,
+          sociability: state.stats.sociability + 3,
+          stress: state.stats.stress - 2,
+          lastDecayAt: createdAt,
+          lastSocialAt: createdAt
+        });
+
+        set((s) => ({
+          stats: nextStats,
+          advice: buildAdvice(nextStats),
+          relationships: updateRelationshipScore(
+            s.relationships,
+            resident.id,
+            config.scoreGain,
+            nextStats,
+            resident.reputation,
+            "crush"
+          ),
+          roomMessages: {
+            ...s.roomMessages,
+            [roomId]: [...(s.roomMessages[roomId] ?? []), ...messages].slice(-200)
+          },
+          lifeFeed: appendFeed(s.lifeFeed, {
+            id: `feed-love-${moment}-${Date.now()}`,
+            title: config.title,
+            body: `${resident.name} a partage un moment plus intime avec toi.`,
+            createdAt
+          })
+        }));
       },
 
       inviteNpcToRoom: (roomId, residentId) => {
@@ -3189,7 +3522,178 @@ export const useGameStore = create<GameState>()(
       resetAll: () => {
         void AsyncStorage.removeItem("mylife-storage");
         set({ ...initialState(), hasHydrated: true });
-      }
+      },
+
+      // ── Daily Quests ──────────────────────────────────────────────────────
+      completeQuest: (questId) => set((s) => ({
+        dailyQuests: (s.dailyQuests ?? []).map((q) =>
+          q.id === questId && !q.completed ? { ...q, completed: true } : q
+        ),
+      })),
+
+      claimQuestReward: (questId) => set((s) => {
+        const quest = (s.dailyQuests ?? []).find((q) => q.id === questId);
+        if (!quest || !quest.completed || quest.claimed) return {};
+        const newPlayerXp = (s.playerXp ?? 0) + quest.xpReward;
+        const newPlayerLevel = Math.max(1, Math.floor(newPlayerXp / 200) + 1);
+        const newStats = normalizeStats({ ...s.stats, money: s.stats.money + quest.moneyReward });
+        const feed = appendFeed(s.lifeFeed, {
+          id: `feed-quest-${Date.now()}`,
+          title: `✅ Quête accomplie : ${quest.title}`,
+          body: `+${quest.xpReward} XP · +${quest.moneyReward} cr`,
+          createdAt: nowIso(),
+        });
+        return {
+          dailyQuests: (s.dailyQuests ?? []).map((q) =>
+            q.id === questId ? { ...q, claimed: true } : q
+          ),
+          playerXp: newPlayerXp,
+          playerLevel: newPlayerLevel,
+          stats: newStats,
+          lifeFeed: feed,
+        };
+      }),
+
+      markQuestAction: (actionId) => set((s) => ({
+        dailyQuests: checkQuestCompletion(s.dailyQuests ?? [], actionId),
+      })),
+
+      // ── World Events ──────────────────────────────────────────────────────
+      joinWorldEvent: () => set((s) => {
+        const event = s.worldEvent;
+        if (!event || !isWorldEventActive(event) || s.worldEventJoined) return {};
+        const newStats = normalizeStats({
+          ...s.stats,
+          mood: s.stats.mood + event.moodBonus,
+          sociability: s.stats.sociability + event.sociabilityBonus,
+          money: s.stats.money + event.moneyReward,
+        });
+        const newPlayerXp = (s.playerXp ?? 0) + event.xpReward;
+        const newPlayerLevel = Math.max(1, Math.floor(newPlayerXp / 200) + 1);
+        const feed = appendFeed(s.lifeFeed, {
+          id: `feed-world-event-${Date.now()}`,
+          title: `🌍 ${event.title} — ${event.city.name}`,
+          body: `+${event.xpReward} XP · +${event.moneyReward} cr · +${event.moodBonus} humeur`,
+          createdAt: nowIso(),
+        });
+        const updatedQuests = checkQuestCompletion(s.dailyQuests ?? [], "join-world-event");
+        return {
+          worldEventJoined: true,
+          stats: newStats,
+          playerXp: newPlayerXp,
+          playerLevel: newPlayerLevel,
+          lifeFeed: feed,
+          dailyQuests: updatedQuests,
+          notifications: appendNotification(s.notifications, {
+            id: `world-event-joined-${Date.now()}`,
+            kind: "reward",
+            title: `🎉 Tu as rejoint : ${event.title}`,
+            body: `Bienvenue à ${event.city.name} ! +${event.xpReward} XP reçus.`,
+            createdAt: nowIso(),
+            read: false,
+          }),
+        };
+      }),
+
+      // ── Inventory & Shop ──────────────────────────────────────────────────
+      buyItem: (itemId) => {
+        const state = get();
+        const item = getItemById(itemId);
+        if (!item) return { ok: false, error: "Item introuvable." };
+        if (state.stats.money < item.price) return { ok: false, error: `Besoin de ${item.price} cr.` };
+        const existing = (state.inventory ?? []).find((i) => i.itemId === itemId);
+        const currentQty = existing?.quantity ?? 0;
+        if (currentQty >= item.maxStack) return { ok: false, error: "Quantité max atteinte." };
+        set((s) => {
+          const inv = s.inventory ?? [];
+          const newInv = existing
+            ? inv.map((i) => i.itemId === itemId ? { ...i, quantity: i.quantity + 1 } : i)
+            : [...inv, { itemId, quantity: 1, acquiredAt: nowIso() }];
+          return {
+            inventory: newInv,
+            stats: normalizeStats({ ...s.stats, money: s.stats.money - item.price }),
+          };
+        });
+        return { ok: true };
+      },
+
+      useItem: (itemId) => {
+        const state = get();
+        const item = getItemById(itemId);
+        if (!item) return { ok: false, error: "Item introuvable." };
+        const invItem = (state.inventory ?? []).find((i) => i.itemId === itemId);
+        if (!invItem || invItem.quantity <= 0) return { ok: false, error: "Plus en stock." };
+        set((s) => {
+          const newStats = applyItemEffect(item, s.stats);
+          const newInv = (s.inventory ?? [])
+            .map((i) => i.itemId === itemId ? { ...i, quantity: i.quantity - 1 } : i)
+            .filter((i) => i.quantity > 0);
+          const feed = appendFeed(s.lifeFeed, {
+            id: `feed-item-${Date.now()}`,
+            title: `${item.emoji} ${item.name} utilisé`,
+            body: Object.entries(item.effects)
+              .filter(([, v]) => v !== 0)
+              .map(([k, v]) => `${(v as number) > 0 ? "+" : ""}${v} ${k}`)
+              .join(" · "),
+            createdAt: nowIso(),
+          });
+          const updatedQuests = checkQuestCompletion(s.dailyQuests ?? [], itemId);
+          return {
+            stats: normalizeStats(newStats),
+            inventory: newInv,
+            lifeFeed: feed,
+            dailyQuests: updatedQuests,
+          };
+        });
+        return { ok: true };
+      },
+
+      // ── NPC Relations ─────────────────────────────────────────────────────
+      updateNpcRelation: (npcId, delta, npcName) => set((s) => {
+        const relations = s.npcRelations ?? [];
+        const existing = relations.find((r) => r.npcId === npcId);
+        const npc = s.npcs?.find((n) => n.id === npcId);
+        const name = npcName ?? npc?.name ?? npcId;
+        const newScore = Math.max(0, Math.min(100, (existing?.score ?? 0) + delta));
+        const totalInteractions = (existing?.totalInteractions ?? 0) + 1;
+
+        const getLevel = (score: number): NpcRelation["level"] => {
+          if (score >= 80) return "complice";
+          if (score >= 60) return "confiant";
+          if (score >= 35) return "ami";
+          if (score >= 15) return "contact";
+          return "inconnu";
+        };
+
+        const prevLevel = existing?.level ?? "inconnu";
+        const newLevel = getLevel(newScore);
+        let notifications = s.notifications;
+        if (prevLevel !== newLevel && newLevel !== "inconnu") {
+          notifications = appendNotification(notifications, {
+            id: `npc-relation-${npcId}-${Date.now()}`,
+            kind: "social",
+            title: `🤝 ${name} : relation améliorée`,
+            body: `Tu es maintenant "${newLevel}" avec ${name}.`,
+            createdAt: nowIso(),
+            read: false,
+          });
+        }
+
+        const newRelation: NpcRelation = {
+          npcId,
+          score: newScore,
+          level: newLevel,
+          lastInteractionAt: nowIso(),
+          totalInteractions,
+        };
+
+        return {
+          npcRelations: existing
+            ? relations.map((r) => r.npcId === npcId ? newRelation : r)
+            : [...relations, newRelation],
+          notifications,
+        };
+      }),
     }),
     {
       name: "mylife-storage",
@@ -3214,6 +3718,9 @@ export const useGameStore = create<GameState>()(
         lifeFeed: state.lifeFeed,
         npcs: state.npcs,
         rooms: state.rooms,
+        roomMessages: state.roomMessages,
+        joinedRooms: state.joinedRooms,
+        roomInvites: state.roomInvites,
         secretRooms: state.secretRooms,
         secretMessages: state.secretMessages,
         isPremium: state.isPremium,
@@ -3228,6 +3735,12 @@ export const useGameStore = create<GameState>()(
         playerLevel: state.playerLevel,
         missionProgresses: state.missionProgresses,
         unlockedTalents: state.unlockedTalents,
+        dailyQuests: state.dailyQuests,
+        questLastRefreshDate: state.questLastRefreshDate,
+        worldEvent: state.worldEvent,
+        worldEventJoined: state.worldEventJoined,
+        inventory: state.inventory,
+        npcRelations: state.npcRelations,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) {
@@ -3235,12 +3748,38 @@ export const useGameStore = create<GameState>()(
           return;
         }
 
+        const storedAvatarName = state.avatar?.displayName?.trim().toLowerCase();
+        const storedEmail = state.session?.email?.trim().toLowerCase() ?? "";
+        const shouldPurgeKenanProfile =
+          storedAvatarName === "kenan" || storedEmail === "kenan" || storedEmail.startsWith("kenan@");
+
+        if (shouldPurgeKenanProfile) {
+          void AsyncStorage.removeItem("mylife-storage");
+          if (isSupabaseConfigured && supabase) void supabase.auth.signOut();
+          useGameStore.setState({ ...initialState(), hasHydrated: true });
+          return;
+        }
+
         const stats = applyDecay(state.stats);
+        const rooms = [...(state.rooms ?? [])];
+        DEFAULT_ROOMS.forEach((defaultRoom) => {
+          if (!rooms.some((room) => room.id === defaultRoom.id)) {
+            rooms.push(createDefaultRoom(defaultRoom));
+          }
+        });
+        const joinedRooms = ["room-home-suite", "room-test-live", "room-lounge-global"].reduce<string[]>(
+          (current, roomId) => current.includes(roomId) ? current : [...current, roomId],
+          state.joinedRooms ?? []
+        );
         useGameStore.setState({
           hasHydrated: true,
           stats,
           advice: buildAdvice(stats),
-          notifications: buildAutomaticNotifications(stats, state.notifications)
+          notifications: buildAutomaticNotifications(stats, state.notifications),
+          rooms,
+          joinedRooms,
+          roomMessages: state.roomMessages ?? {},
+          roomInvites: state.roomInvites ?? []
         });
       }
     }

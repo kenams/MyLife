@@ -278,17 +278,24 @@ export default function ProfileScreen() {
           {/* Avatar + infos */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
             <View style={{ position: "relative" }}>
-              <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: "rgba(255,255,255,0.15)",
-                borderWidth: 3, borderColor: "rgba(255,255,255,0.5)",
-                alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+              {/* Glow ring basé sur état */}
+              <View style={{
+                width: 100, height: 100, borderRadius: 50,
+                backgroundColor: stateColor + "22",
+                borderWidth: 3, borderColor: stateColor + "80",
+                alignItems: "center", justifyContent: "center",
+                shadowColor: stateColor, shadowOpacity: 0.45, shadowRadius: 18,
+                overflow: "hidden",
+              }}>
                 {avatar
-                  ? <AvatarSprite visual={getAvatarVisual(avatar)} action={stats.energy < 20 ? "sleeping" : "idle"} size="sm" />
-                  : <Text style={{ fontSize: 38 }}>🧑</Text>
+                  ? <AvatarSprite visual={getAvatarVisual(avatar)} action={stats.energy < 20 ? "sleeping" : stats.mood < 25 ? "idle" : "waving"} size="md" />
+                  : <Text style={{ fontSize: 42 }}>🧑</Text>
                 }
               </View>
-              <View style={{ position: "absolute", bottom: -2, right: -4,
-                backgroundColor: stateColor, borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2,
-                borderWidth: 2, borderColor: "#fff" }}>
+              {/* Badge état */}
+              <View style={{ position: "absolute", bottom: -4, left: "50%", transform: [{ translateX: -30 }],
+                backgroundColor: stateColor, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
+                borderWidth: 2, borderColor: "#fff", minWidth: 60, alignItems: "center" }}>
                 <Text style={{ color: "#fff", fontSize: 8, fontWeight: "900" }}>{stateLabel}</Text>
               </View>
             </View>
@@ -303,6 +310,15 @@ export default function ProfileScreen() {
               <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 1 }}>
                 {sessionData?.email ?? "Mode local"}
               </Text>
+              {/* Indicateur action temps réel */}
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6,
+                backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 8,
+                paddingHorizontal: 8, paddingVertical: 4, alignSelf: "flex-start" }}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: stateColor }} />
+                <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 10, fontWeight: "700" }}>
+                  {stats.energy < 20 ? "En train de dormir" : stats.mood < 25 ? "Repos — moral bas" : "Actif"}
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -578,7 +594,7 @@ export default function ProfileScreen() {
             <Pressable onPress={() => { resetAll(); router.replace("/(auth)/welcome"); }}
               style={{ flex: 1, paddingVertical: 13, borderRadius: 14,
                 backgroundColor: L.card, borderWidth: 1, borderColor: L.border, alignItems: "center" }}>
-              <Text style={{ color: L.muted, fontWeight: "700", fontSize: 12 }}>↺ Reset</Text>
+              <Text style={{ color: L.muted, fontWeight: "700", fontSize: 12 }}>Supprimer profil local</Text>
             </Pressable>
           </View>
 

@@ -12,7 +12,7 @@ function goBack() {
   router.canGoBack() ? router.back() : router.replace("/(app)/(tabs)/world");
 }
 
-const KIND_META: Record<RoomKind, { color: string; emoji: string; label: string }> = {
+const KIND_META: Record<string, { color: string; emoji: string; label: string }> = {
   public:  { color: "#38c793", emoji: "🌍", label: "Publique"  },
   private: { color: "#8b7cff", emoji: "🔒", label: "Privée"    },
   event:   { color: "#f6b94f", emoji: "🎉", label: "Événement" },
@@ -43,7 +43,7 @@ function RoomMiniPreview({ room }: { room: Room }) {
 
 // ─── Carte room améliorée ─────────────────────────────────────────────────────
 function RoomCard({ room, onJoin }: { room: Room; onJoin: () => void }) {
-  const meta = KIND_META[room.kind];
+  const meta = KIND_META[room.kind] ?? { color: "#ec4899", emoji: "LOVE", label: "Love" };
   const full = room.memberCount >= room.maxMembers;
   const pct  = (room.memberCount / room.maxMembers) * 100;
   const [expanded, setExpanded] = useState(false);

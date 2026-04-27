@@ -1,5 +1,4 @@
 "use client";
-import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Modal, Pressable, ScrollView, Text, View } from "react-native";
@@ -7,6 +6,7 @@ import { Animated, Modal, Pressable, ScrollView, Text, View } from "react-native
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getAvatarVisual } from "@/lib/avatar-visual";
 import { getHousingTier } from "@/lib/housing";
+import { hapticImpact } from "@/lib/safe-haptics";
 import { getWellbeingScore } from "@/lib/selectors";
 import { getSuggestedActions, useTimeContext } from "@/lib/time-context";
 import type { LifeActionId } from "@/lib/types";
@@ -214,7 +214,7 @@ function ActionButton({ action, onPress, disabled, primary }: {
   const color = CAT_COLOR[action.category];
   const bg    = CAT_BG[action.category];
   function handlePress() {
-    void Haptics.impactAsync(primary ? Haptics.ImpactFeedbackStyle.Medium : Haptics.ImpactFeedbackStyle.Light);
+    hapticImpact(primary ? "medium" : "light");
     onPress();
   }
   return (
@@ -250,6 +250,10 @@ export default function HomeScreen() {
   const checkHousingRent = useGameStore((s) => s.checkHousingRent);
   const lifeFeed         = useGameStore((s) => s.lifeFeed ?? []);
   const npcs             = useGameStore((s) => s.npcs);
+  const dailyQuests      = useGameStore((s) => s.dailyQuests ?? []);
+  const worldEvent       = useGameStore((s) => s.worldEvent);
+  const worldEventJoined = useGameStore((s) => s.worldEventJoined ?? false);
+  const joinWorldEvent   = useGameStore((s) => s.joinWorldEvent);
   const [eventModalOpen, setEventModalOpen] = useState(false);
 
   useFocusEffect(useCallback(() => { bootstrap(); checkHousingRent(); }, [bootstrap, checkHousingRent]));
@@ -306,6 +310,42 @@ export default function HomeScreen() {
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 380, useNativeDriver: true }).start();
   }, []);
+
+  // ── Toast feedback ────────────────────────────────────────────────────────
+  const [toast, setToast] = useState<{ text: string; color: string } | null>(null);
+  const toastAnim = useRef(new Animated.Value(0)).current;
+  const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function showToast(text: string, color: string) {
+    if (toastTimer.current) clearTimeout(toastTimer.current);
+    setToast({ text, color });
+    toastAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(toastAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(1600),
+      Animated.timing(toastAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
+    ]).start(() => setToast(null));
+    toastTimer.current = setTimeout(() => setToast(null), 2200);
+  }
+
+  function handleAction(id: LifeActionId) {
+    const before = { money: stats.money, energy: stats.energy, xp: 0 };
+    performAction(id);
+    const action = actionById.get(id);
+    const gains: string[] = [];
+    if (id === "work-shift")  gains.push("💰 +argent", "⭐ +rép");
+    else if (id === "sleep")  gains.push("⚡ énergie max");
+    else if (id === "nap")    gains.push("⚡ +énergie");
+    else if (id === "healthy-meal" || id === "home-cooking") gains.push("🍱 +faim", "❤️ +santé");
+    else if (id === "shower") gains.push("🚿 +hygiène", "😊 +moral");
+    else if (id === "walk" || id === "gym") gains.push("💪 +forme", "😊 +humeur");
+    else if (id === "meditate") gains.push("🧘 -stress");
+    else if (id === "cafe-chat" || id === "team-sport") gains.push("👥 +social");
+    else gains.push("✨ +XP");
+    const color = id === "work-shift" ? L.gold : id === "sleep" || id === "nap" ? L.blue : L.green;
+    showToast(gains.join("  "), color);
+    hapticImpact("medium");
+  }
 
   return (
     <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
@@ -371,12 +411,35 @@ export default function HomeScreen() {
                 backgroundColor: "#fff" }} />
             </View>
           </View>
+
+          {/* Mini stat pills */}
+          <View style={{ flexDirection: "row", gap: 6, marginTop: 12, flexWrap: "wrap" }}>
+            {[
+              { emoji: "⚡", val: stats.energy,   color: "#93c5fd" },
+              { emoji: "🍱", val: stats.hunger,    color: "#fde68a" },
+              { emoji: "😊", val: stats.mood,      color: "#d8b4fe" },
+              { emoji: "🚿", val: stats.hygiene,   color: "#99f6e4" },
+              { emoji: "💰", val: Math.min(100, stats.money / 5), color: "#6ee7b7", label: `${Math.round(stats.money)} cr` },
+            ].map((s, i) => (
+              <View key={i} style={{ flexDirection: "row", alignItems: "center", gap: 5,
+                backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 20,
+                paddingHorizontal: 9, paddingVertical: 5 }}>
+                <Text style={{ fontSize: 11 }}>{s.emoji}</Text>
+                <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.2)", overflow: "hidden" }}>
+                  <View style={{ height: 5, borderRadius: 3,
+                    width: `${Math.max(0, Math.min(100, s.val))}%` as `${number}%`,
+                    backgroundColor: s.color }} />
+                </View>
+                {s.label && <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 10, fontWeight: "700" }}>{s.label}</Text>}
+              </View>
+            ))}
+          </View>
         </View>
 
         <View style={{ padding: 16, gap: 16, maxWidth: 980, width: "100%", alignSelf: "center" }}>
 
           {/* ── PRIORITÉ ── */}
-          <Pressable onPress={() => primaryAction ? performAction(primaryAction.id) : router.push("/(app)/(tabs)/world" as never)}
+          <Pressable onPress={() => primaryAction ? handleAction(primaryAction.id) : router.push("/(app)/(tabs)/world" as never)}
             style={{ borderRadius: 22, padding: 18,
               backgroundColor: primaryCrisis ? L.redBg : L.greenBg,
               borderWidth: 1.5, borderColor: primaryCrisis ? L.red + "30" : L.green + "30",
@@ -432,7 +495,7 @@ export default function HomeScreen() {
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
               {quickActions.map((action, i) => (
                 <ActionButton key={action.id} action={action} primary={i === 0}
-                  disabled={!isAvailable(action)} onPress={() => performAction(action.id)} />
+                  disabled={!isAvailable(action)} onPress={() => handleAction(action.id)} />
               ))}
             </View>
           </View>
@@ -467,6 +530,80 @@ export default function HomeScreen() {
             </View>
           </View>
 
+          {/* ── QUÊTES DU JOUR ── */}
+          {dailyQuests.length > 0 && (() => {
+            const done = dailyQuests.filter((q) => q.completed).length;
+            const claimed = dailyQuests.filter((q) => q.claimed).length;
+            const hasClaim = done > claimed;
+            return (
+              <Pressable onPress={() => router.push("/(app)/quests" as never)}
+                style={{ backgroundColor: hasClaim ? L.goldBg : L.card, borderRadius: 20, padding: 16,
+                  borderWidth: 1, borderColor: hasClaim ? L.gold + "40" : L.border,
+                  shadowColor: hasClaim ? L.gold : "transparent", shadowOpacity: 0.1, shadowRadius: 10 }}>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text style={{ fontSize: 18 }}>{hasClaim ? "🎁" : "🎯"}</Text>
+                    <Text style={{ color: L.text, fontWeight: "800", fontSize: 15 }}>
+                      Quêtes du jour
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                    <Text style={{ color: hasClaim ? L.gold : L.primary, fontSize: 13, fontWeight: "800" }}>
+                      {done}/{dailyQuests.length}
+                    </Text>
+                    {hasClaim && (
+                      <View style={{ backgroundColor: L.gold, borderRadius: 10,
+                        paddingHorizontal: 8, paddingVertical: 3 }}>
+                        <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>CLAIM</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 6 }}>
+                  {dailyQuests.map((q) => (
+                    <View key={q.id} style={{ flex: 1, gap: 4 }}>
+                      <View style={{ height: 6, borderRadius: 3,
+                        backgroundColor: q.claimed ? L.green : q.completed ? L.gold : L.border }} />
+                      <Text numberOfLines={1} style={{ color: L.muted, fontSize: 9, textAlign: "center" }}>
+                        {q.claimed ? "✓" : q.completed ? "🎁" : q.emoji}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              </Pressable>
+            );
+          })()}
+
+          {/* ── ÉVÉNEMENT MONDIAL ── */}
+          {worldEvent && (
+            <Pressable onPress={() => worldEventJoined ? null : joinWorldEvent()}
+              style={{ backgroundColor: worldEventJoined ? L.card : L.tealBg, borderRadius: 18, padding: 14,
+                borderWidth: 1, borderColor: worldEventJoined ? L.border : L.teal + "30",
+                flexDirection: "row", alignItems: "center", gap: 12,
+                shadowColor: worldEventJoined ? "transparent" : L.teal, shadowOpacity: 0.1, shadowRadius: 8 }}>
+              <View style={{ width: 44, height: 44, borderRadius: 14,
+                backgroundColor: L.teal + "18", alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ fontSize: 22 }}>{worldEvent.emoji}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: worldEventJoined ? L.muted : L.teal, fontSize: 10, fontWeight: "800", letterSpacing: 1 }}>
+                  🌍 ÉVÉNEMENT MONDIAL · {worldEvent.city.name.toUpperCase()}
+                </Text>
+                <Text numberOfLines={1} style={{ color: L.text, fontSize: 13, fontWeight: "700", marginTop: 1 }}>
+                  {worldEvent.title}
+                </Text>
+                <Text style={{ color: L.gold, fontSize: 11, fontWeight: "700", marginTop: 1 }}>
+                  +{worldEvent.xpReward} XP · +{worldEvent.moneyReward} cr · +{worldEvent.moodBonus} humeur
+                </Text>
+              </View>
+              {worldEventJoined ? (
+                <Text style={{ color: L.green, fontSize: 12, fontWeight: "800" }}>✓ Rejoint</Text>
+              ) : (
+                <Text style={{ color: L.teal, fontSize: 12, fontWeight: "800" }}>Rejoindre →</Text>
+              )}
+            </Pressable>
+          )}
+
           {/* ── ÉVÉNEMENT DU JOUR ── */}
           {dailyEvent && !dailyEvent.resolved && (
             <Pressable onPress={() => setEventModalOpen(true)}
@@ -489,9 +626,12 @@ export default function HomeScreen() {
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {[
               { emoji: "🗺️", label: "Ville",     route: "/(app)/(tabs)/world",  color: L.teal,   bg: L.tealBg    },
-              { emoji: "💊", label: "Santé",     route: "/(app)/health",        color: L.red,    bg: L.redBg     },
+              { emoji: "🌍", label: "Carte",     route: "/(app)/world-social",  color: L.blue,   bg: L.blueBg    },
+              { emoji: "🏙️", label: "Néon",      route: "/(app)/world-live",    color: L.purple, bg: L.purpleBg  },
+              { emoji: "🎯", label: "Quêtes",    route: "/(app)/quests",        color: L.gold,   bg: L.goldBg    },
+              { emoji: "🛍️", label: "Boutique",  route: "/(app)/shop",          color: L.pink,   bg: L.pinkBg    },
               { emoji: "💼", label: "Travail",   route: "/(app)/work",          color: L.blue,   bg: L.blueBg    },
-              { emoji: "👥", label: "Relations", route: "/(app)/relations",     color: L.purple, bg: L.purpleBg  },
+              { emoji: "👥", label: "Relations", route: "/(app)/relations",     color: L.primary, bg: L.primaryBg },
             ].map((item) => (
               <Pressable key={item.route} onPress={() => router.push(item.route as never)}
                 style={{ flexDirection: "row", alignItems: "center", gap: 7,
@@ -530,20 +670,69 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* ── DERNIER ÉVÉNEMENT ── */}
+          {/* ── JOURNAL ── */}
           {lifeFeed.length > 0 && (
             <View style={{ backgroundColor: L.card, borderRadius: 16, padding: 14,
               borderWidth: 1, borderColor: L.border }}>
-              <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 8 }}>
-                DERNIER ÉVÉNEMENT
-              </Text>
-              <Text style={{ color: L.text, fontWeight: "700", fontSize: 13 }}>{lifeFeed[0].title}</Text>
-              <Text numberOfLines={1} style={{ color: L.muted, fontSize: 12, marginTop: 3 }}>{lifeFeed[0].body}</Text>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2 }}>
+                  JOURNAL
+                </Text>
+                <Text style={{ color: L.muted, fontSize: 10 }}>{lifeFeed.length} événements</Text>
+              </View>
+              {lifeFeed.slice(0, 4).map((item, i) => {
+                const isEncounter = item.id.includes("encounter");
+                const isLevelUp   = item.id.includes("lvl");
+                const isNpcAct    = item.id.includes("npc-act");
+                const feedEmoji   = isLevelUp ? "⬆️" : isEncounter ? "👤" : isNpcAct ? "🎭" : "📖";
+                const feedBg      = isLevelUp ? L.goldBg : isEncounter ? L.primaryBg : L.bg;
+                const feedColor   = isLevelUp ? L.gold : isEncounter ? L.primary : L.muted;
+                return (
+                  <View key={item.id} style={{
+                    flexDirection: "row", alignItems: "flex-start", gap: 10,
+                    paddingVertical: 8,
+                    borderBottomWidth: i < Math.min(lifeFeed.length, 4) - 1 ? 1 : 0,
+                    borderBottomColor: L.border,
+                  }}>
+                    <View style={{ width: 28, height: 28, borderRadius: 8,
+                      backgroundColor: feedBg, alignItems: "center", justifyContent: "center", marginTop: 1 }}>
+                      <Text style={{ fontSize: 13 }}>{feedEmoji}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: L.text, fontWeight: "700", fontSize: 12 }}>{item.title}</Text>
+                      <Text numberOfLines={1} style={{ color: feedColor, fontSize: 11, marginTop: 1 }}>{item.body}</Text>
+                    </View>
+                  </View>
+                );
+              })}
             </View>
           )}
 
         </View>
       </ScrollView>
+
+      {/* ── Toast feedback action ── */}
+      {toast && (
+        <Animated.View
+          pointerEvents="none"
+          style={{
+            position: "absolute", bottom: 100, left: 20, right: 20,
+            opacity: toastAnim,
+            transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [16, 0] }) }],
+          }}>
+          <View style={{
+            backgroundColor: toast.color, borderRadius: 20,
+            paddingHorizontal: 20, paddingVertical: 14,
+            flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+            shadowColor: toast.color, shadowOpacity: 0.35, shadowRadius: 16,
+            shadowOffset: { width: 0, height: 4 },
+          }}>
+            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "900", textAlign: "center" }}>
+              {toast.text}
+            </Text>
+          </View>
+        </Animated.View>
+      )}
     </Animated.View>
   );
 }

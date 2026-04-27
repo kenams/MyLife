@@ -1,4 +1,3 @@
-import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
@@ -6,6 +5,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getNpcVisual } from "@/lib/avatar-visual";
 import { getDateReadiness, getDateVenueOptions, starterResidents } from "@/lib/game-engine";
+import { hapticImpact, hapticSuccess } from "@/lib/safe-haptics";
 import { getDateVenueLabel, getRelationshipLabel } from "@/lib/selectors";
 import { useGameStore } from "@/stores/game-store";
 import type { DateVenueKind } from "@/lib/types";
@@ -223,7 +223,7 @@ export default function DatesScreen() {
         {/* ── Bouton proposer ───────────────────────────────────── */}
         {selected && (
           <Pressable
-            onPress={() => { void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); proposeDate(selected.id, selected.name, selectedVenue); }}
+            onPress={() => { hapticImpact("medium"); proposeDate(selected.id, selected.name, selectedVenue); }}
             disabled={!readiness.allowed}
             style={{
               backgroundColor: readiness.allowed ? L.pink : L.bg,
@@ -273,7 +273,7 @@ export default function DatesScreen() {
                     </View>
                     {plan.status === "proposed" && (
                       <View style={{ flexDirection: "row", gap: 10 }}>
-                        <Pressable onPress={() => { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); respondDatePlan(plan.id, "accepted"); }}
+                        <Pressable onPress={() => { hapticSuccess(); respondDatePlan(plan.id, "accepted"); }}
                           style={{ flex: 1, backgroundColor: L.green, borderRadius: 12,
                             paddingVertical: 10, alignItems: "center" }}>
                           <Text style={{ color: "#fff", fontWeight: "800" }}>✓ Confirmer</Text>
@@ -287,7 +287,7 @@ export default function DatesScreen() {
                       </View>
                     )}
                     {plan.status === "accepted" && (
-                      <Pressable onPress={() => { void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); completeDatePlan(plan.id); }}
+                      <Pressable onPress={() => { hapticSuccess(); completeDatePlan(plan.id); }}
                         style={{ backgroundColor: L.purple, borderRadius: 12,
                           paddingVertical: 12, alignItems: "center" }}>
                         <Text style={{ color: "#fff", fontWeight: "800", fontSize: 14 }}>🎉 Jouer le date</Text>
