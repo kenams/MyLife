@@ -60,6 +60,8 @@ import type { WorldEvent } from "@/lib/world-events";
 import { applyItemEffect, getItemById, SHOP_ITEMS } from "@/lib/inventory";
 import type { InventoryItem } from "@/lib/inventory";
 import type { NpcRelation } from "@/lib/types";
+import { calcGiftBonus, getGiftReaction, GIFTS, getTierFromScore, TIER_META, DATE_RESULT_META, getDateResult } from "@/lib/romance";
+import type { GiftId } from "@/lib/romance";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
   AvatarProfile,
@@ -409,6 +411,11 @@ type GameState = {
   // ── NPC Relations ───────────────────────────────────────────────────────────
   npcRelations: NpcRelation[];
   updateNpcRelation: (npcId: string, delta: number, npcName?: string) => void;
+  // ── Romance ─────────────────────────────────────────────────────────────────
+  activeDatePlanId: string | null;
+  startDateNarrative: (planId: string) => void;
+  finalizeDate: (planId: string, totalDelta: number) => void;
+  sendGift: (residentId: string, residentName: string, giftId: GiftId, npcInterests: string[]) => { ok: boolean; bonus: number; reaction: string; error?: string };
 };
 
 const LOVE_ROOM_MOMENTS: Record<LoveRoomMomentKind, { title: string; userLine: string; reply: string; scoreGain: number; moodGain: number }> = {
@@ -517,6 +524,7 @@ function initialState() {
     worldEventJoined: false,
     inventory: [] as InventoryItem[],
     npcRelations: [] as NpcRelation[],
+    activeDatePlanId: null as string | null,
     avatar: null as AvatarProfile | null,
     dailyEvent: null as DailyEvent | null,
     lastKnownRank: null as SocialRank | null,
@@ -3694,6 +3702,109 @@ export const useGameStore = create<GameState>()(
           notifications,
         };
       }),
+
+      // ── Romance ───────────────────────────────────────────────────────────────
+      startDateNarrative: (planId) => set({ activeDatePlanId: planId }),
+
+      finalizeDate: (planId, totalDelta) => set((state) => {
+        const plan = state.datePlans.find((p) => p.id === planId);
+        if (!plan) return { activeDatePlanId: null };
+
+        const result = getDateResult(totalDelta);
+        const meta   = DATE_RESULT_META[result];
+        const resident = starterResidents.find((r) => r.id === plan.residentId);
+
+        // Tier check for milestone notification
+        const relBefore = state.relationships.find((r) => r.residentId === plan.residentId);
+        const scoreBefore = relBefore?.score ?? 0;
+        const scoreAfter  = Math.min(100, scoreBefore + meta.relationBonus);
+        const tierBefore  = getTierFromScore(scoreBefore);
+        const tierAfter   = getTierFromScore(scoreAfter);
+
+        let notifications = state.notifications;
+        if (tierBefore !== tierAfter) {
+          const tierMeta = TIER_META[tierAfter];
+          notifications = appendNotification(notifications, {
+            id: `milestone-${plan.residentId}-${Date.now()}`,
+            kind: "social",
+            title: `${tierMeta.emoji} Nouveau niveau avec ${plan.residentName} !`,
+            body: `${tierMeta.feedMsg} (${tierMeta.label})`,
+            createdAt: nowIso(),
+            read: false,
+          });
+        }
+
+        const moodDelta = meta.moodBonus;
+        const nextStats = { ...state.stats, mood: Math.max(0, Math.min(100, state.stats.mood + moodDelta)) };
+
+        return {
+          activeDatePlanId: null,
+          datePlans: state.datePlans.map((p) => p.id === planId ? { ...p, status: "completed" as const } : p),
+          stats: normalizeStats(nextStats),
+          relationships: meta.relationBonus > 0
+            ? updateRelationshipScore(state.relationships, plan.residentId, meta.relationBonus, nextStats, resident?.reputation ?? 60, "crush")
+            : state.relationships,
+          notifications,
+          lifeFeed: appendFeed(state.lifeFeed, {
+            id: `feed-date-${planId}`,
+            title: `${meta.emoji} ${meta.label} avec ${plan.residentName}`,
+            body: meta.desc,
+            createdAt: nowIso(),
+          }),
+        };
+      }),
+
+      sendGift: (residentId, residentName, giftId, npcInterests) => {
+        const gift = GIFTS.find((g) => g.id === giftId);
+        if (!gift) return { ok: false, bonus: 0, reaction: "", error: "Cadeau introuvable" };
+
+        let result = { ok: false, bonus: 0, reaction: "" as string, error: undefined as string | undefined };
+
+        set((state) => {
+          if (state.stats.money < gift.price) {
+            result = { ok: false, bonus: 0, reaction: "", error: "Pas assez de crédits" };
+            return state;
+          }
+          const bonus    = calcGiftBonus(gift, npcInterests);
+          const reaction = getGiftReaction(bonus, residentName);
+          const resident = starterResidents.find((r) => r.id === residentId);
+
+          // Tier check
+          const relBefore  = state.relationships.find((r) => r.residentId === residentId);
+          const scoreBefore = relBefore?.score ?? 0;
+          const scoreAfter  = Math.min(100, scoreBefore + bonus);
+          const tierBefore  = getTierFromScore(scoreBefore);
+          const tierAfter   = getTierFromScore(scoreAfter);
+
+          let notifications = state.notifications;
+          if (tierBefore !== tierAfter) {
+            const tm = TIER_META[tierAfter];
+            notifications = appendNotification(notifications, {
+              id: `milestone-gift-${residentId}-${Date.now()}`,
+              kind: "social",
+              title: `${tm.emoji} ${residentName} : ${tm.label} !`,
+              body: tm.feedMsg,
+              createdAt: nowIso(),
+              read: false,
+            });
+          }
+
+          result = { ok: true, bonus, reaction, error: undefined };
+          return {
+            stats: normalizeStats({ ...state.stats, money: state.stats.money - gift.price }),
+            relationships: updateRelationshipScore(state.relationships, residentId, bonus, state.stats, resident?.reputation ?? 60),
+            notifications,
+            lifeFeed: appendFeed(state.lifeFeed, {
+              id: `feed-gift-${residentId}-${Date.now()}`,
+              title: `${gift.emoji} Cadeau envoyé à ${residentName}`,
+              body: reaction,
+              createdAt: nowIso(),
+            }),
+          };
+        });
+
+        return result;
+      },
     }),
     {
       name: "mylife-storage",

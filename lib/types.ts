@@ -516,6 +516,9 @@ export type { WorldEvent, WorldEventKind, WorldEventCity } from "@/lib/world-eve
 // ─── Inventory ────────────────────────────────────────────────────────────────
 export type { InventoryItem, ShopItem, ItemCategory } from "@/lib/inventory";
 
+// ─── Romance ──────────────────────────────────────────────────────────────────
+export type { RomanceTier, GiftId, GiftDef, DateResult } from "@/lib/romance";
+
 // ─── NPC Relations ────────────────────────────────────────────────────────────
 export type NpcRelation = {
   npcId: string;

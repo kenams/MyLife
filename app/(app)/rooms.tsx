@@ -17,6 +17,7 @@ const KIND_META: Record<string, { color: string; emoji: string; label: string }>
   private: { color: "#8b7cff", emoji: "🔒", label: "Privée"    },
   event:   { color: "#f6b94f", emoji: "🎉", label: "Événement" },
   secret:  { color: "#9b59b6", emoji: "🔐", label: "Secrète"   },
+  love:    { color: "#ec4899", emoji: "💕", label: "Love Room"  },
 };
 
 // ─── Mini Preview (vue du dessus réduite) ─────────────────────────────────────
@@ -424,7 +425,7 @@ export default function RoomsScreen() {
               TYPE DE ROOM
             </Text>
             <View style={{ flexDirection: "row", gap: 10 }}>
-              {(["public", "private", "event"] as RoomKind[]).map((k) => {
+              {(["public", "private", "event", "love"] as RoomKind[]).map((k) => {
                 const meta = KIND_META[k];
                 return (
                   <Pressable key={k} onPress={() => setNewKind(k)}
@@ -449,7 +450,7 @@ export default function RoomsScreen() {
                   room={{
                     id: "preview", name: newName || "Ma Room", kind: newKind,
                     code: "PREV", ownerId: "", ownerName: "Toi",
-                    locationSlug: newKind === "event" ? "event-hall" : newKind === "private" ? "home" : "cafe",
+                    locationSlug: newKind === "event" ? "event-hall" : newKind === "love" ? "residence-luxe" : newKind === "private" ? "home" : "cafe",
                     memberCount: 1, maxMembers: 20, description: newDesc,
                     createdAt: new Date().toISOString(), isActive: true
                   }}
