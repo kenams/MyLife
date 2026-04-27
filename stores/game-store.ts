@@ -62,6 +62,8 @@ import type { InventoryItem } from "@/lib/inventory";
 import type { NpcRelation } from "@/lib/types";
 import { calcGiftBonus, getGiftReaction, GIFTS, getTierFromScore, TIER_META, DATE_RESULT_META, getDateResult } from "@/lib/romance";
 import type { GiftId } from "@/lib/romance";
+import { DEFAULT_THEME } from "@/lib/themes";
+import type { ThemeId } from "@/lib/themes";
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import type {
   AvatarProfile,
@@ -416,6 +418,9 @@ type GameState = {
   startDateNarrative: (planId: string) => void;
   finalizeDate: (planId: string, totalDelta: number) => void;
   sendGift: (residentId: string, residentName: string, giftId: GiftId, npcInterests: string[]) => { ok: boolean; bonus: number; reaction: string; error?: string };
+  // ── Theme ────────────────────────────────────────────────────────────────────
+  appTheme: ThemeId;
+  setAppTheme: (id: ThemeId) => void;
 };
 
 const LOVE_ROOM_MOMENTS: Record<LoveRoomMomentKind, { title: string; userLine: string; reply: string; scoreGain: number; moodGain: number }> = {
@@ -525,6 +530,7 @@ function initialState() {
     inventory: [] as InventoryItem[],
     npcRelations: [] as NpcRelation[],
     activeDatePlanId: null as string | null,
+    appTheme: DEFAULT_THEME as ThemeId,
     avatar: null as AvatarProfile | null,
     dailyEvent: null as DailyEvent | null,
     lastKnownRank: null as SocialRank | null,
@@ -3703,6 +3709,9 @@ export const useGameStore = create<GameState>()(
         };
       }),
 
+      // ── Theme ─────────────────────────────────────────────────────────────────
+      setAppTheme: (id) => set({ appTheme: id }),
+
       // ── Romance ───────────────────────────────────────────────────────────────
       startDateNarrative: (planId) => set({ activeDatePlanId: planId }),
 
@@ -3852,6 +3861,7 @@ export const useGameStore = create<GameState>()(
         worldEventJoined: state.worldEventJoined,
         inventory: state.inventory,
         npcRelations: state.npcRelations,
+        appTheme: state.appTheme,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) {

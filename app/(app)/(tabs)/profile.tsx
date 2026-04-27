@@ -11,6 +11,8 @@ import { getHousingTier } from "@/lib/housing";
 import { getActivePremiumBoost, getBoostMultiplier } from "@/lib/premium";
 import { getLevelTitle } from "@/lib/progression";
 import { getMomentumState, getSocialRankLabel, getSocialRankProgressData, RANK_ORDER } from "@/lib/selectors";
+import { THEMES } from "@/lib/themes";
+import type { ThemeId } from "@/lib/themes";
 import { useGameStore } from "@/stores/game-store";
 
 // ─── Light theme local ────────────────────────────────────────────────────────
@@ -207,6 +209,8 @@ export default function ProfileScreen() {
   const housingTier      = useGameStore((s) => s.housingTier);
   const wealthScore      = useGameStore((s) => s.wealthScore);
   const sessionData      = useGameStore((s) => s.session);
+  const appTheme         = useGameStore((s) => s.appTheme);
+  const setAppTheme      = useGameStore((s) => s.setAppTheme);
 
   const momentum    = getMomentumState(stats);
   const activeBoost = getActivePremiumBoost(activeBoosts);
@@ -531,6 +535,31 @@ export default function ProfileScreen() {
                 alignItems: "center", borderWidth: 1, borderColor: L.primary + "30" }}>
               <Text style={{ color: L.primary, fontWeight: "700", fontSize: 13 }}>✏️ Modifier le profil</Text>
             </Pressable>
+          </View>
+
+          {/* ── THÈME ── */}
+          <View>
+            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 10 }}>
+              DIRECTION ARTISTIQUE
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {(Object.values(THEMES) as (typeof THEMES)[ThemeId][]).map((t) => {
+                const active = appTheme === t.id;
+                return (
+                  <Pressable key={t.id} onPress={() => setAppTheme(t.id as ThemeId)}
+                    style={{ flex: 1, borderRadius: 16, padding: 12, alignItems: "center", gap: 4,
+                      backgroundColor: active ? t.primary + "20" : L.card,
+                      borderWidth: active ? 2 : 1,
+                      borderColor: active ? t.primary : L.border }}>
+                    <Text style={{ fontSize: 22 }}>{t.emoji}</Text>
+                    <Text style={{ color: active ? t.primary : L.textSoft, fontSize: 10, fontWeight: "800", textAlign: "center" }}>
+                      {t.name}
+                    </Text>
+                    <Text style={{ color: L.muted, fontSize: 9, textAlign: "center" }}>{t.tagline}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
 
           {/* ── ACCÈS RAPIDE ── */}

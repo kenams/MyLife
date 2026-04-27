@@ -2,13 +2,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 import { Text, View } from "react-native";
 
+import { useAppTheme } from "@/hooks/use-app-theme";
 import { buildMapEvents } from "@/lib/map-events";
 import { useGameStore } from "@/stores/game-store";
 
-const TAB_ACTIVE   = "#6366f1";
-const TAB_INACTIVE = "#8fa3b8";
-const BADGE_RED    = "#ef4444";
-const BADGE_GOLD   = "#f59e0b";
+const BADGE_RED  = "#ef4444";
+const BADGE_GOLD = "#f59e0b";
 
 function Badge({ count, color }: { count: number; color: string }) {
   if (count <= 0) return null;
@@ -62,6 +61,7 @@ function WorldIcon({ color, focused }: { color: string; focused: boolean }) {
 }
 
 export default function TabsLayout() {
+  const T = useAppTheme();
   return (
     <Tabs
       screenOptions={{
@@ -71,21 +71,21 @@ export default function TabsLayout() {
           left: 12,
           right: 12,
           bottom: 10,
-          backgroundColor: "rgba(255,255,255,0.97)",
-          borderTopColor: "rgba(0,0,0,0.06)",
+          backgroundColor: T.tabBg,
+          borderTopColor: T.tabBorder,
           borderTopWidth: 1,
           borderRadius: 24,
           height: 72,
           paddingBottom: 10,
           paddingTop: 8,
-          shadowColor: "rgba(99,102,241,0.15)",
+          shadowColor: T.tabShadow,
           shadowOpacity: 1,
           shadowRadius: 20,
           shadowOffset: { width: 0, height: -4 },
           elevation: 16,
         },
-        tabBarActiveTintColor:   TAB_ACTIVE,
-        tabBarInactiveTintColor: TAB_INACTIVE,
+        tabBarActiveTintColor:   T.tabActive,
+        tabBarInactiveTintColor: T.tabInactive,
         tabBarItemStyle:   { borderRadius: 16, marginHorizontal: 2 },
         tabBarLabelStyle:  { fontSize: 10, fontWeight: "800", marginTop: 1 },
       }}
