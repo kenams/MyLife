@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyLife — Life Map Paris</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:#141414; display:flex; justify-content:center; align-items:center; min-height:100vh; font-family:-apple-system,sans-serif; gap:40px; flex-wrap:wrap; padding:40px; }
+.phone { width:375px; height:812px; background:#0a0a0a; border-radius:44px; overflow:hidden; position:relative; box-shadow:0 40px 120px rgba(0,0,0,0.8),inset 0 1px 0 rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.06); }
+
+/* Map dark Paris SVG */
+.map-bg { position:absolute; inset:0; background:radial-gradient(ellipse at 60% 40%, #051218 0%, #080808 60%); overflow:hidden; }
+.map-bg::before { content:""; position:absolute; inset:0;
+  background:
+    linear-gradient(transparent 49.5%, rgba(255,255,255,0.03) 49.5%, rgba(255,255,255,0.03) 50.5%, transparent 50.5%) 0 0 / 60px 60px,
+    linear-gradient(90deg, transparent 49.5%, rgba(255,255,255,0.03) 49.5%, rgba(255,255,255,0.03) 50.5%, transparent 50.5%) 0 0 / 60px 60px;
+}
+/* Seine */
+.seine { position:absolute; top:55%; left:0; right:0; height:18px;
+  background:rgba(0,60,100,0.5); border-radius:50%;
+  box-shadow:0 0 20px rgba(0,180,255,0.15); }
+/* Routes */
+.route { position:absolute; background:rgba(255,255,255,0.04); }
+.r1 { top:0; bottom:0; left:50%; width:2px; }
+.r2 { left:0; right:0; top:45%; height:2px; }
+.r3 { left:0; right:0; top:30%; height:1px; transform:rotate(-5deg); }
+.r4 { top:0; bottom:0; left:30%; width:1px; transform:rotate(3deg); }
+.r5 { top:0; bottom:0; left:70%; width:1px; }
+
+/* Overlay gradient haut/bas */
+.map-fade-top { position:absolute; top:0; left:0; right:0; height:120px;
+  background:linear-gradient(to bottom, rgba(8,8,8,0.9), transparent); pointer-events:none; z-index:5; }
+.map-fade-bot { position:absolute; bottom:0; left:0; right:0; height:80px;
+  background:linear-gradient(to top, rgba(8,8,8,0.95), transparent); pointer-events:none; z-index:5; }
+
+/* Header */
+.header { position:absolute; top:0; left:0; right:0; padding:54px 16px 12px;
+  display:flex; align-items:center; justify-content:space-between; z-index:10; }
+.chip { background:rgba(17,17,17,0.92); border-radius:14px; padding:8px 14px;
+  border:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; gap:8px; }
+.dot-live { width:7px; height:7px; border-radius:50%; background:#39FF14;
+  box-shadow:0 0 6px #39FF14; }
+.chip-text { color:#F5F2E8; font-size:13px; font-weight:800; }
+.status-chip { background:rgba(17,17,17,0.92); border-radius:14px; padding:8px 14px;
+  border:1px solid rgba(255,214,0,0.3); display:flex; align-items:center; gap:8px; cursor:pointer; }
+.status-text { color:#FFD600; font-size:13px; font-weight:800; }
+
+/* Filtres */
+.filters { position:absolute; top:110px; left:0; right:0; padding:0 16px;
+  display:flex; gap:8px; overflow-x:auto; z-index:10; }
+.filter-pill { padding:8px 14px; border-radius:20px; border:1px solid rgba(255,255,255,0.07);
+  background:rgba(17,17,17,0.9); font-size:12px; font-weight:800; color:#F5F2E8;
+  white-space:nowrap; cursor:pointer; }
+.filter-pill.active { background:#FFD600; color:#080808; border-color:#FFD600; }
+
+/* Players markers */
+.marker { position:absolute; display:flex; flex-direction:column; align-items:center; cursor:pointer; transform:translate(-50%,-100%); }
+.marker-ring { border-radius:50%; border:2px solid; display:flex; align-items:center; justify-content:center; }
+.marker-name { margin-top:3px; border-radius:6px; padding:2px 6px; border:1px solid; font-size:9px; font-weight:800; color:#F5F2E8; }
+
+/* Star pulse */
+@keyframes pulse { 0%,100%{transform:scale(1)} 50%{transform:scale(1.25)} }
+.star-pulse { position:absolute; width:54px; height:54px; border-radius:50%; animation:pulse 1.8s ease-in-out infinite; top:50%; left:50%; transform:translate(-50%,-50%); }
+
+/* CTA bottom */
+.cta-bottom { position:absolute; bottom:90px; left:20px; right:20px; z-index:10; }
+.cta-btn { background:#FFD600; border-radius:18px; padding:18px; text-align:center;
+  box-shadow:0 0 30px rgba(255,214,0,0.35); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:10px; }
+.cta-btn span { color:#080808; font-size:16px; font-weight:900; }
+.cta-sub { color:#4A4844; font-size:11px; text-align:center; margin-top:8px; }
+
+/* Tab bar */
+.tabbar { position:absolute; bottom:0; left:0; right:0; height:74px;
+  background:rgba(8,8,8,0.94); border-top:1px solid rgba(255,255,255,0.07);
+  display:flex; align-items:center; justify-content:space-around; padding:0 8px 16px; z-index:20; }
+.tab { display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 12px; }
+.tab-icon { font-size:20px; opacity:0.3; }
+.tab-icon.active { opacity:1; }
+.tab-label { font-size:10px; color:#4A4844; font-weight:600; }
+.tab-label.active { color:#FFD600; font-weight:800; }
+
+/* Fiche profil (vue côte à côte) */
+.sheet { width:375px; background:#111; border-radius:28px 28px 0 0; padding:24px; padding-bottom:40px; position:relative; border:1px solid rgba(255,255,255,0.07); }
+.sheet-handle { width:36px; height:4px; border-radius:2px; background:rgba(255,255,255,0.07); margin:0 auto 20px; }
+.sheet-header { display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+.sheet-avatar { width:60px; height:60px; border-radius:50%; background:#181818; border:3px solid #BF5FFF; display:flex; align-items:center; justify-content:center; font-size:28px; box-shadow:0 0 20px rgba(191,95,255,0.3); flex-shrink:0; }
+.sheet-name { color:#F5F2E8; font-size:18px; font-weight:900; }
+.sheet-sub { color:#4A4844; font-size:12px; margin-top:3px; }
+.sheet-status-badge { margin-left:auto; text-align:center; }
+.sheet-infos { background:#181818; border-radius:14px; padding:14px; display:flex; flex-direction:column; gap:10px; margin-bottom:16px; }
+.info-row { display:flex; align-items:center; gap:10px; }
+.info-text { color:#A8A49A; font-size:13px; }
+.info-verified { color:#39FF14; font-size:13px; }
+.cta-sheet { background:#BF5FFF; border-radius:16px; padding:17px; text-align:center; box-shadow:0 0 20px rgba(191,95,255,0.3); cursor:pointer; }
+.cta-sheet span { color:#080808; font-size:16px; font-weight:900; }
+
+/* Status picker */
+.picker { width:375px; background:#111; border-radius:24px; padding:20px; border:1px solid rgba(255,255,255,0.07); }
+.picker-title { color:#F5F2E8; font-size:16px; font-weight:900; text-align:center; margin-bottom:16px; }
+.status-row { display:flex; align-items:center; gap:14px; padding:16px; border-radius:14px; background:#181818; margin-bottom:8px; cursor:pointer; }
+.status-row.active { background:rgba(255,214,0,0.1); border:1px solid rgba(255,214,0,0.3); }
+.status-row-info { flex:1; }
+.status-row-label { color:#F5F2E8; font-size:15px; font-weight:800; }
+.status-row-label.active { color:#FFD600; }
+.status-row-desc { color:#4A4844; font-size:12px; margin-top:2px; }
+</style>
+</head>
+<body>
+
+<!-- ÉCRAN 1 : Life Map principale -->
+<div>
+<div style="color:#A8A49A;font-size:12px;font-weight:700;text-align:center;margin-bottom:12px;letter-spacing:1px;">LIFE MAP — PARIS LIVE</div>
+<div class="phone">
+  <div class="map-bg">
+    <div class="seine"></div>
+    <div class="route r1"></div>
+    <div class="route r2"></div>
+    <div class="route r3"></div>
+    <div class="route r4"></div>
+    <div class="route r5"></div>
+  </div>
+  <div class="map-fade-top"></div>
+  <div class="map-fade-bot"></div>
+
+  <!-- HEADER -->
+  <div class="header">
+    <div class="chip">
+      <div class="dot-live"></div>
+      <span class="chip-text">7 en live · Paris</span>
+    </div>
+    <div class="status-chip">
+      <span>🟡</span>
+      <span class="status-text">Libre</span>
+    </div>
+  </div>
+
+  <!-- FILTRES -->
+  <div class="filters">
+    <div class="filter-pill active">Tous</div>
+    <div class="filter-pill">🟡 Libre</div>
+    <div class="filter-pill">💜 Soirée</div>
+    <div class="filter-pill">🔴 Charo</div>
+    <div class="filter-pill">💍 Pris</div>
+  </div>
+
+  <!-- MARKERS -->
+  <!-- Jok'air star — Montmartre nord -->
+  <div class="marker" style="left:52%;top:22%">
+    <div style="position:relative;width:46px;height:46px">
+      <div class="star-pulse" style="background:rgba(191,95,255,0.18)"></div>
+      <div class="marker-ring" style="width:46px;height:46px;border-color:#BF5FFF;background:#111;box-shadow:0 0 14px rgba(191,95,255,0.5)">
+        <span style="font-size:20px">🎤</span>
+      </div>
+    </div>
+    <div class="marker-name" style="background:#111;border-color:rgba(191,95,255,0.3)">
+      Jok'air ✓
+    </div>
+  </div>
+
+  <!-- Karim — Aubervilliers nord -->
+  <div class="marker" style="left:62%;top:14%">
+    <div class="marker-ring" style="width:38px;height:38px;border-color:#FFD600;background:#111;box-shadow:0 0 8px rgba(255,214,0,0.3)">
+      <span style="font-size:16px">🧢</span>
+    </div>
+    <div class="marker-name" style="background:#111;border-color:rgba(255,214,0,0.2)">Karim_93</div>
+  </div>
+
+  <!-- Lina — République centre -->
+  <div class="marker" style="left:57%;top:38%">
+    <div class="marker-ring" style="width:38px;height:38px;border-color:#BF5FFF;background:#111;box-shadow:0 0 8px rgba(191,95,255,0.3)">
+      <span style="font-size:16px">👑</span>
+    </div>
+    <div class="marker-name" style="background:#111;border-color:rgba(191,95,255,0.2)">Lina.Paris</div>
+  </div>
+
+  <!-- Seb — Belleville -->
+  <div class="marker" style="left:67%;top:32%">
+    <div class="marker-ring" style="width:38px;height:38px;border-color:#FFD600;background:#111">
+      <span style="font-size:16px">🎨</span>
+    </div>
+    <div class="marker-name" style="background:#111;border-color:rgba(255,214,0,0.2)">Seb_Bell. ✓</div>
+  </div>
+
+  <!-- Toxic — Nation est -->
+  <div class="marker" style="left:72%;top:52%">
+    <div class="marker-ring" style="width:38px;height:38px;border-color:#FF3B3B;background:#111;box-shadow:0 0 8px rgba(255,59,59,0.3)">
+      <span style="font-size:16px">🔥</span>
+    </div>
+    <div class="marker-name" style="background:#111;border-color:rgba(255,59,59,0.2)">Toxic_Nation</div>
+  </div>
+
+  <!-- Amina — Montreuil -->
+  <div class="marker" style="left:80%;top:44%">
+    <div class="marker-ring" style="width:38px;height:38px;border-color:#39FF14;background:#111">
+      <span style="font-size:16px">💄</span>
+    </div>
+    <div class="marker-name" style="background:#111;border-color:rgba(57,255,20,0.2)">Amina.M ✓</div>
+  </div>
+
+  <!-- Djo — Saint-Denis -->
+  <div class="marker" style="left:48%;top:10%">
+    <div class="marker-ring" style="width:38px;height:38px;border-color:#FFD600;background:#111">
+      <span style="font-size:16px">⚽</span>
+    </div>
+    <div class="marker-name" style="background:#111;border-color:rgba(255,214,0,0.2)">Djo.SDenis ✓</div>
+  </div>
+
+  <!-- CTA bottom -->
+  <div class="cta-bottom">
+    <div class="cta-btn">
+      <span style="font-size:20px">📍</span>
+      <span>Apparaître sur la map</span>
+    </div>
+    <div class="cta-sub">Ta position est réelle · Vérifiée · Ghost disponible à tout moment</div>
+  </div>
+
+  <!-- TAB BAR -->
+  <div class="tabbar">
+    <div class="tab"><div class="tab-icon">✨</div><div class="tab-label">Vie</div></div>
+    <div class="tab"><div class="tab-icon active">🗺️</div><div class="tab-label active">Map</div></div>
+    <div class="tab"><div class="tab-icon">🧭</div><div class="tab-label">Ville</div></div>
+    <div class="tab"><div class="tab-icon">💬</div><div class="tab-label">Chat</div></div>
+    <div class="tab"><div class="tab-icon">👤</div><div class="tab-label">Profil</div></div>
+  </div>
+</div>
+</div>
+
+<!-- ÉCRAN 2 : Fiche Jok'air -->
+<div>
+<div style="color:#A8A49A;font-size:12px;font-weight:700;text-align:center;margin-bottom:12px;letter-spacing:1px;">FICHE JOUEUR — STAR</div>
+<div class="sheet" style="width:375px">
+  <div class="sheet-handle"></div>
+  <div class="sheet-header">
+    <div class="sheet-avatar" style="border-color:#BF5FFF;box-shadow:0 0 20px rgba(191,95,255,0.35)">🎤</div>
+    <div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="sheet-name">Jok'air</div>
+        <div style="background:#BF5FFF;border-radius:4px;padding:2px 6px;font-size:9px;font-weight:900;color:#080808">STAR</div>
+      </div>
+      <div class="sheet-sub">Niveau 99 · Montmartre</div>
+    </div>
+    <div class="sheet-status-badge">
+      <div style="font-size:20px">💜</div>
+      <div style="color:#BF5FFF;font-size:10px;font-weight:800">Soirée</div>
+    </div>
+  </div>
+  <div class="sheet-infos">
+    <div class="info-row"><span>🎮</span><span class="info-text">Studio session — Montmartre</span></div>
+    <div class="info-row"><span>📍</span><span class="info-text">Montmartre <span class="info-verified">· Vérifié ✓</span></span></div>
+    <div class="info-row"><span>🕐</span><span style="color:#4A4844;font-size:13px">À l'instant</span></div>
+  </div>
+  <div class="cta-sheet" style="background:#BF5FFF">
+    <span style="color:#080808">🎤 Dire wesh à Jok'air</span>
+  </div>
+</div>
+</div>
+
+<!-- ÉCRAN 3 : Sélecteur de statut -->
+<div>
+<div style="color:#A8A49A;font-size:12px;font-weight:700;text-align:center;margin-bottom:12px;letter-spacing:1px;">MON STATUT</div>
+<div class="picker">
+  <div class="picker-title">Ton statut sur la map</div>
+  <div class="status-row active">
+    <span style="font-size:22px">🟡</span>
+    <div class="status-row-info">
+      <div class="status-row-label active">Libre</div>
+      <div class="status-row-desc">Je cherche</div>
+    </div>
+    <span style="color:#FFD600;font-size:18px">✓</span>
+  </div>
+  <div class="status-row">
+    <span style="font-size:22px">💜</span>
+    <div class="status-row-info">
+      <div class="status-row-label">Soirée</div>
+      <div class="status-row-desc">Je sors ce soir</div>
+    </div>
+  </div>
+  <div class="status-row">
+    <span style="font-size:22px">🔴</span>
+    <div class="status-row-info">
+      <div class="status-row-label">Charo</div>
+      <div class="status-row-desc">Décomplexé, assumé</div>
+    </div>
+  </div>
+  <div class="status-row">
+    <span style="font-size:22px">💍</span>
+    <div class="status-row-info">
+      <div class="status-row-label">Pris</div>
+      <div class="status-row-desc">Just vibes, amis</div>
+    </div>
+  </div>
+  <div class="status-row">
+    <span style="font-size:22px">⚫</span>
+    <div class="status-row-info">
+      <div class="status-row-label">Ghost</div>
+      <div class="status-row-desc">Mode discret</div>
+    </div>
+  </div>
+</div>
+</div>
+
+</body>
+</html>

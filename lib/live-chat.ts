@@ -1,4 +1,4 @@
-import { supabase } from "./supabase-client";
+import { supabase } from "./supabase";
 import { rateLimit } from "./safety";
 
 export type QuartierMessage = {
@@ -32,13 +32,14 @@ export function dmRoomId(uidA: string, uidB: string): string {
 
 export async function fetchQuartierMessages(quartier: string, limit = 50): Promise<QuartierMessage[]> {
   if (!supabase) return MOCK_MESSAGES[quartier] ?? [];
-  const { data } = await supabase
+  const { data, error } = await supabase
     .from("quartier_messages")
     .select("*")
     .eq("quartier", quartier)
     .order("created_at", { ascending: false })
     .limit(limit);
-  return ((data ?? []) as QuartierMessage[]).reverse();
+  if (error || !data || data.length === 0) return MOCK_MESSAGES[quartier] ?? [];
+  return (data as QuartierMessage[]).reverse();
 }
 
 export async function sendQuartierMessage(params: {

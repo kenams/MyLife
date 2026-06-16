@@ -245,8 +245,12 @@ export default function HomeScreen() {
   ].filter(Boolean) as LifeActionId[])).slice(0, 8);
 
   const allRows = wantedIds
-    .map((id) => ({ action: actionById.get(id)!, blocked: blockedReason(actionById.get(id)!) }))
-    .filter((r) => r.action);
+    .map((id) => {
+      const action = actionById.get(id);
+      if (!action) return null;
+      return { action, blocked: blockedReason(action) };
+    })
+    .filter(Boolean) as { action: ActionDef; blocked: string | undefined }[];
 
   const availableRows = allRows.filter((r) => !r.blocked).slice(0, 5);
   const blockedRows   = allRows.filter((r) => r.blocked).slice(0, 2);

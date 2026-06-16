@@ -5,11 +5,11 @@ import { Pressable, SafeAreaView, ScrollView, Text, TextInput, View } from "reac
 import { useGameStore } from "@/stores/game-store";
 
 const L = {
-  bg: "#e8edf5", card: "#f0f4fa", border: "#ccd4e0",
-  text: "#1e2a3a", textSoft: "#4a5568", muted: "#8fa3b8",
-  primary: "#6366f1", primaryBg: "#eef2ff",
-  green: "#10b981", greenBg: "#ecfdf5",
-  red: "#ef4444", redBg: "#fef2f2",
+  bg: "#080808", card: "#111111", border: "#222222",
+  text: "#F5F5F0", textSoft: "#A0A0A0", muted: "#555555",
+  primary: "#FFD600", primaryBg: "#1a1600",
+  green: "#39FF14", greenBg: "#0a1a00",
+  red: "#FF3B3B", redBg: "#1a0000",
 };
 
 type Tab = "signin" | "signup" | "reset";

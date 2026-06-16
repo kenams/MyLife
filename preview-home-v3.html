@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>MyLife — Home v3</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#1a1a1a; display:flex; justify-content:center; align-items:center; min-height:100vh; font-family: -apple-system, 'SF Pro Display', sans-serif; }
+  .phone { width:375px; height:812px; background:#080808; border-radius:44px; overflow:hidden; position:relative; box-shadow: 0 40px 120px rgba(0,0,0,0.8), inset 0 1px 0 rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.06); }
+  .scroll { overflow-y:auto; height:100%; padding-bottom:80px; }
+  .scroll::-webkit-scrollbar { display:none; }
+
+  /* Header */
+  .header { padding: 54px 20px 18px; border-bottom:1px solid rgba(255,255,255,0.07); }
+  .greeting { color:#4A4844; font-size:12px; font-weight:700; letter-spacing:0.3px; margin-bottom:10px; }
+  .top-row { display:flex; align-items:center; gap:12px; }
+  .avatar { width:44px; height:44px; border-radius:50%; background:#111; border:1px solid rgba(255,255,255,0.07); display:flex; align-items:center; justify-content:center; font-size:22px; flex-shrink:0; }
+  .name-block { flex:1; }
+  .player-name { color:#F5F2E8; font-size:16px; font-weight:900; }
+  .player-sub { color:#4A4844; font-size:12px; margin-top:2px; }
+  .money { color:#FFD600; font-size:15px; font-weight:900; }
+
+  /* Barre de vie */
+  .life-row { display:flex; align-items:center; gap:10px; margin-top:14px; }
+  .life-track { flex:1; height:3px; border-radius:2px; background:#111; }
+  .life-fill { height:3px; border-radius:2px; background:#FF3B3B; box-shadow:0 0 8px rgba(255,59,59,0.6); width:38%; }
+  .life-label { color:#FF3B3B; font-size:11px; font-weight:800; min-width:72px; text-align:right; }
+
+  /* Sections */
+  .section { padding:0 20px; }
+
+  /* Urgent */
+  .urgent-card { margin:20px 20px 0; background:#111; border-radius:16px; padding:18px; border:1px solid rgba(255,59,59,0.18); }
+  .urgent-top { display:flex; align-items:flex-start; gap:12px; }
+  .urgent-emoji { font-size:28px; }
+  .urgent-badge { color:#FF3B3B; font-size:9px; font-weight:900; letter-spacing:1.5px; }
+  .urgent-title { color:#F5F2E8; font-size:17px; font-weight:900; margin-top:2px; }
+  .urgent-body { color:#A8A49A; font-size:13px; margin-top:3px; }
+  .urgent-count { color:#4A4844; font-size:11px; margin-top:12px; }
+  .urgent-btn { margin-top:14px; background:#FF3B3B; border-radius:12px; padding:16px; text-align:center; cursor:pointer; box-shadow:0 0 20px rgba(255,59,59,0.25); }
+  .urgent-btn span { color:#fff; font-size:15px; font-weight:900; }
+
+  /* Stat section */
+  .section-label { color:#4A4844; font-size:10px; font-weight:800; letter-spacing:2px; margin-bottom:2px; }
+  .stat-row { display:flex; align-items:center; gap:12px; padding:11px 0; border-bottom:1px solid rgba(255,255,255,0.07); }
+  .stat-emoji { font-size:15px; width:22px; text-align:center; }
+  .stat-name { color:#A8A49A; font-size:13px; font-weight:600; width:48px; }
+  .stat-track { flex:1; height:3px; border-radius:2px; background:rgba(255,255,255,0.05); }
+  .stat-fill-red  { height:3px; border-radius:2px; background:#FF3B3B; box-shadow:0 0 6px rgba(255,59,59,0.7); }
+  .stat-fill-gold { height:3px; border-radius:2px; background:#FFD600; box-shadow:0 0 4px rgba(255,214,0,0.4); }
+  .stat-fill-green{ height:3px; border-radius:2px; background:#39FF14; box-shadow:0 0 4px rgba(57,255,20,0.4); }
+  .stat-val { color:#4A4844; font-size:12px; font-weight:800; width:26px; text-align:right; }
+  .stat-val.danger { color:#FF3B3B; }
+
+  /* Actions */
+  .action-row { display:flex; align-items:center; gap:14px; padding:14px 0; border-bottom:1px solid rgba(255,255,255,0.07); }
+  .action-icon { width:40px; height:40px; border-radius:12px; background:#181818; display:flex; align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+  .action-icon.highlighted { background:rgba(255,214,0,0.09); border:1px solid rgba(255,214,0,0.25); }
+  .action-icon.locked { background:#111; opacity:0.5; }
+  .action-info { flex:1; }
+  .action-label { color:#F5F2E8; font-size:15px; font-weight:800; }
+  .action-label.highlighted { color:#FFD600; }
+  .action-label.muted { color:#4A4844; }
+  .action-gain { color:#4A4844; font-size:12px; margin-top:2px; }
+  .action-gain.reason { color:#4A4844; font-style:italic; }
+  .action-right { text-align:right; }
+  .badge-now { background:#FFD600; border-radius:5px; padding:3px 8px; display:inline-block; }
+  .badge-now span { color:#080808; font-size:9px; font-weight:900; letter-spacing:0.5px; }
+  .action-cost { color:#4A4844; font-size:11px; }
+  .action-row.blocked { opacity:0.4; }
+
+  /* Missions */
+  .missions-row { display:flex; align-items:center; gap:12px; margin-top:24px; }
+  .mission-label { color:#4A4844; font-size:10px; font-weight:800; letter-spacing:2px; }
+  .mission-count { color:#A8A49A; font-size:11px; font-weight:800; }
+  .mission-track { flex:1; height:3px; border-radius:2px; background:#111; }
+  .mission-fill { height:3px; border-radius:2px; background:#FFD600; width:40%; }
+  .mission-arrow { color:#4A4844; font-size:12px; }
+
+  /* World event */
+  .event-row { display:flex; align-items:center; gap:12px; background:#111; border-radius:12px; padding:14px; border:1px solid rgba(0,255,209,0.12); margin-top:10px; }
+  .event-emoji { font-size:20px; }
+  .event-info { flex:1; }
+  .event-badge { color:#00FFD1; font-size:9px; font-weight:800; letter-spacing:1px; }
+  .event-title { color:#F5F2E8; font-size:13px; font-weight:700; margin-top:1px; }
+  .event-xp { color:#00FFD1; font-size:12px; font-weight:800; }
+
+  /* Feed */
+  .feed-item { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,0.07); }
+  .feed-dot { font-size:14px; }
+  .feed-text { color:#A8A49A; font-size:13px; }
+
+  /* Tab bar */
+  .tabbar { position:absolute; bottom:0; left:0; right:0; height:74px; background:rgba(8,8,8,0.92); border-top:1px solid rgba(255,255,255,0.07); backdrop-filter:blur(20px); display:flex; align-items:center; justify-content:space-around; padding:0 8px 16px; }
+  .tab { display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 16px; }
+  .tab-icon { font-size:20px; filter:grayscale(1) opacity(0.35); }
+  .tab-icon.active { filter:none; }
+  .tab-label { font-size:10px; color:#4A4844; font-weight:600; }
+  .tab-label.active { color:#FFD600; font-weight:800; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="scroll">
+    <!-- HEADER -->
+    <div class="header">
+      <div class="greeting">Bon matin, Malik</div>
+      <div class="top-row">
+        <div class="avatar">🧢</div>
+        <div class="name-block">
+          <div class="player-name">Malik_93</div>
+          <div class="player-sub">Niv. 4 · 🏠 Appart HLM</div>
+        </div>
+        <div class="money">💰 47 bl</div>
+      </div>
+      <div class="life-row">
+        <div class="life-track"><div class="life-fill"></div></div>
+        <div class="life-label">Danger 🚨</div>
+      </div>
+    </div>
+
+    <!-- URGENT -->
+    <div class="urgent-card">
+      <div class="urgent-top">
+        <div class="urgent-emoji">😤</div>
+        <div>
+          <div class="urgent-badge">URGENT</div>
+          <div class="urgent-title">Mood au fond</div>
+          <div class="urgent-body">Pose-toi. Ça changera tout.</div>
+        </div>
+      </div>
+      <div class="urgent-count">+2 autres points à régler</div>
+      <div class="urgent-btn"><span>🧘  Faire maintenant</span></div>
+    </div>
+
+    <!-- TON ÉTAT -->
+    <div class="section" style="margin-top:28px">
+      <div class="section-label">TON ÉTAT</div>
+      <div class="stat-row">
+        <div class="stat-emoji">😤</div>
+        <div class="stat-name">Mood</div>
+        <div class="stat-track"><div class="stat-fill-red" style="width:20%"></div></div>
+        <div class="stat-val danger">20</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-emoji">⚡</div>
+        <div class="stat-name">Pêche</div>
+        <div class="stat-track"><div class="stat-fill-gold" style="width:28%"></div></div>
+        <div class="stat-val danger">28</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-emoji">🍱</div>
+        <div class="stat-name">Dalle</div>
+        <div class="stat-track"><div class="stat-fill-gold" style="width:45%"></div></div>
+        <div class="stat-val">45</div>
+      </div>
+      <div class="stat-row">
+        <div class="stat-emoji">👟</div>
+        <div class="stat-name">Look</div>
+        <div class="stat-track"><div class="stat-fill-green" style="width:72%"></div></div>
+        <div class="stat-val">72</div>
+      </div>
+    </div>
+
+    <!-- CE QUE TU FAIS -->
+    <div class="section" style="margin-top:28px">
+      <div class="section-label">CE QUE TU FAIS</div>
+
+      <!-- 1ère action : crise = pas de MAINTENANT badge -->
+      <div class="action-row">
+        <div class="action-icon"><span>🧘</span></div>
+        <div class="action-info">
+          <div class="action-label">Se poser</div>
+          <div class="action-gain">-Stress +Zen</div>
+        </div>
+        <div class="action-right"><span class="action-cost">temps</span></div>
+      </div>
+
+      <div class="action-row">
+        <div class="action-icon highlighted"><span>🛌</span></div>
+        <div class="action-info">
+          <div class="action-label highlighted">Roupiller</div>
+          <div class="action-gain">+Pêche max</div>
+        </div>
+        <div class="action-right">
+          <div class="badge-now"><span>MAINTENANT</span></div>
+        </div>
+      </div>
+
+      <div class="action-row">
+        <div class="action-icon"><span>🍱</span></div>
+        <div class="action-info">
+          <div class="action-label">Manger propre</div>
+          <div class="action-gain">+Dalle +Forme</div>
+        </div>
+        <div class="action-right"><span class="action-cost">14 bl</span></div>
+      </div>
+
+      <div class="action-row">
+        <div class="action-icon"><span>🏃</span></div>
+        <div class="action-info">
+          <div class="action-label">Faire un tour</div>
+          <div class="action-gain">+Mood -Stress</div>
+        </div>
+        <div class="action-right"><span class="action-cost">pêche</span></div>
+      </div>
+
+      <!-- Bloqué -->
+      <div class="action-row blocked">
+        <div class="action-icon locked"><span>🔒</span></div>
+        <div class="action-info">
+          <div class="action-label muted">Aller au taff</div>
+          <div class="action-gain reason">Pêche insuffisante (28/20)</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- MISSIONS -->
+    <div class="section">
+      <div class="missions-row">
+        <div class="mission-label">MISSIONS</div>
+        <div class="mission-count">2/5</div>
+        <div class="mission-track"><div class="mission-fill"></div></div>
+        <div class="mission-arrow">→</div>
+      </div>
+    </div>
+
+    <!-- WORLD EVENT -->
+    <div style="padding:0 20px;">
+      <div class="event-row">
+        <div class="event-emoji">🎤</div>
+        <div class="event-info">
+          <div class="event-badge">ÉVÉNEMENT</div>
+          <div class="event-title">Freestyle au Stade de France</div>
+        </div>
+        <div class="event-xp">+XP →</div>
+      </div>
+    </div>
+
+    <!-- FEED -->
+    <div class="section" style="margin-top:28px; margin-bottom:20px;">
+      <div class="section-label">LE FEED</div>
+      <div class="feed-item">
+        <div class="feed-dot">⬆️</div>
+        <div class="feed-text">Malik a atteint le niveau 4</div>
+      </div>
+      <div class="feed-item">
+        <div class="feed-dot">👤</div>
+        <div class="feed-text">Jok'air t'a laissé un message</div>
+      </div>
+      <div class="feed-item" style="border-bottom:none">
+        <div class="feed-dot">·</div>
+        <div class="feed-text">Loyer déduit — 200 bl restants</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB BAR -->
+  <div class="tabbar">
+    <div class="tab">
+      <div class="tab-icon active">🏠</div>
+      <div class="tab-label active">Home</div>
+    </div>
+    <div class="tab">
+      <div class="tab-icon">🗺️</div>
+      <div class="tab-label">Quartier</div>
+    </div>
+    <div class="tab">
+      <div class="tab-icon">💬</div>
+      <div class="tab-label">NPCs</div>
+    </div>
+    <div class="tab">
+      <div class="tab-icon">👤</div>
+      <div class="tab-label">Profil</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

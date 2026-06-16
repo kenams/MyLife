@@ -7,7 +7,7 @@ import {
 import { hapticImpact } from "@/lib/safe-haptics";
 import {
   fetchQuartierMessages, sendQuartierMessage, subscribeQuartier,
-  PARIS_QUARTIERS_LIST,
+  PARIS_QUARTIERS_LIST, MOCK_MESSAGES,
 } from "@/lib/live-chat";
 import type { QuartierMessage } from "@/lib/live-chat";
 import { useGameStore } from "@/stores/game-store";
@@ -76,7 +76,7 @@ export default function LiveChatScreen() {
   const session = useGameStore((s) => s.session);
   const myId    = session?.id ?? "local_user";
 
-  const [messages, setMessages] = useState<QuartierMessage[]>([]);
+  const [messages, setMessages] = useState<QuartierMessage[]>(MOCK_MESSAGES[quartier] ?? []);
   const [input,    setInput]    = useState("");
   const [sending,  setSending]  = useState(false);
   const listRef = useRef<FlatList>(null);

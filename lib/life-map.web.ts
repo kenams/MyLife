@@ -1,4 +1,3 @@
-import * as ExpoLocation from "expo-location";
 import { supabase } from "./supabase";
 
 export type MapStatus = "free" | "vibe" | "charo" | "taken" | "ghost";
@@ -63,21 +62,24 @@ function getQuartier(lat: number, lng: number): string | null {
   return null;
 }
 
-// ── Demande permission + récupère position ────────────────────────────────────
+// ── Demande permission + récupère position (web via navigator.geolocation) ────
 export async function requestAndGetLocation(): Promise<{
   lat: number;
   lng: number;
   locationName: string | null;
   verified: boolean;
 } | null> {
-  const { status } = await ExpoLocation.requestForegroundPermissionsAsync();
-  if (status !== "granted") return null;
-
-  const loc = await ExpoLocation.getCurrentPositionAsync({ accuracy: ExpoLocation.Accuracy.Balanced });
-  const { latitude: lat, longitude: lng } = loc.coords;
-  const locationName = getQuartier(lat, lng);
-
-  return { lat, lng, locationName, verified: true };
+  if (typeof navigator === "undefined" || !navigator.geolocation) return null;
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const { latitude: lat, longitude: lng } = pos.coords;
+        resolve({ lat, lng, locationName: getQuartier(lat, lng), verified: true });
+      },
+      () => resolve(null),
+      { timeout: 8000 }
+    );
+  });
 }
 
 // ── Upsert position dans Supabase ─────────────────────────────────────────────
@@ -122,11 +124,12 @@ export async function goGhost(userId: string) {
 
 // ── Récupère les joueurs proches ──────────────────────────────────────────────
 export async function fetchNearbyPlayers(lat: number, lng: number, radiusKm = 5): Promise<MapPlayer[]> {
-  if (!supabase) return MOCK_PLAYERS; // fallback démo
-  const { data } = await supabase.rpc("players_nearby", {
+  if (!supabase) return MOCK_PLAYERS;
+  const { data, error } = await supabase.rpc("players_nearby", {
     ref_lat: lat, ref_lng: lng, radius_km: radiusKm,
   });
-  return (data as MapPlayer[]) ?? [];
+  if (error || !data || (data as MapPlayer[]).length === 0) return MOCK_PLAYERS;
+  return data as MapPlayer[];
 }
 
 // ── Subscribe Realtime aux updates de la map ──────────────────────────────────

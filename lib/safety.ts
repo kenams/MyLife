@@ -4,7 +4,7 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { supabase } from "./supabase-client";
+import { supabase } from "./supabase";
 
 const RESEND_API_KEY = process.env.EXPO_PUBLIC_RESEND_KEY ?? "";
 const ADMIN_EMAIL    = "kahdigital42@gmail.com";
