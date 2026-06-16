@@ -184,6 +184,13 @@ function PlayerSheet({ player, onClose, onInvite }: {
             </Text>
           </Pressable>
         )}
+        {/* Signalement */}
+        <Pressable onPress={onClose}
+          style={{ paddingVertical: 12, alignItems: "center" }}>
+          <Text style={{ color: L.muted, fontSize: 12, fontWeight: "600" }}>
+            🚩 Signaler ce profil
+          </Text>
+        </Pressable>
       </View>
     </Modal>
   );

@@ -5,22 +5,37 @@ import { useEffect, useState } from "react";
 
 import { DuskOverlay } from "@/components/dusk-overlay";
 import { useAuthListener } from "@/hooks/use-auth-listener";
+import { hasConsented } from "./(auth)/consent";
+import { isAgeVerified } from "./(auth)/age-check";
 import { useGameStore } from "@/stores/game-store";
 
 function AuthGate() {
   useAuthListener();
-  const avatarName = useGameStore((s) => s.avatar?.displayName?.trim().toLowerCase() ?? "");
+  const avatarName   = useGameStore((s) => s.avatar?.displayName?.trim().toLowerCase() ?? "");
   const sessionEmail = useGameStore((s) => s.session?.email?.trim().toLowerCase() ?? "");
-  const resetAll = useGameStore((s) => s.resetAll);
+  const resetAll     = useGameStore((s) => s.resetAll);
 
   useEffect(() => {
     const shouldPurgeKenanProfile =
       avatarName === "kenan" || sessionEmail === "kenan" || sessionEmail.startsWith("kenan@");
     if (!shouldPurgeKenanProfile) return;
-
     resetAll();
     router.replace("/(auth)/welcome");
   }, [avatarName, resetAll, sessionEmail]);
+
+  // Vérif légale au premier lancement
+  useEffect(() => {
+    async function checkLegal() {
+      const ageOk     = await isAgeVerified();
+      const consentOk = await hasConsented();
+      if (!ageOk) {
+        router.replace("/(auth)/age-check");
+      } else if (!consentOk) {
+        router.replace("/(auth)/consent");
+      }
+    }
+    checkLegal();
+  }, []);
 
   return null;
 }
