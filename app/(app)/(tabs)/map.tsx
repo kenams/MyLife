@@ -307,7 +307,6 @@ export default function LifeMapScreen() {
   const [selected,      setSelected]      = useState<MapPlayer | null>(null);
   const [showPicker,    setShowPicker]    = useState(false);
   const [filter,        setFilter]        = useState<MapStatus | "all">("all");
-  const [inviteSent,    setInviteSent]    = useState<string | null>(null);
   const [onlineCount,   setOnlineCount]   = useState(MOCK_PLAYERS.filter(p => p.status !== "ghost").length);
   const [reportTarget,  setReportTarget]  = useState<MapPlayer | null>(null);
   const [blocked,       setBlocked]       = useState<string[]>([]);
@@ -382,8 +381,8 @@ export default function LifeMapScreen() {
   }
 
   function handleInvite(p: MapPlayer) {
-    setInviteSent(p.display_name);
-    setTimeout(() => setInviteSent(null), 3000);
+    hapticImpact("medium");
+    router.push(`/(app)/dm?targetId=${p.user_id}&targetName=${encodeURIComponent(p.display_name)}&targetEmoji=${encodeURIComponent(p.avatar_emoji)}` as never);
   }
 
   async function handleBlock(p: MapPlayer) {
@@ -503,19 +502,6 @@ export default function LifeMapScreen() {
         </Pressable>
       )}
 
-      {/* Toast invite envoyée */}
-      {inviteSent && (
-        <View style={{
-          position: "absolute", bottom: 170, left: 40, right: 40,
-          backgroundColor: L.card, borderRadius: 14,
-          paddingHorizontal: 20, paddingVertical: 14, alignItems: "center",
-          borderWidth: 1, borderColor: L.primary + "30",
-        }}>
-          <Text style={{ color: L.text, fontSize: 14, fontWeight: "800" }}>
-            💬 Wesh envoyé à {inviteSent} !
-          </Text>
-        </View>
-      )}
 
       {/* Modals */}
       <PlayerSheet player={selected} onClose={() => setSelected(null)}
