@@ -11,6 +11,8 @@ import {
   publishPosition, requestAndGetLocation, STATUS_CONFIG, subscribeToMap,
 } from "@/lib/life-map";
 import type { MapPlayer, MapStatus } from "@/lib/life-map";
+import { blockUser } from "@/lib/safety";
+import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
 
 const L = {
@@ -84,10 +86,12 @@ function PlayerMarker({ player, onPress }: { player: MapPlayer; onPress: () => v
 }
 
 // ── Fiche profil joueur (bottom sheet) ───────────────────────────────────────
-function PlayerSheet({ player, onClose, onInvite }: {
+function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
   player: MapPlayer | null;
   onClose: () => void;
   onInvite: (p: MapPlayer) => void;
+  onReport: (p: MapPlayer) => void;
+  onBlock: (p: MapPlayer) => void;
 }) {
   if (!player) return null;
   const cfg = STATUS_CONFIG[player.status];
@@ -184,13 +188,21 @@ function PlayerSheet({ player, onClose, onInvite }: {
             </Text>
           </Pressable>
         )}
-        {/* Signalement */}
-        <Pressable onPress={onClose}
-          style={{ paddingVertical: 12, alignItems: "center" }}>
-          <Text style={{ color: L.muted, fontSize: 12, fontWeight: "600" }}>
-            🚩 Signaler ce profil
-          </Text>
-        </Pressable>
+        {/* Actions modération */}
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <Pressable onPress={() => { onReport(player); onClose(); }}
+            style={{ flex: 1, paddingVertical: 12, alignItems: "center",
+              backgroundColor: L.cardAlt, borderRadius: 10,
+              borderWidth: 1, borderColor: L.border }}>
+            <Text style={{ color: L.muted, fontSize: 12, fontWeight: "700" }}>🚩 Signaler</Text>
+          </Pressable>
+          <Pressable onPress={() => { onBlock(player); onClose(); }}
+            style={{ flex: 1, paddingVertical: 12, alignItems: "center",
+              backgroundColor: L.cardAlt, borderRadius: 10,
+              borderWidth: 1, borderColor: L.border }}>
+            <Text style={{ color: L.red, fontSize: 12, fontWeight: "700" }}>🚫 Bloquer</Text>
+          </Pressable>
+        </View>
       </View>
     </Modal>
   );
@@ -297,6 +309,8 @@ export default function LifeMapScreen() {
   const [filter,        setFilter]        = useState<MapStatus | "all">("all");
   const [inviteSent,    setInviteSent]    = useState<string | null>(null);
   const [onlineCount,   setOnlineCount]   = useState(MOCK_PLAYERS.filter(p => p.status !== "ghost").length);
+  const [reportTarget,  setReportTarget]  = useState<MapPlayer | null>(null);
+  const [blocked,       setBlocked]       = useState<string[]>([]);
 
   const mapRef = useRef<MapView>(null);
 
@@ -372,8 +386,16 @@ export default function LifeMapScreen() {
     setTimeout(() => setInviteSent(null), 3000);
   }
 
+  async function handleBlock(p: MapPlayer) {
+    await blockUser(p.user_id);
+    setBlocked((prev) => [...prev, p.user_id]);
+    hapticImpact("medium");
+  }
+
   const visiblePlayers = players.filter((p) =>
-    filter === "all" ? p.status !== "ghost" : p.status === filter
+    p.status !== "ghost" &&
+    !blocked.includes(p.user_id) &&
+    (filter === "all" || p.status === filter)
   );
 
   const cfg = STATUS_CONFIG[myStatus];
@@ -496,7 +518,18 @@ export default function LifeMapScreen() {
       )}
 
       {/* Modals */}
-      <PlayerSheet player={selected} onClose={() => setSelected(null)} onInvite={handleInvite} />
+      <PlayerSheet player={selected} onClose={() => setSelected(null)}
+        onInvite={handleInvite}
+        onReport={(p) => { setSelected(null); setReportTarget(p); }}
+        onBlock={handleBlock} />
+      {reportTarget && (
+        <ReportModal
+          visible={!!reportTarget}
+          targetUserId={reportTarget.user_id}
+          targetName={reportTarget.display_name}
+          onClose={() => setReportTarget(null)}
+        />
+      )}
       {showPicker && (
         <StatusPicker current={myStatus} onChange={handleStatusChange} onClose={() => setShowPicker(false)} />
       )}
