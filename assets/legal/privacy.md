@@ -1,7 +1,8 @@
 # Politique de Confidentialité — MyLife
 
 **Version 1.0 — En vigueur au 16 juin 2026**
-**Responsable de traitement : KAH Digital · kahdigital42@gmail.com**
+**Responsable de traitement : M. KEITA NAMAKE — KAH-Prod**
+**SIREN : 953 058 427 · kahdigital42@gmail.com**
 
 ---
 

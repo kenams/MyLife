@@ -1,7 +1,10 @@
 # Conditions Générales d'Utilisation — MyLife
 
 **Version 1.0 — En vigueur au 16 juin 2026**
-**Éditeur : KAH Digital · contact : kahdigital42@gmail.com**
+
+**Éditeur : M. KEITA NAMAKE — KAH-Prod**
+**SIREN : 953 058 427**
+**Contact : kahdigital42@gmail.com**
 
 ---
 
@@ -15,7 +18,7 @@ MyLife est une application de simulation de vie sociale disponible sur mobile et
 
 **MyLife est strictement réservée aux personnes âgées de 18 ans ou plus.**
 
-En vous inscrivant, vous déclarez sur l'honneur avoir au moins 18 ans. Toute fausse déclaration entraîne la suppression immédiate du compte. KAH Digital se réserve le droit de demander une preuve d'identité en cas de doute.
+En vous inscrivant, vous déclarez sur l'honneur avoir au moins 18 ans. Toute fausse déclaration entraîne la suppression immédiate du compte. KAH-Prod se réserve le droit de demander une preuve d'identité en cas de doute.
 
 ---
 
@@ -80,7 +83,7 @@ MyLife dispose d'un système de signalement accessible sur chaque fiche joueur. 
 
 ## 8. Responsabilité
 
-MyLife fournit une plateforme de mise en relation virtuelle. KAH Digital ne peut être tenu responsable :
+MyLife fournit une plateforme de mise en relation virtuelle. KAH-Prod ne peut être tenu responsable :
 - Des rencontres physiques entre utilisateurs
 - Des informations fournies par les utilisateurs
 - Des dommages résultant d'une utilisation non conforme aux présentes CGU
@@ -89,13 +92,13 @@ MyLife fournit une plateforme de mise en relation virtuelle. KAH Digital ne peut
 
 ## 9. Propriété intellectuelle
 
-Le code, le design, les graphismes et les contenus de MyLife appartiennent à KAH Digital. Toute reproduction sans autorisation est interdite.
+Le code, le design, les graphismes et les contenus de MyLife appartiennent à KAH-Prod. Toute reproduction sans autorisation est interdite.
 
 ---
 
 ## 10. Modification des CGU
 
-KAH Digital se réserve le droit de modifier les présentes CGU. Les utilisateurs seront notifiés par email et dans l'application au moins 15 jours avant l'entrée en vigueur des nouvelles conditions.
+KAH-Prod se réserve le droit de modifier les présentes CGU. Les utilisateurs seront notifiés par email et dans l'application au moins 15 jours avant l'entrée en vigueur des nouvelles conditions.
 
 ---
 
@@ -107,6 +110,7 @@ Les présentes CGU sont soumises au droit français. En cas de litige, les parti
 
 ## 12. Contact
 
-**KAH Digital**
+**M. KEITA NAMAKE — KAH-Prod**
+SIREN : 953 058 427
 Email : kahdigital42@gmail.com
-Responsable de traitement : KAH Digital
+Responsable de traitement : M. KEITA NAMAKE (KAH-Prod)

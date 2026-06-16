@@ -144,7 +144,7 @@ export default function SettingsScreen() {
         {/* Mentions légales */}
         <Section title="LÉGAL">
           <Row emoji="🏢" label="Mentions légales"
-            sublabel="KAH Digital — kahdigital42@gmail.com"
+            sublabel="M. KEITA NAMAKE — KAH-Prod · SIREN 953 058 427"
             onPress={() => router.push("/(auth)/legal" as never)} />
           <Row emoji="⚖️" label="CGU — Version 1.0"
             sublabel="En vigueur depuis le 16 juin 2026"
@@ -170,9 +170,9 @@ export default function SettingsScreen() {
         )}
 
         <Text style={{ color: L.muted, fontSize: 11, textAlign: "center", lineHeight: 18 }}>
-          MyLife — KAH Digital{"\n"}
-          contact : kahdigital42@gmail.com{"\n"}
-          Version 1.0.0
+          MyLife — M. KEITA NAMAKE · KAH-Prod{"\n"}
+          SIREN : 953 058 427{"\n"}
+          kahdigital42@gmail.com · Version 1.0.0
         </Text>
       </ScrollView>
 
