@@ -1,0 +1,515 @@
+import { useEffect, useRef, useState } from "react";
+import {
+  Animated, Modal, Pressable, ScrollView,
+  Text, View, ActivityIndicator,
+} from "react-native";
+import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
+
+import { hapticImpact } from "@/lib/safe-haptics";
+import {
+  fetchNearbyPlayers, goGhost, MOCK_PLAYERS, PARIS_REGION,
+  publishPosition, requestAndGetLocation, STATUS_CONFIG, subscribeToMap,
+} from "@/lib/life-map";
+import type { MapPlayer, MapStatus } from "@/lib/life-map";
+import { useGameStore } from "@/stores/game-store";
+
+const L = {
+  bg:       "#080808",
+  card:     "#111111",
+  cardAlt:  "#181818",
+  text:     "#F5F2E8",
+  textSoft: "#A8A49A",
+  muted:    "#4A4844",
+  border:   "rgba(255,255,255,0.07)",
+  primary:  "#FFD600",
+  red:      "#FF3B3B",
+  green:    "#39FF14",
+};
+
+// ── Marqueur joueur sur la map ────────────────────────────────────────────────
+function PlayerMarker({ player, onPress }: { player: MapPlayer; onPress: () => void }) {
+  const cfg   = STATUS_CONFIG[player.status];
+  const isStar = player.is_star;
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (!isStar) return;
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1.25, duration: 900, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 1,    duration: 900, useNativeDriver: true }),
+      ])
+    ).start();
+  }, [isStar]);
+
+  return (
+    <Marker
+      coordinate={{ latitude: player.lat, longitude: player.lng }}
+      onPress={onPress}
+      tracksViewChanges={false}
+    >
+      <View style={{ alignItems: "center" }}>
+        {isStar && (
+          <Animated.View style={{
+            position: "absolute", width: 54, height: 54, borderRadius: 27,
+            backgroundColor: cfg.color + "22",
+            transform: [{ scale: pulse }],
+          }} />
+        )}
+        <View style={{
+          width: isStar ? 46 : 38, height: isStar ? 46 : 38,
+          borderRadius: isStar ? 23 : 19,
+          backgroundColor: L.card,
+          borderWidth: isStar ? 3 : 2,
+          borderColor: cfg.color,
+          alignItems: "center", justifyContent: "center",
+          shadowColor: cfg.color, shadowOpacity: 0.6, shadowRadius: 8,
+        }}>
+          <Text style={{ fontSize: isStar ? 20 : 16 }}>{player.avatar_emoji}</Text>
+        </View>
+        {/* Bulle nom */}
+        <View style={{
+          marginTop: 3, backgroundColor: L.card, borderRadius: 6,
+          paddingHorizontal: 6, paddingVertical: 2,
+          borderWidth: 1, borderColor: cfg.color + "30",
+        }}>
+          <Text style={{ color: L.text, fontSize: 9, fontWeight: "800" }}>
+            {player.display_name.split(" ")[0]}
+            {player.location_verified ? " ✓" : ""}
+          </Text>
+        </View>
+      </View>
+    </Marker>
+  );
+}
+
+// ── Fiche profil joueur (bottom sheet) ───────────────────────────────────────
+function PlayerSheet({ player, onClose, onInvite }: {
+  player: MapPlayer | null;
+  onClose: () => void;
+  onInvite: (p: MapPlayer) => void;
+}) {
+  if (!player) return null;
+  const cfg = STATUS_CONFIG[player.status];
+  const minutesAgo = Math.round(
+    (Date.now() - new Date(player.updated_at).getTime()) / 60000
+  );
+  const freshness = minutesAgo < 2
+    ? "À l'instant"
+    : minutesAgo < 60
+    ? `Il y a ${minutesAgo} min`
+    : "Il y a + d'1h";
+
+  return (
+    <Modal transparent animationType="slide" visible={!!player} onRequestClose={onClose}>
+      <Pressable style={{ flex: 1 }} onPress={onClose} />
+      <View style={{
+        backgroundColor: L.card, borderTopLeftRadius: 28, borderTopRightRadius: 28,
+        padding: 24, paddingBottom: 44, gap: 20,
+        borderTopWidth: 1, borderColor: L.border,
+      }}>
+        {/* Handle */}
+        <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: L.border, alignSelf: "center" }} />
+
+        {/* Header */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+          <View style={{
+            width: 60, height: 60, borderRadius: 30,
+            backgroundColor: L.cardAlt,
+            borderWidth: 3, borderColor: cfg.color,
+            alignItems: "center", justifyContent: "center",
+            shadowColor: cfg.color, shadowOpacity: 0.4, shadowRadius: 10,
+          }}>
+            <Text style={{ fontSize: 28 }}>{player.avatar_emoji}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ color: L.text, fontSize: 18, fontWeight: "900" }}>
+                {player.display_name}
+              </Text>
+              {player.is_star && (
+                <View style={{ backgroundColor: cfg.color, borderRadius: 4,
+                  paddingHorizontal: 6, paddingVertical: 2 }}>
+                  <Text style={{ color: "#080808", fontSize: 9, fontWeight: "900" }}>STAR</Text>
+                </View>
+              )}
+            </View>
+            <Text style={{ color: L.muted, fontSize: 12, marginTop: 3 }}>
+              Niveau {player.level} · {player.location_name ?? "Paris"}
+            </Text>
+          </View>
+          {/* Statut */}
+          <View style={{ alignItems: "center", gap: 4 }}>
+            <Text style={{ fontSize: 20 }}>{cfg.emoji}</Text>
+            <Text style={{ color: cfg.color, fontSize: 10, fontWeight: "800" }}>{cfg.label}</Text>
+          </View>
+        </View>
+
+        {/* Infos */}
+        <View style={{ backgroundColor: L.cardAlt, borderRadius: 14, padding: 14, gap: 10 }}>
+          {player.last_action && (
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Text style={{ fontSize: 16 }}>🎮</Text>
+              <Text style={{ color: L.textSoft, fontSize: 13 }}>
+                {player.last_action}
+              </Text>
+            </View>
+          )}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Text style={{ fontSize: 16 }}>📍</Text>
+            <Text style={{ color: L.textSoft, fontSize: 13 }}>
+              {player.location_name ?? "Paris"}
+              {player.location_verified
+                ? <Text style={{ color: L.green }}> · Vérifié ✓</Text>
+                : <Text style={{ color: L.muted }}> · Non vérifié</Text>}
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <Text style={{ fontSize: 16 }}>🕐</Text>
+            <Text style={{ color: L.muted, fontSize: 13 }}>{freshness}</Text>
+          </View>
+        </View>
+
+        {/* CTA */}
+        {player.status !== "ghost" && (
+          <Pressable
+            onPress={() => { hapticImpact("medium"); onInvite(player); onClose(); }}
+            style={{
+              backgroundColor: cfg.color, borderRadius: 16,
+              paddingVertical: 17, alignItems: "center",
+              shadowColor: cfg.color, shadowOpacity: 0.35, shadowRadius: 12,
+            }}>
+            <Text style={{ color: "#080808", fontSize: 16, fontWeight: "900" }}>
+              {player.is_star ? `🎤 Dire wesh à ${player.display_name}` : "💬 Dire wesh"}
+            </Text>
+          </Pressable>
+        )}
+      </View>
+    </Modal>
+  );
+}
+
+// ── Sélecteur de statut ───────────────────────────────────────────────────────
+function StatusPicker({ current, onChange, onClose }: {
+  current: MapStatus;
+  onChange: (s: MapStatus) => void;
+  onClose: () => void;
+}) {
+  return (
+    <Modal transparent animationType="fade" visible onRequestClose={onClose}>
+      <Pressable style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.7)",
+        justifyContent: "center", padding: 24 }} onPress={onClose}>
+        <View style={{ backgroundColor: L.card, borderRadius: 24, padding: 20, gap: 10,
+          borderWidth: 1, borderColor: L.border }}>
+          <Text style={{ color: L.text, fontSize: 16, fontWeight: "900",
+            marginBottom: 8, textAlign: "center" }}>
+            Ton statut sur la map
+          </Text>
+          {(Object.keys(STATUS_CONFIG) as MapStatus[]).map((key) => {
+            const cfg = STATUS_CONFIG[key];
+            const active = key === current;
+            return (
+              <Pressable key={key}
+                onPress={() => { hapticImpact("light"); onChange(key); onClose(); }}
+                style={{
+                  flexDirection: "row", alignItems: "center", gap: 14,
+                  padding: 16, borderRadius: 14,
+                  backgroundColor: active ? cfg.color + "15" : L.cardAlt,
+                  borderWidth: active ? 1 : 0, borderColor: cfg.color + "40",
+                }}>
+                <Text style={{ fontSize: 22 }}>{cfg.emoji}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: active ? cfg.color : L.text,
+                    fontSize: 15, fontWeight: "800" }}>
+                    {cfg.label}
+                  </Text>
+                  <Text style={{ color: L.muted, fontSize: 12, marginTop: 2 }}>
+                    {cfg.desc}
+                  </Text>
+                </View>
+                {active && (
+                  <Text style={{ color: cfg.color, fontSize: 18 }}>✓</Text>
+                )}
+              </Pressable>
+            );
+          })}
+        </View>
+      </Pressable>
+    </Modal>
+  );
+}
+
+// ── Filtre statut (pills en haut) ─────────────────────────────────────────────
+function FilterPills({ active, onChange }: {
+  active: MapStatus | "all";
+  onChange: (f: MapStatus | "all") => void;
+}) {
+  const filters: { key: MapStatus | "all"; label: string; color: string }[] = [
+    { key: "all",   label: "Tous",   color: L.primary },
+    { key: "free",  label: "🟡 Libre",  color: STATUS_CONFIG.free.color },
+    { key: "vibe",  label: "💜 Soirée", color: STATUS_CONFIG.vibe.color },
+    { key: "charo", label: "🔴 Charo",  color: STATUS_CONFIG.charo.color },
+    { key: "taken", label: "💍 Pris",   color: STATUS_CONFIG.taken.color },
+  ];
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}
+      style={{ position: "absolute", top: 58, left: 0, right: 0 }}
+      contentContainerStyle={{ paddingHorizontal: 16, gap: 8, flexDirection: "row" }}>
+      {filters.map((f) => {
+        const on = active === f.key;
+        return (
+          <Pressable key={f.key} onPress={() => onChange(f.key)}
+            style={{
+              paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+              backgroundColor: on ? f.color : L.card + "EE",
+              borderWidth: 1, borderColor: on ? f.color : L.border,
+            }}>
+            <Text style={{ color: on ? "#080808" : L.text,
+              fontSize: 12, fontWeight: "800" }}>
+              {f.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
+// ── Screen principal ──────────────────────────────────────────────────────────
+export default function LifeMapScreen() {
+  const avatar      = useGameStore((s) => s.avatar);
+  const playerLevel = useGameStore((s) => s.playerLevel ?? 1);
+  const stats       = useGameStore((s) => s.stats);
+
+  const [players,       setPlayers]       = useState<MapPlayer[]>(MOCK_PLAYERS);
+  const [myStatus,      setMyStatus]      = useState<MapStatus>("ghost");
+  const [myLocation,    setMyLocation]    = useState<{ lat: number; lng: number } | null>(null);
+  const [loading,       setLoading]       = useState(false);
+  const [selected,      setSelected]      = useState<MapPlayer | null>(null);
+  const [showPicker,    setShowPicker]    = useState(false);
+  const [filter,        setFilter]        = useState<MapStatus | "all">("all");
+  const [inviteSent,    setInviteSent]    = useState<string | null>(null);
+  const [onlineCount,   setOnlineCount]   = useState(MOCK_PLAYERS.filter(p => p.status !== "ghost").length);
+
+  const mapRef = useRef<MapView>(null);
+
+  // Subscribe Realtime
+  useEffect(() => {
+    const sub = subscribeToMap((updated) => {
+      setPlayers((prev) => {
+        const idx = prev.findIndex((p) => p.id === updated.id);
+        if (idx >= 0) {
+          const next = [...prev];
+          next[idx] = updated;
+          return next;
+        }
+        return [...prev, updated];
+      });
+      setOnlineCount((n) => n);
+    });
+    return () => { sub?.unsubscribe(); };
+  }, []);
+
+  // Active géoloc + publie position
+  async function activateLocation() {
+    setLoading(true);
+    const loc = await requestAndGetLocation();
+    setLoading(false);
+    if (!loc) return;
+
+    setMyLocation({ lat: loc.lat, lng: loc.lng });
+    mapRef.current?.animateToRegion({
+      latitude: loc.lat, longitude: loc.lng,
+      latitudeDelta: 0.04, longitudeDelta: 0.04,
+    }, 800);
+
+    if (avatar) {
+      await publishPosition({
+        userId:            "local_user",
+        displayName:       avatar.displayName,
+        avatarEmoji:       "🧢",
+        status:            myStatus === "ghost" ? "free" : myStatus,
+        level:             playerLevel,
+        lastAction:        null,
+        lat:               loc.lat,
+        lng:               loc.lng,
+        locationName:      loc.locationName,
+        locationVerified:  loc.verified,
+      });
+      if (myStatus === "ghost") setMyStatus("free");
+    }
+  }
+
+  async function handleStatusChange(s: MapStatus) {
+    setMyStatus(s);
+    if (s === "ghost") {
+      await goGhost("local_user");
+    } else if (myLocation) {
+      await publishPosition({
+        userId:           "local_user",
+        displayName:      avatar?.displayName ?? "Moi",
+        avatarEmoji:      "🧢",
+        status:           s,
+        level:            playerLevel,
+        lastAction:       null,
+        lat:              myLocation.lat,
+        lng:              myLocation.lng,
+        locationName:     null,
+        locationVerified: true,
+      });
+    }
+  }
+
+  function handleInvite(p: MapPlayer) {
+    setInviteSent(p.display_name);
+    setTimeout(() => setInviteSent(null), 3000);
+  }
+
+  const visiblePlayers = players.filter((p) =>
+    filter === "all" ? p.status !== "ghost" : p.status === filter
+  );
+
+  const cfg = STATUS_CONFIG[myStatus];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: L.bg }}>
+      {/* MAP */}
+      <MapView
+        ref={mapRef}
+        provider={PROVIDER_DEFAULT}
+        style={{ flex: 1 }}
+        initialRegion={PARIS_REGION}
+        mapType="mutedStandard"
+        showsUserLocation={!!myLocation}
+        showsMyLocationButton={false}
+        customMapStyle={DARK_MAP_STYLE}
+      >
+        {visiblePlayers.map((p) => (
+          <PlayerMarker key={p.id} player={p}
+            onPress={() => { hapticImpact("light"); setSelected(p); }} />
+        ))}
+      </MapView>
+
+      {/* Filtre pills */}
+      <FilterPills active={filter} onChange={setFilter} />
+
+      {/* Header overlay */}
+      <View style={{
+        position: "absolute", top: 0, left: 0, right: 0,
+        paddingTop: 54, paddingHorizontal: 20, paddingBottom: 10,
+        flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+      }}>
+        <View style={{
+          backgroundColor: L.card + "F0", borderRadius: 14,
+          paddingHorizontal: 14, paddingVertical: 8,
+          borderWidth: 1, borderColor: L.border,
+          flexDirection: "row", alignItems: "center", gap: 8,
+        }}>
+          <View style={{ width: 7, height: 7, borderRadius: 4,
+            backgroundColor: L.green,
+            shadowColor: L.green, shadowOpacity: 1, shadowRadius: 4 }} />
+          <Text style={{ color: L.text, fontSize: 13, fontWeight: "800" }}>
+            {onlineCount} en live · Paris
+          </Text>
+        </View>
+
+        {/* Mon statut */}
+        <Pressable onPress={() => setShowPicker(true)}
+          style={{
+            backgroundColor: L.card + "F0", borderRadius: 14,
+            paddingHorizontal: 14, paddingVertical: 8,
+            borderWidth: 1, borderColor: cfg.color + "40",
+            flexDirection: "row", alignItems: "center", gap: 8,
+          }}>
+          <Text style={{ fontSize: 16 }}>{cfg.emoji}</Text>
+          <Text style={{ color: cfg.color, fontSize: 13, fontWeight: "800" }}>
+            {cfg.label}
+          </Text>
+        </Pressable>
+      </View>
+
+      {/* Bouton géoloc / activer */}
+      {!myLocation && (
+        <View style={{
+          position: "absolute", bottom: 110, left: 20, right: 20,
+        }}>
+          <Pressable onPress={activateLocation}
+            style={{
+              backgroundColor: L.primary, borderRadius: 18,
+              paddingVertical: 18, alignItems: "center",
+              shadowColor: L.primary, shadowOpacity: 0.4, shadowRadius: 16,
+              flexDirection: "row", justifyContent: "center", gap: 10,
+            }}>
+            {loading
+              ? <ActivityIndicator color="#080808" />
+              : <>
+                  <Text style={{ fontSize: 20 }}>📍</Text>
+                  <Text style={{ color: "#080808", fontSize: 16, fontWeight: "900" }}>
+                    Apparaître sur la map
+                  </Text>
+                </>
+            }
+          </Pressable>
+          <Text style={{ color: L.muted, fontSize: 11, textAlign: "center", marginTop: 8 }}>
+            Ta position est réelle · Vérifiée · Tu peux passer en Ghost à tout moment
+          </Text>
+        </View>
+      )}
+
+      {/* Bouton centrer sur moi */}
+      {myLocation && (
+        <Pressable
+          onPress={() => mapRef.current?.animateToRegion({
+            latitude: myLocation.lat, longitude: myLocation.lng,
+            latitudeDelta: 0.025, longitudeDelta: 0.025,
+          }, 500)}
+          style={{
+            position: "absolute", bottom: 110, right: 20,
+            width: 50, height: 50, borderRadius: 25,
+            backgroundColor: L.card, borderWidth: 1, borderColor: L.border,
+            alignItems: "center", justifyContent: "center",
+            shadowColor: "#000", shadowOpacity: 0.4, shadowRadius: 8,
+          }}>
+          <Text style={{ fontSize: 22 }}>🎯</Text>
+        </Pressable>
+      )}
+
+      {/* Toast invite envoyée */}
+      {inviteSent && (
+        <View style={{
+          position: "absolute", bottom: 170, left: 40, right: 40,
+          backgroundColor: L.card, borderRadius: 14,
+          paddingHorizontal: 20, paddingVertical: 14, alignItems: "center",
+          borderWidth: 1, borderColor: L.primary + "30",
+        }}>
+          <Text style={{ color: L.text, fontSize: 14, fontWeight: "800" }}>
+            💬 Wesh envoyé à {inviteSent} !
+          </Text>
+        </View>
+      )}
+
+      {/* Modals */}
+      <PlayerSheet player={selected} onClose={() => setSelected(null)} onInvite={handleInvite} />
+      {showPicker && (
+        <StatusPicker current={myStatus} onChange={handleStatusChange} onClose={() => setShowPicker(false)} />
+      )}
+    </View>
+  );
+}
+
+// ── Style map dark Paris ──────────────────────────────────────────────────────
+const DARK_MAP_STYLE = [
+  { elementType: "geometry",                  stylers: [{ color: "#0a0a0a" }] },
+  { elementType: "labels.text.fill",          stylers: [{ color: "#4A4844" }] },
+  { elementType: "labels.text.stroke",        stylers: [{ color: "#080808" }] },
+  { featureType: "road",      elementType: "geometry",           stylers: [{ color: "#1a1a1a" }] },
+  { featureType: "road",      elementType: "geometry.stroke",    stylers: [{ color: "#111111" }] },
+  { featureType: "road.highway", elementType: "geometry",        stylers: [{ color: "#222222" }] },
+  { featureType: "water",     elementType: "geometry",           stylers: [{ color: "#050a12" }] },
+  { featureType: "water",     elementType: "labels.text.fill",   stylers: [{ color: "#00B4FF" }] },
+  { featureType: "poi",       elementType: "geometry",           stylers: [{ color: "#0d0d0d" }] },
+  { featureType: "poi.park",  elementType: "geometry",           stylers: [{ color: "#091A03" }] },
+  { featureType: "transit",   elementType: "geometry",           stylers: [{ color: "#111111" }] },
+  { featureType: "administrative", elementType: "geometry.stroke", stylers: [{ color: "#1a1a1a" }] },
+  { featureType: "administrative.locality", elementType: "labels.text.fill", stylers: [{ color: "#A8A49A" }] },
+];

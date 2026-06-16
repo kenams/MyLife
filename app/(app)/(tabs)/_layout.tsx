@@ -96,6 +96,12 @@ export default function TabsLayout() {
           <Ionicons name={focused ? "sparkles" : "sparkles-outline"} color={color} size={23} />
         ),
       }} />
+      <Tabs.Screen name="map" options={{
+        title: "Map",
+        tabBarIcon: ({ color, focused }) => (
+          <Ionicons name={focused ? "map" : "map-outline"} color={color} size={23} />
+        ),
+      }} />
       <Tabs.Screen name="world" options={{
         title: "Ville",
         tabBarIcon: ({ color, focused }) => <WorldIcon color={color} focused={focused} />,
