@@ -169,7 +169,7 @@ function WeekChart({ history }: { history: ShiftRecord[] }) {
       shadowColor: L.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
       borderWidth: 1, borderColor: L.border }}>
       <Text style={{ color: L.text, fontSize: 15, fontWeight: "800", marginBottom: 2 }}>Progression 7 jours</Text>
-      <Text style={{ color: L.muted, fontSize: 11, marginBottom: 16 }}>Revenus journaliers (crédits)</Text>
+      <Text style={{ color: L.muted, fontSize: 11, marginBottom: 16 }}>Revenus journaliers (thunes)</Text>
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 5 }}>
         {earned.map((val, i) => {
           const d = new Date(days[i]);
@@ -239,7 +239,7 @@ export default function ProfileScreen() {
   const xpBarWidth = xpBarAnim.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] });
 
   // Résumé de l'état
-  const stateLabel = stats.energy < 25 ? "Fatigué" : stats.hunger < 25 ? "A faim" : stats.hygiene < 25 ? "Besoin d'hygiène" : stats.mood < 30 ? "Moral bas" : "En forme ✓";
+  const stateLabel = stats.energy < 25 ? "À plat 🪫" : stats.hunger < 25 ? "J'ai dalle 🍱" : stats.hygiene < 25 ? "Look en carton 👟" : stats.mood < 30 ? "Mood à zéro 😤" : "En forme 🔥";
   const stateColor = stats.energy < 25 || stats.hunger < 25 || stats.hygiene < 25 || stats.mood < 30 ? L.red : L.green;
 
   const activeRels = relationships.filter((r) => r.score > 30);
@@ -344,7 +344,7 @@ export default function ProfileScreen() {
           <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
             {[
               { label: "Argent",    value: `${stats.money}`,           color: "#fde68a" },
-              { label: "Réputation",value: `${stats.reputation}`,      color: "rgba(255,255,255,0.9)" },
+              { label: "Côte",      value: `${stats.reputation}`,      color: "rgba(255,255,255,0.9)" },
               { label: "Streak",    value: `${stats.streak}j`,         color: "#fca5a5" },
               { label: "Richesse",  value: `${(wealthScore/1000).toFixed(1)}k`, color: "rgba(255,255,255,0.7)" },
             ].map((item) => (
@@ -366,9 +366,9 @@ export default function ProfileScreen() {
             </Text>
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               <QuickAction emoji="🍽️" label="Manger"    color={L.gold}    bg={L.goldBg}    route="/(app)/health" />
-              <QuickAction emoji="😴" label="Dormir"    color={L.blue}    bg={L.blueBg}    route="/(app)/health" />
-              <QuickAction emoji="🚿" label="Hygiène"   color={L.teal}    bg={L.tealBg}    route="/(app)/health" />
-              <QuickAction emoji="💼" label="Travailler" color={L.primary} bg={L.primaryBg} route="/(app)/work" />
+              <QuickAction emoji="😴" label="Roupiller"  color={L.blue}    bg={L.blueBg}    route="/(app)/health" />
+              <QuickAction emoji="👟" label="Se laver"   color={L.teal}    bg={L.tealBg}    route="/(app)/health" />
+              <QuickAction emoji="💼" label="Le Taff"    color={L.primary} bg={L.primaryBg} route="/(app)/work" />
               <QuickAction emoji="💪" label="Sport"     color={L.green}   bg={L.greenBg}   route="/(app)/health" />
               <QuickAction emoji="🌍" label="Sortir"    color={L.pink}    bg={L.pinkBg}    route="/(app)/(tabs)/world" />
             </View>
@@ -380,11 +380,11 @@ export default function ProfileScreen() {
             borderWidth: 1, borderColor: L.border }}>
             <Text style={{ color: L.text, fontSize: 15, fontWeight: "800", marginBottom: 4 }}>Statistiques</Text>
             <Text style={{ color: L.muted, fontSize: 11, marginBottom: 12 }}>État actuel de ton personnage</Text>
-            <StatBar label="Énergie"     value={stats.energy}          icon="⚡"  color={L.blue}    bg={L.blueBg} />
+            <StatBar label="Pêche"       value={stats.energy}          icon="⚡"  color={L.blue}    bg={L.blueBg} />
             <StatBar label="Faim"        value={stats.hunger}          icon="🍽️" color={L.gold}    bg={L.goldBg} />
-            <StatBar label="Santé"       value={stats.health}          icon="❤️"  color={L.red}     bg={L.redBg} />
-            <StatBar label="Hygiène"     value={stats.hygiene}         icon="🚿"  color={L.teal}    bg={L.tealBg} />
-            <StatBar label="Moral"       value={stats.mood}            icon="😊"  color={L.purple}  bg={L.purpleBg} />
+            <StatBar label="Forme"       value={stats.health}          icon="❤️"  color={L.red}     bg={L.redBg} />
+            <StatBar label="Look"        value={stats.hygiene}         icon="👟"  color={L.teal}    bg={L.tealBg} />
+            <StatBar label="Mood"        value={stats.mood}            icon="😤"  color={L.purple}  bg={L.purpleBg} />
             <StatBar label="Attractivité" value={stats.attractiveness} icon="✨"  color={L.pink}    bg={L.pinkBg} />
             <StatBar label="Fitness"     value={stats.fitness}         icon="💪"  color={L.green}   bg={L.greenBg} />
             <StatBar label="Discipline"  value={stats.discipline}      icon="🎯"  color={L.primary} bg={L.primaryBg} />
@@ -401,7 +401,7 @@ export default function ProfileScreen() {
             <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
               <AssetCard emoji={housing.emoji} label="Logement"  value={housing.name}       color={L.primary} bg={L.primaryBg} />
               <AssetCard emoji="💰"           label="Argent"     value={`${stats.money} cr`} color={L.gold}    bg={L.goldBg} />
-              <AssetCard emoji="⭐"           label="Réputation" value={`${stats.reputation}`} color={L.purple} bg={L.purpleBg} />
+              <AssetCard emoji="⭐"           label="Côte"       value={`${stats.reputation}`} color={L.purple} bg={L.purpleBg} />
               <AssetCard emoji="📱"           label="Niveau"     value={`Niv. ${playerLevel}`} color={L.green}  bg={L.greenBg} />
             </View>
           </View>

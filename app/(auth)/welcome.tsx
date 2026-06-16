@@ -2,114 +2,146 @@ import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Dimensions, Easing, Pressable, Text, View } from "react-native";
 
-const { width: W } = Dimensions.get("window");
+const { width: W, height: H } = Dimensions.get("window");
 
 const SLIDES = [
   {
-    id: "intro",
-    emoji: "🏙️",
-    title: "Bienvenue dans MyLife",
-    subtitle: "Simulation de vie",
-    body: "Prends soin de ton personnage.\nChaque jour compte.",
-    color: "#6366f1",
-    bg: "#eef2ff",
+    id:       "intro",
+    icon:     "🏙️",
+    tag:      "BIENVENUE DANS LA CITÉ",
+    title:    "T'es dans\nle quartier",
+    body:     "Gère ta vie, monte ta côte.\nIci chaque jour compte.",
+    accent:   "#FFD600",
+    glow:     "rgba(255,214,0,0.18)",
+    dim:      "#1A1500",
   },
   {
-    id: "needs",
-    emoji: "⚡",
-    title: "Surveille tes besoins",
-    subtitle: "Faim · Énergie · Moral",
-    body: "Mange, dors, reste propre.\nSinon ta vie se dégrade.",
-    color: "#3b82f6",
-    bg: "#eff6ff",
+    id:       "needs",
+    icon:     "⚡",
+    tag:      "SURVEILLE TON ÉTAT",
+    title:    "Dalle, pêche,\nmood — gère tout",
+    body:     "Mange, dors, reste propre.\nSinon ta vie part en vrille.",
+    accent:   "#FF6B00",
+    glow:     "rgba(255,107,0,0.18)",
+    dim:      "#1A0D00",
   },
   {
-    id: "world",
-    emoji: "🗺️",
-    title: "Utilise la ville",
-    subtitle: "Lieux utiles",
-    body: "Marché, parc, travail, café.\nChaque lieu sert ton quotidien.",
-    color: "#10b981",
-    bg: "#ecfdf5",
+    id:       "world",
+    icon:     "🗺️",
+    tag:      "PARIS T'APPARTIENT",
+    title:    "Le bando, la dalle,\nles beaux quartiers",
+    body:     "Chaque lieu a son vibe.\nExplore, connecte, gratte.",
+    accent:   "#00B4FF",
+    glow:     "rgba(0,180,255,0.18)",
+    dim:      "#001A2A",
   },
   {
-    id: "missions",
-    emoji: "🎯",
-    title: "Reviens progresser",
-    subtitle: "Missions · XP · Relations",
-    body: "Garde ta vie stable.\nDébloque de meilleurs choix.",
-    color: "#f59e0b",
-    bg: "#fffbeb",
+    id:       "social",
+    icon:     "👥",
+    tag:      "TON RÉSEAU C'EST TON OR",
+    title:    "Relations, réputation,\nton cercle",
+    body:     "Croise des rappeurs, des go.\nTon réseau définit qui t'es.",
+    accent:   "#BF5FFF",
+    glow:     "rgba(191,95,255,0.18)",
+    dim:      "#18082A",
   },
   {
-    id: "start",
-    emoji: "🧑",
-    title: "Crée ton avatar",
-    subtitle: "Première étape",
-    body: "Choisis ton style.\nPuis commence ta vie.",
-    color: "#ec4899",
-    bg: "#fdf2f8",
+    id:       "start",
+    icon:     "🧢",
+    tag:      "CRÉE TON PERSONNAGE",
+    title:    "Ton style,\nton flow",
+    body:     "Jordans, hoodie, dégradé.\nChoisis qui tu veux être.",
+    accent:   "#39FF14",
+    glow:     "rgba(57,255,20,0.18)",
+    dim:      "#091A03",
   },
 ];
 
 function Dot({ active, color }: { active: boolean; color: string }) {
-  const scaleAnim = useRef(new Animated.Value(active ? 1 : 0.6)).current;
+  const w = useRef(new Animated.Value(active ? 24 : 6)).current;
   useEffect(() => {
-    Animated.spring(scaleAnim, { toValue: active ? 1 : 0.6, useNativeDriver: true, speed: 30 }).start();
+    Animated.spring(w, { toValue: active ? 24 : 6, useNativeDriver: false, speed: 40 }).start();
   }, [active]);
   return (
     <Animated.View style={{
-      width: active ? 20 : 6, height: 6, borderRadius: 3,
-      backgroundColor: active ? color : color + "33",
-      transform: [{ scaleY: scaleAnim }],
+      width: w, height: 4, borderRadius: 2,
+      backgroundColor: active ? color : "rgba(255,255,255,0.15)",
     }} />
   );
 }
 
 function SlideView({ slide, index, currentIndex }: { slide: typeof SLIDES[0]; index: number; currentIndex: number }) {
-  const translateX = useRef(new Animated.Value((index - currentIndex) * W)).current;
-  const opacity    = useRef(new Animated.Value(index === currentIndex ? 1 : 0)).current;
+  const tx  = useRef(new Animated.Value((index - currentIndex) * W)).current;
+  const op  = useRef(new Animated.Value(index === currentIndex ? 1 : 0)).current;
+  const scl = useRef(new Animated.Value(index === currentIndex ? 1 : 0.92)).current;
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(translateX, { toValue: (index - currentIndex) * W, duration: 380,
-        easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: index === currentIndex ? 1 : 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(tx,  { toValue: (index - currentIndex) * W, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(op,  { toValue: index === currentIndex ? 1 : 0, duration: 260, useNativeDriver: true }),
+      Animated.spring(scl, { toValue: index === currentIndex ? 1 : 0.92, speed: 30, useNativeDriver: true }),
     ]).start();
   }, [currentIndex]);
 
   return (
     <Animated.View style={{
-      position: "absolute", width: W, paddingHorizontal: 28,
-      alignItems: "center", gap: 16,
-      transform: [{ translateX }], opacity,
+      position: "absolute", width: W, paddingHorizontal: 32,
+      alignItems: "flex-start",
+      transform: [{ translateX: tx }, { scale: scl }], opacity: op,
     }}>
-      <View style={{ width: 110, height: 110, borderRadius: 55,
-        backgroundColor: slide.color + "18",
-        borderWidth: 3, borderColor: slide.color + "40",
-        alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontSize: 52 }}>{slide.emoji}</Text>
+      {/* Icon block */}
+      <View style={{
+        width: 88, height: 88, borderRadius: 24,
+        backgroundColor: slide.dim,
+        borderWidth: 1.5, borderColor: slide.accent + "40",
+        alignItems: "center", justifyContent: "center",
+        marginBottom: 28,
+        shadowColor: slide.accent, shadowOpacity: 0.35, shadowRadius: 20, shadowOffset: { width: 0, height: 8 },
+      }}>
+        <Text style={{ fontSize: 44 }}>{slide.icon}</Text>
       </View>
 
-      <View style={{ alignItems: "center", gap: 6 }}>
-        <Text style={{ color: slide.color, fontSize: 11, fontWeight: "700", letterSpacing: 1.5 }}>
-          {slide.subtitle.toUpperCase()}
-        </Text>
-        <Text style={{ color: "#1e2a3a", fontWeight: "900", fontSize: 28, textAlign: "center", lineHeight: 34 }}>
-          {slide.title}
-        </Text>
-        <Text style={{ color: "#4a5568", fontSize: 15, textAlign: "center", lineHeight: 22, marginTop: 4 }}>
-          {slide.body}
+      {/* Tag */}
+      <View style={{
+        paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6,
+        backgroundColor: slide.accent + "15",
+        borderWidth: 1, borderColor: slide.accent + "30",
+        marginBottom: 14,
+      }}>
+        <Text style={{ color: slide.accent, fontSize: 10, fontWeight: "900", letterSpacing: 2 }}>
+          {slide.tag}
         </Text>
       </View>
+
+      {/* Title */}
+      <Text style={{
+        color: "#F5F2E8",
+        fontSize: 40,
+        fontWeight: "900",
+        lineHeight: 46,
+        letterSpacing: -0.5,
+        marginBottom: 16,
+      }}>
+        {slide.title}
+      </Text>
+
+      {/* Body */}
+      <Text style={{ color: "#7A776E", fontSize: 16, lineHeight: 24, fontWeight: "500" }}>
+        {slide.body}
+      </Text>
     </Animated.View>
   );
 }
 
 export default function WelcomeScreen() {
   const [current, setCurrent] = useState(0);
-  const slide = SLIDES[current];
+  const slide  = SLIDES[current];
   const isLast = current === SLIDES.length - 1;
+
+  const bgAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(bgAnim, { toValue: 1, duration: 300, useNativeDriver: false }).start(() => bgAnim.setValue(0));
+  }, [current]);
 
   function next() {
     if (current < SLIDES.length - 1) setCurrent((c) => c + 1);
@@ -117,55 +149,73 @@ export default function WelcomeScreen() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: slide.bg }}>
-      {/* Glow de fond */}
+    <View style={{ flex: 1, backgroundColor: "#080808" }}>
+
+      {/* Ambient glow top-left */}
       <View style={{
-        position: "absolute", top: -60, left: W / 2 - 150, width: 300, height: 300,
-        borderRadius: 150, backgroundColor: slide.color + "10",
+        position: "absolute", top: -80, left: -60, width: 280, height: 280,
+        borderRadius: 140, backgroundColor: slide.glow,
+      }} />
+      {/* Grain texture overlay via dots */}
+      <View style={{
+        position: "absolute", bottom: H * 0.3, right: -40, width: 200, height: 200,
+        borderRadius: 100, backgroundColor: slide.accent + "08",
       }} />
 
-      {/* Passer */}
+      {/* Numéro slide — coin haut droit */}
+      <View style={{ position: "absolute", top: 54, right: 24, zIndex: 10,
+        flexDirection: "row", alignItems: "center", gap: 6 }}>
+        <Text style={{ color: slide.accent, fontWeight: "900", fontSize: 15 }}>
+          {String(current + 1).padStart(2, "0")}
+        </Text>
+        <Text style={{ color: "#2A2A28", fontWeight: "700", fontSize: 15 }}>
+          / {String(SLIDES.length).padStart(2, "0")}
+        </Text>
+      </View>
+
+      {/* Skip */}
       <Pressable onPress={() => router.push("/(auth)/sign-in")}
-        style={{ position: "absolute", top: 52, right: 24, zIndex: 10 }}>
-        <Text style={{ color: slide.color + "88", fontSize: 14, fontWeight: "600" }}>Passer</Text>
+        style={{ position: "absolute", top: 54, left: 24, zIndex: 10 }}>
+        <Text style={{ color: "#3A3835", fontSize: 13, fontWeight: "700", letterSpacing: 0.5 }}>PASSER</Text>
       </Pressable>
 
       {/* Slides */}
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <View style={{ flex: 1, justifyContent: "center", paddingTop: 40 }}>
         {SLIDES.map((s, i) => (
           <SlideView key={s.id} slide={s} index={i} currentIndex={current} />
         ))}
       </View>
 
-      {/* Bas */}
-      <View style={{ paddingHorizontal: 28, paddingBottom: 56, gap: 20, alignItems: "center" }}>
+      {/* Bottom */}
+      <View style={{ paddingHorizontal: 28, paddingBottom: 52, gap: 24 }}>
         {/* Dots */}
         <View style={{ flexDirection: "row", gap: 6, alignItems: "center" }}>
           {SLIDES.map((s, i) => (
             <Pressable key={s.id} onPress={() => setCurrent(i)}>
-              <Dot active={i === current} color={slide.color} />
+              <Dot active={i === current} color={slide.accent} />
             </Pressable>
           ))}
         </View>
 
         {/* CTA */}
         <Pressable onPress={next} style={{
-          width: "100%", paddingVertical: 18, borderRadius: 18,
-          backgroundColor: slide.color,
+          width: "100%", paddingVertical: 20, borderRadius: 16,
+          backgroundColor: slide.accent,
           alignItems: "center",
-          shadowColor: slide.color, shadowOpacity: 0.3, shadowRadius: 16,
-          shadowOffset: { width: 0, height: 6 }, elevation: 6,
+          shadowColor: slide.accent, shadowOpacity: 0.4, shadowRadius: 20,
+          shadowOffset: { width: 0, height: 8 },
         }}>
-          <Text style={{ color: "#fff", fontWeight: "900", fontSize: 17 }}>
-            {isLast ? "🚀 Créer mon avatar" : "Suivant →"}
+          <Text style={{ color: "#080808", fontWeight: "900", fontSize: 16, letterSpacing: 0.5 }}>
+            {isLast ? "CRÉER MON PERSO →" : "SUIVANT →"}
           </Text>
         </Pressable>
 
         {/* Sign in */}
-        <Pressable onPress={() => router.push("/(auth)/sign-in")}>
-          <Text style={{ color: "#8fa3b8", fontSize: 13 }}>
-            Déjà un compte ?{" "}
-            <Text style={{ color: slide.color, fontWeight: "700" }}>Se connecter</Text>
+        <Pressable onPress={() => router.push("/(auth)/sign-in")}
+          style={{ alignItems: "center" }}>
+          <Text style={{ color: "#3A3835", fontSize: 13, fontWeight: "600" }}>
+            Déjà dans le game ?{" "}
+            <Text style={{ color: slide.accent, fontWeight: "800" }}>Connexion</Text>
           </Text>
         </Pressable>
       </View>

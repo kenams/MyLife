@@ -283,6 +283,67 @@ const PERSONAS: Record<string, BotPersona> = {
     ]
   },
 
+  jokair: {
+    tone: "rappeur street, cash, authentique, 93",
+    focus: "musique, argent, loyauté, quartier, studio",
+    greetings: [
+      "Wesh {player} ! On m'a parlé de toi dans le coin. T'as quoi à prouver ?",
+      "Eh {player}, j'étais au studio là. T'arrives à point nommé frère.",
+      "Ayo {player} ! J'ai entendu ton nom. C'est quoi ton histoire ?",
+      "Wsh {player}. Rare que je prends le temps de parler à quelqu'un. Profites-en.",
+      "T'es {player} ? On m'a dit que t'avais du flow. On verra ça.",
+    ],
+    activities: [
+      "Le studio ce soir si t'as le niveau. Sinon y'a le terrain derrière la dalle — ça compte aussi.",
+      "Viens checker le nouveau son d'abord. Si ça te touche on parlera d'autre chose.",
+      "Moi j'ai deux vitesses : studio ou terrain. Le reste c'est du temps perdu.",
+      "Y'a une session ce soir au bando. Amène ta meilleure énergie ou reste chez toi.",
+      "Café c'est pour les meetings. Moi je bosse en studio ou sur scène. T'as le choix.",
+    ],
+    work: [
+      "Le travail c'est tous les jours {player}. Pas quand t'as envie — tous les jours.",
+      "Moi j'ai fait 200 sons avant que quelqu'un s'en fout. La régularité c'est tout.",
+      "Si ton taff te passionne pas, fais-le quand même. Les thunes d'abord, la passion après quand t'es libre.",
+      "Un shift bien fait ça respecte. N'importe quel taff. Fait bien.",
+    ],
+    wellbeing: [
+      "Le quartier ça rend dur mais ça rend fort aussi {player}. Les deux en même temps.",
+      "Si t'es au fond, c'est que t'as encore quelque chose à perdre. Utilise ça.",
+      "Moi quand j'étais à plat j'ai écrit mes meilleurs sons. La douleur ça s'utilise.",
+      "Dors. Mange. Reviens avec de l'énergie. Les problèmes attendent.",
+    ],
+    room: [
+      "Je viens dans la room si y'a un sujet sérieux. Sinon gardez le flow entre vous.",
+      "Je suis là mais je parle quand j'ai quelque chose à dire. Qualité pas quantité.",
+      "Room ouverte ? Ok. Mais on parle de trucs qui comptent — pas que de météo.",
+    ],
+    compliment: [
+      "Merci {player}. Les mots ça vaut rien sans les actes derrière.",
+      "Je prends. Mais dis-moi aussi ce qui va pas — c'est plus utile.",
+      "Apprécié {player}. Continue à regarder la réalité en face comme ça.",
+    ],
+    question: [
+      "Ma réponse : fais ce qui te rend fier dans 5 ans, pas ce qui est facile maintenant.",
+      "La vraie question c'est : t'es prêt à payer le prix pour ce que tu veux ?",
+      "Moi j'ai toujours choisi l'authenticité. Parfois ça coûte, mais tu dors bien le soir.",
+      "Bonne question. Écoute ton instinct. La tête elle ment, l'instinct jamais.",
+    ],
+    money: [
+      "Les thunes c'est la liberté, rien d'autre. Vise ça pas les objets.",
+      "J'ai connu le manque {player}. C'est pour ça que je travaille comme ça. Même énergie.",
+      "Dépense sur ce qui te fait avancer. Tout le reste c'est du flan.",
+      "Budget propre = tête propre. Le désordre financier c'est du stress gratis.",
+    ],
+    lowEnergy: [
+      "T'es à plat {player}. Recharge. On peut pas construire sur vide.",
+      "Même moi j'ai mes creux. La clé c'est de pas prendre de décision dans ces moments-là.",
+    ],
+    highMood: [
+      "Belle énergie {player} ! C'est maintenant qu'il faut faire le truc difficile.",
+      "T'es bien là. Capitalise. Ce moment reviendra pas exactement pareil.",
+    ]
+  },
+
   sana: {
     tone: "énergique et sportive",
     focus: "sport, énergie, discipline physique",
@@ -359,18 +420,18 @@ export function detectBotIntent(message: string): BotIntent {
   const text = message.toLowerCase();
   if (text.includes("[[wizz]]") || /\bwizz\b/.test(text)) return "wizz";
   if (/[😀😂😍🔥👍👀💯✨☕🎮💬❤️🥳😎]/u.test(message)) return "emoji";
-  if (/\b(salut|bonjour|hello|hey|yo|coucou|wesh|slt|bjr)\b/.test(text)) return "greeting";
+  if (/\b(salut|bonjour|hello|hey|yo|coucou|wesh|wsh|ayo|slt|bjr|frere|frero|bg|gros)\b/.test(text)) return "greeting";
   if (/\b(mon nom|je m'appelle|tu me connais|qui suis-je|reconnais)\b/.test(text)) return "identity";
-  if (/\b(rejoins|invite|room|groupe|viens|dispo|participe)\b/.test(text)) return "invite";
-  if (/\b(sortie|cafe|cinema|sport|gym|marche|restaurant|activite|faire|sortir)\b/.test(text)) return "activity";
-  if (/\b(fatigue|fatigué|stress|triste|moral|faim|sommeil|dormir|mal|angoisse|epuise|a plat|plat)\b/.test(text)) return "wellbeing";
-  if (/\b(travail|bosse|job|bureau|shift|objectif|productiv|bosser|travaill)\b/.test(text)) return "work";
-  if (/\b(argent|credit|budget|payer|riche|economie|dépenser|économis)\b/.test(text)) return "money";
-  if (/\b(map|ville|carte|lieu|quartier|monde|world|plan)\b/.test(text)) return "map";
-  if (/\b(merci|thanks|bien vu|super|parfait|nickel|excellent)\b/.test(text)) return "thanks";
+  if (/\b(rejoins|invite|room|groupe|viens|dispo|participe|bando|dalle|terrain)\b/.test(text)) return "invite";
+  if (/\b(sortie|cafe|cinema|sport|gym|marche|restaurant|activite|faire|sortir|studio|session|terrain|foot)\b/.test(text)) return "activity";
+  if (/\b(fatigue|fatigué|stress|triste|moral|faim|dalle|sommeil|dormir|mal|angoisse|epuise|a plat|plat|mood|crevé|naze|au fond)\b/.test(text)) return "wellbeing";
+  if (/\b(travail|bosse|job|bureau|shift|objectif|productiv|bosser|travaill|taff|thunes|gratter|cheddar)\b/.test(text)) return "work";
+  if (/\b(argent|credit|budget|payer|riche|economie|dépenser|économis|thunes|blé|fric|cash|money|sous)\b/.test(text)) return "money";
+  if (/\b(map|ville|carte|lieu|quartier|monde|world|plan|cité|banlieue|arrondissement)\b/.test(text)) return "map";
+  if (/\b(merci|thanks|bien vu|super|parfait|nickel|excellent|c'est chaud|respect|s'il te plait)\b/.test(text)) return "thanks";
   if (/\b(test|apk|bug|demo|live)\b/.test(text)) return "test";
-  if (/\b(aide|quoi faire|conseil|propose|idee|suggere|comment)\b/.test(text)) return "help";
-  if (/\b(cool|bien|super|top|sympa|genial|bravo|chapeau|merv|incroyable)\b/.test(text)) return "compliment";
+  if (/\b(aide|quoi faire|conseil|propose|idee|suggere|comment|lost|perdu|sais pas)\b/.test(text)) return "help";
+  if (/\b(cool|bien|super|top|sympa|genial|bravo|chapeau|merv|incroyable|ouf|c'est ouf|c'est chaud|fire|go|trop fort)\b/.test(text)) return "compliment";
   if (/\?/.test(text) || /\b(pourquoi|comment|quand|c'est quoi|tu penses|selon toi|ton avis)\b/.test(text)) return "question";
   return "general";
 }

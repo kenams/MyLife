@@ -11,33 +11,35 @@ import { getWellbeingScore } from "@/lib/selectors";
 import { getSuggestedActions, useTimeContext } from "@/lib/time-context";
 import type { LifeActionId } from "@/lib/types";
 import { useGameStore } from "@/stores/game-store";
+import { useAppTheme } from "@/hooks/use-app-theme";
 
-// ─── Light theme ─────────────────────────────────────────────────────────────
+// ─── Quartier Life static theme tokens ───────────────────────────────────────
 const L = {
-  bg:        "#e8edf5",
-  card:       "#f0f4fa",
-  text:      "#1e2a3a",
-  textSoft:  "#4a5568",
-  muted:     "#8fa3b8",
-  border:    "#ccd4e0",
-  primary:   "#6366f1",
-  primaryBg: "#eef2ff",
-  green:     "#10b981",
-  greenBg:   "#ecfdf5",
-  gold:      "#f59e0b",
-  goldBg:    "#fffbeb",
-  red:       "#ef4444",
-  redBg:     "#fef2f2",
-  blue:      "#3b82f6",
-  blueBg:    "#eff6ff",
-  purple:    "#8b5cf6",
-  purpleBg:  "#f5f3ff",
-  teal:      "#14b8a6",
-  tealBg:    "#f0fdfa",
-  orange:    "#f97316",
-  orangeBg:  "#fff7ed",
-  pink:      "#ec4899",
-  pinkBg:    "#fdf2f8",
+  bg:         "#080808",
+  card:       "#111111",
+  cardAlt:    "#181818",
+  text:       "#F5F2E8",
+  textSoft:   "#A8A49A",
+  muted:      "#4A4844",
+  border:     "rgba(255,255,255,0.07)",
+  primary:    "#FFD600",
+  primaryBg:  "#1A1500",
+  green:      "#39FF14",
+  greenBg:    "#091A03",
+  gold:       "#FFD600",
+  goldBg:     "#1A1500",
+  red:        "#FF3B3B",
+  redBg:      "#1A0808",
+  blue:       "#00B4FF",
+  blueBg:     "#001A2A",
+  purple:     "#BF5FFF",
+  purpleBg:   "#18082A",
+  pink:       "#FF2D78",
+  pinkBg:     "#1A0818",
+  teal:       "#00FFD1",
+  tealBg:     "#001A14",
+  orange:     "#FF6B00",
+  orangeBg:   "#1A0D00",
 };
 
 type ActionDef = {
@@ -52,19 +54,19 @@ type ActionDef = {
 };
 
 const ALL_ACTIONS: ActionDef[] = [
-  { id: "healthy-meal",  emoji: "🍱", label: "Repas sain",      costLabel: "14 cr",   gainLabel: "+Faim +Santé",        category: "survie" },
-  { id: "home-cooking",  emoji: "🍳", label: "Cuisiner",         costLabel: "8 cr",    gainLabel: "+Faim économique",    category: "survie" },
-  { id: "sleep",         emoji: "🛌", label: "Dormir",           costLabel: "temps",   gainLabel: "+Énergie max",         category: "survie" },
-  { id: "nap",           emoji: "💤", label: "Sieste 20 min",    costLabel: "temps",   gainLabel: "+Énergie rapide",      category: "survie" },
-  { id: "shower",        emoji: "🚿", label: "Douche",           costLabel: "3 cr",    gainLabel: "+Hygiène +Humeur",     category: "survie" },
-  { id: "work-shift",    emoji: "💼", label: "Travailler",       costLabel: "énergie", gainLabel: "+Argent +Rép",         category: "travail", minEnergy: 20 },
-  { id: "cafe-chat",     emoji: "☕", label: "Café social",      costLabel: "8 cr",    gainLabel: "+Social +Humeur",      category: "social",  minMoney: 8 },
-  { id: "team-sport",    emoji: "🏀", label: "Sport collectif",  costLabel: "énergie", gainLabel: "+Social +Forme",       category: "social",  minEnergy: 25 },
-  { id: "walk",          emoji: "🏃", label: "Marcher",          costLabel: "énergie", gainLabel: "+Humeur -Stress",      category: "santé" },
-  { id: "gym",           emoji: "🏋️", label: "Salle de sport",   costLabel: "12 cr",   gainLabel: "+Forme +Discipline",   category: "santé",   minEnergy: 22, minMoney: 12 },
-  { id: "meditate",      emoji: "🧘", label: "Méditer",          costLabel: "temps",   gainLabel: "-Stress +Zen",         category: "santé" },
-  { id: "read-book",     emoji: "📚", label: "Lire",             costLabel: "énergie", gainLabel: "+Motivation +Calme",   category: "santé" },
-  { id: "shopping",      emoji: "🛍️", label: "Shopping",         costLabel: "35 cr",   gainLabel: "+Image +Humeur",       category: "social",  minMoney: 35 },
+  { id: "healthy-meal",  emoji: "🍱", label: "Manger propre",    costLabel: "14 bl",   gainLabel: "+Dalle +Forme",         category: "survie" },
+  { id: "home-cooking",  emoji: "🍳", label: "Faire la popote",  costLabel: "8 bl",    gainLabel: "+Dalle économe",        category: "survie" },
+  { id: "sleep",         emoji: "🛌", label: "Roupiller",        costLabel: "temps",   gainLabel: "+Pêche max",            category: "survie" },
+  { id: "nap",           emoji: "💤", label: "Piquer un som",    costLabel: "temps",   gainLabel: "+Pêche rapide",         category: "survie" },
+  { id: "shower",        emoji: "🚿", label: "Se laver",         costLabel: "3 bl",    gainLabel: "+Look +Mood",           category: "survie" },
+  { id: "work-shift",    emoji: "💼", label: "Aller au taff",    costLabel: "pêche",   gainLabel: "+Thunes +Côte",         category: "travail", minEnergy: 20 },
+  { id: "cafe-chat",     emoji: "☕", label: "Poser au bando",   costLabel: "8 bl",    gainLabel: "+Réseau +Mood",         category: "social",  minMoney: 8 },
+  { id: "team-sport",    emoji: "🏀", label: "Terrain de foot",  costLabel: "pêche",   gainLabel: "+Réseau +Forme",        category: "social",  minEnergy: 25 },
+  { id: "walk",          emoji: "🏃", label: "Faire un tour",    costLabel: "pêche",   gainLabel: "+Mood -Stress",         category: "santé" },
+  { id: "gym",           emoji: "🏋️", label: "Aller à la salle", costLabel: "12 bl",   gainLabel: "+Forme +Discipline",    category: "santé",   minEnergy: 22, minMoney: 12 },
+  { id: "meditate",      emoji: "🧘", label: "Se poser",         costLabel: "temps",   gainLabel: "-Stress +Zen",          category: "santé" },
+  { id: "read-book",     emoji: "📚", label: "S'instruire",      costLabel: "pêche",   gainLabel: "+Motivation +Calme",    category: "santé" },
+  { id: "shopping",      emoji: "🛍️", label: "Le Marais / SNKRS", costLabel: "35 bl",  gainLabel: "+Look +Mood",           category: "social",  minMoney: 35 },
 ];
 
 const CAT_COLOR: Record<ActionDef["category"], string> = {
@@ -275,11 +277,11 @@ export default function HomeScreen() {
   };
 
   const crises = [
-    stats.hunger < 18  && { emoji: "🍱", title: "Ton personnage a faim",        body: "Mange maintenant.",                action: "healthy-meal" as LifeActionId },
-    stats.energy < 15  && { emoji: "🛌", title: "Il est épuisé",                body: "Dors pour récupérer de l'énergie.", action: "sleep" as LifeActionId },
-    stats.hygiene < 15 && { emoji: "🚿", title: "Hygiène trop basse",           body: "Prends une douche.",                action: "shower" as LifeActionId },
-    stats.mood < 15    && { emoji: "🧘", title: "Moral très bas",               body: "Fais une pause calme.",             action: "meditate" as LifeActionId },
-    stats.money < 20   && { emoji: "💼", title: "Budget serré",                 body: "Travaille dès que possible.",       action: "work-shift" as LifeActionId },
+    stats.hunger < 18  && { emoji: "🍱", title: "T'as la dalle",                body: "Mange quelque chose maintenant.",   action: "healthy-meal" as LifeActionId },
+    stats.energy < 15  && { emoji: "🛌", title: "T'es à plat",                  body: "Roupille, t'as besoin de pêche.",   action: "sleep" as LifeActionId },
+    stats.hygiene < 15 && { emoji: "🚿", title: "Look au plus bas",             body: "Vas te laver, t'as une image.",     action: "shower" as LifeActionId },
+    stats.mood < 15    && { emoji: "🧘", title: "Mood à zéro",                  body: "Pose-toi, respire.",                action: "meditate" as LifeActionId },
+    stats.money < 20   && { emoji: "💼", title: "Plus de thunes",               body: "File au taff dès que possible.",    action: "work-shift" as LifeActionId },
   ].filter(Boolean) as { emoji: string; title: string; body: string; action: LifeActionId }[];
 
   const primaryCrisis = crises[0];
@@ -295,14 +297,14 @@ export default function HomeScreen() {
   const npcsHere       = npcs.filter((n) => n.locationSlug === currentLocation).slice(0, 3);
 
   const keyNeeds = [
-    { emoji: "🍱", label: "Faim",    value: stats.hunger,   color: L.gold,   bg: L.goldBg   },
-    { emoji: "⚡", label: "Énergie", value: stats.energy,   color: L.blue,   bg: L.blueBg   },
-    { emoji: "🚿", label: "Hygiène", value: stats.hygiene,  color: L.teal,   bg: L.tealBg   },
-    { emoji: "😊", label: "Moral",   value: stats.mood,     color: L.purple, bg: L.purpleBg },
-    { emoji: "❤️", label: "Santé",   value: stats.health,   color: L.red,    bg: L.redBg    },
-    { emoji: "👥", label: "Social",  value: stats.sociability, color: L.primary, bg: L.primaryBg },
-    { emoji: "✨", label: "Image",   value: stats.attractiveness, color: L.pink, bg: L.pinkBg },
-    { emoji: "🧘", label: "Zen",     value: 100 - stats.stress, color: "#a78bfa", bg: L.purpleBg },
+    { emoji: "🍱", label: "Dalle",   value: stats.hunger,        color: L.gold,    bg: L.goldBg    },
+    { emoji: "⚡", label: "Pêche",   value: stats.energy,        color: L.blue,    bg: L.blueBg    },
+    { emoji: "👟", label: "Look",    value: stats.hygiene,       color: L.teal,    bg: L.tealBg    },
+    { emoji: "😤", label: "Mood",    value: stats.mood,          color: L.purple,  bg: L.purpleBg  },
+    { emoji: "❤️", label: "Forme",   value: stats.health,        color: L.red,     bg: L.redBg     },
+    { emoji: "🤝", label: "Réseau",  value: stats.sociability,   color: L.primary, bg: L.primaryBg },
+    { emoji: "🔥", label: "Style",   value: stats.attractiveness,color: L.pink,    bg: L.pinkBg    },
+    { emoji: "🧘", label: "Zen",     value: 100 - stats.stress,  color: "#BF5FFF", bg: L.purpleBg  },
   ].sort((a, b) => a.value - b.value).slice(0, 4);
 
   const nextGoal  = dailyGoals.find((g) => !g.completed);
@@ -333,15 +335,15 @@ export default function HomeScreen() {
     performAction(id);
     const action = actionById.get(id);
     const gains: string[] = [];
-    if (id === "work-shift")  gains.push("💰 +argent", "⭐ +rép");
-    else if (id === "sleep")  gains.push("⚡ énergie max");
-    else if (id === "nap")    gains.push("⚡ +énergie");
-    else if (id === "healthy-meal" || id === "home-cooking") gains.push("🍱 +faim", "❤️ +santé");
-    else if (id === "shower") gains.push("🚿 +hygiène", "😊 +moral");
-    else if (id === "walk" || id === "gym") gains.push("💪 +forme", "😊 +humeur");
+    if (id === "work-shift")  gains.push("💰 +thunes", "⭐ +côte");
+    else if (id === "sleep")  gains.push("⚡ pêche full");
+    else if (id === "nap")    gains.push("⚡ +pêche");
+    else if (id === "healthy-meal" || id === "home-cooking") gains.push("🍱 +dalle", "❤️ +forme");
+    else if (id === "shower") gains.push("👟 +look", "😤 +mood");
+    else if (id === "walk" || id === "gym") gains.push("💪 +forme", "😤 +mood");
     else if (id === "meditate") gains.push("🧘 -stress");
-    else if (id === "cafe-chat" || id === "team-sport") gains.push("👥 +social");
-    else gains.push("✨ +XP");
+    else if (id === "cafe-chat" || id === "team-sport") gains.push("🤝 +réseau");
+    else gains.push("🔥 +XP");
     const color = id === "work-shift" ? L.gold : id === "sleep" || id === "nap" ? L.blue : L.green;
     showToast(gains.join("  "), color);
     hapticImpact("medium");
@@ -385,7 +387,7 @@ export default function HomeScreen() {
             <View style={{ alignItems: "flex-end", gap: 6 }}>
               <View style={{ backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 20,
                 paddingHorizontal: 11, paddingVertical: 6 }}>
-                <Text style={{ color: "#fde68a", fontWeight: "900", fontSize: 13 }}>💰 {stats.money}</Text>
+                <Text style={{ color: "#FFD600", fontWeight: "900", fontSize: 13 }}>💰 {stats.money} bl</Text>
               </View>
               <Pressable onPress={() => router.push("/(app)/housing" as never)}
                 style={{ backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 20,
@@ -401,7 +403,7 @@ export default function HomeScreen() {
           <View style={{ marginTop: 18, gap: 6 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
               <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, fontWeight: "700" }}>
-                État général {wellbeing}%
+                VIE {wellbeing}%
               </Text>
               <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 12 }}>Niv. {playerLevel}</Text>
             </View>
@@ -478,7 +480,7 @@ export default function HomeScreen() {
           {/* ── BESOINS ── */}
           <View>
             <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 10 }}>
-              À SURVEILLER
+              TON ÉTAT
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
               {keyNeeds.map((need) => (
@@ -490,7 +492,7 @@ export default function HomeScreen() {
           {/* ── ACTIONS RAPIDES ── */}
           <View>
             <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 10 }}>
-              ACTIONS RAPIDES
+              CE QUE TU FAIS CE SOIR
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
               {quickActions.map((action, i) => (
@@ -505,7 +507,7 @@ export default function HomeScreen() {
             borderWidth: 1, borderColor: L.border,
             shadowColor: "rgba(0,0,0,0.04)", shadowOpacity: 1, shadowRadius: 8, shadowOffset: { width: 0, height: 3 } }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-              <Text style={{ color: L.text, fontSize: 15, fontWeight: "800" }}>Objectifs du jour</Text>
+              <Text style={{ color: L.text, fontSize: 15, fontWeight: "800" }}>Missions du jour</Text>
               <Text style={{ color: L.primary, fontSize: 13, fontWeight: "800" }}>{doneGoals}/{totalGoals}</Text>
             </View>
             <View style={{ height: 8, borderRadius: 4, backgroundColor: L.border, overflow: "hidden" }}>
@@ -522,7 +524,7 @@ export default function HomeScreen() {
                 </Text>
               </View>
               <Text numberOfLines={1} style={{ color: L.textSoft, fontSize: 13, flex: 1 }}>
-                {nextGoal?.label ?? "Tous les objectifs sont terminés !"}
+                {nextGoal?.label ?? "Toutes tes missions sont bouclées 🔥"}
               </Text>
               <Pressable onPress={() => router.push("/(app)/missions" as never)}>
                 <Text style={{ color: L.primary, fontSize: 12, fontWeight: "700" }}>Voir →</Text>
@@ -625,13 +627,13 @@ export default function HomeScreen() {
           {/* ── NAVIGATION RAPIDE ── */}
           <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
             {[
-              { emoji: "🗺️", label: "Ville",     route: "/(app)/(tabs)/world",  color: L.teal,   bg: L.tealBg    },
-              { emoji: "🌍", label: "Carte",     route: "/(app)/world-social",  color: L.blue,   bg: L.blueBg    },
-              { emoji: "🏙️", label: "Néon",      route: "/(app)/world-live",    color: L.purple, bg: L.purpleBg  },
-              { emoji: "🎯", label: "Quêtes",    route: "/(app)/quests",        color: L.gold,   bg: L.goldBg    },
-              { emoji: "🛍️", label: "Boutique",  route: "/(app)/shop",          color: L.pink,   bg: L.pinkBg    },
-              { emoji: "💼", label: "Travail",   route: "/(app)/work",          color: L.blue,   bg: L.blueBg    },
-              { emoji: "👥", label: "Relations", route: "/(app)/relations",     color: L.primary, bg: L.primaryBg },
+              { emoji: "🏙️", label: "Le Quartier",  route: "/(app)/(tabs)/world",  color: L.teal,    bg: L.tealBg    },
+              { emoji: "🌍", label: "Paris Live",  route: "/(app)/world-social",  color: L.blue,    bg: L.blueBg    },
+              { emoji: "🔮", label: "La Dalle",    route: "/(app)/world-live",    color: L.purple,  bg: L.purpleBg  },
+              { emoji: "🎯", label: "Missions",    route: "/(app)/quests",        color: L.gold,    bg: L.goldBg    },
+              { emoji: "👟", label: "SNKRS",       route: "/(app)/shop",          color: L.pink,    bg: L.pinkBg    },
+              { emoji: "💼", label: "Le Taff",     route: "/(app)/work",          color: L.blue,    bg: L.blueBg    },
+              { emoji: "🤝", label: "Le Cercle",   route: "/(app)/relations",     color: L.primary, bg: L.primaryBg },
             ].map((item) => (
               <Pressable key={item.route} onPress={() => router.push(item.route as never)}
                 style={{ flexDirection: "row", alignItems: "center", gap: 7,
@@ -648,7 +650,7 @@ export default function HomeScreen() {
           {npcsHere.length > 0 && (
             <View>
               <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 10 }}>
-                PRÉSENTS ICI
+                DANS LE COIN
               </Text>
               <View style={{ flexDirection: "row", gap: 8 }}>
                 {npcsHere.map((npc) => (
@@ -676,7 +678,7 @@ export default function HomeScreen() {
               borderWidth: 1, borderColor: L.border }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                 <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2 }}>
-                  JOURNAL
+                  LE FEED
                 </Text>
                 <Text style={{ color: L.muted, fontSize: 10 }}>{lifeFeed.length} événements</Text>
               </View>

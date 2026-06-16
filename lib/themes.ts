@@ -1,8 +1,8 @@
-// ── 3 directions artistiques ──────────────────────────────────────────────────
-export type ThemeId = "urban-premium" | "clean-life" | "social-pulse";
+// ── Directions artistiques ────────────────────────────────────────────────────
+export type ThemeId = "urban-premium" | "clean-life" | "social-pulse" | "quartier-life";
 
 export type AppTheme = {
-  id: ThemeId;
+  id: string;
   name: string;
   tagline: string;
   emoji: string;
@@ -165,10 +165,54 @@ const socialPulse: AppTheme = {
   tabShadow:   "rgba(192,132,252,0.25)",
 };
 
-export const THEMES: Record<ThemeId, AppTheme> = {
-  "urban-premium": urbanPremium,
-  "clean-life":    cleanLife,
-  "social-pulse":  socialPulse,
+const quartierLife: AppTheme = {
+  id: "urban-premium",
+  name: "Quartier Life",
+  tagline: "Asphalte · Néon · Paris",
+  emoji: "🏙️",
+  dark: true,
+
+  bg:       "#080808",
+  card:     "#111111",
+  card2:    "#181818",
+  text:     "#F5F2E8",
+  textSoft: "#A8A49A",
+  muted:    "#4A4844",
+  border:   "rgba(255,255,255,0.07)",
+
+  primary:   "#FFD600",
+  primaryBg: "#1A1500",
+  green:     "#39FF14",
+  greenBg:   "#091A03",
+  gold:      "#FFD600",
+  goldBg:    "#1A1500",
+  red:       "#FF3B3B",
+  redBg:     "#1A0808",
+  blue:      "#00B4FF",
+  blueBg:    "#001A2A",
+  purple:    "#BF5FFF",
+  purpleBg:  "#18082A",
+  pink:      "#FF2D78",
+  pinkBg:    "#1A0818",
+  teal:      "#00FFD1",
+  tealBg:    "#001A14",
+  orange:    "#FF6B00",
+  orangeBg:  "#1A0D00",
+
+  tabBg:       "#0E0E0E",
+  tabBorder:   "rgba(255,214,0,0.12)",
+  tabActive:   "#FFD600",
+  tabInactive: "#4A4844",
+  tabShadow:   "rgba(255,214,0,0.15)",
 };
 
-export const DEFAULT_THEME: ThemeId = "clean-life";
+// ThemeId kept at top of file — see type definition above
+
+export const THEMES: Record<string, AppTheme> = {
+  "urban-premium":  urbanPremium,
+  "clean-life":     cleanLife,
+  "social-pulse":   socialPulse,
+  "quartier-life":  quartierLife,
+};
+
+export const DEFAULT_THEME: ThemeId = "quartier-life";

@@ -3,5 +3,5 @@ import { useGameStore } from "@/stores/game-store";
 
 export function useAppTheme() {
   const themeId = useGameStore((s) => s.appTheme);
-  return THEMES[themeId] ?? THEMES["clean-life"];
+  return THEMES[themeId] ?? THEMES["quartier-life"] ?? THEMES["urban-premium"];
 }

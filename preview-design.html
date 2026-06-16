@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quartier Life — Preview Design</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;800;900&family=Barlow:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg:      #080808;
+    --card:    #111111;
+    --card2:   #181818;
+    --text:    #F5F2E8;
+    --soft:    #A8A49A;
+    --muted:   #4A4844;
+    --border:  rgba(255,255,255,0.07);
+    --yellow:  #FFD600;
+    --orange:  #FF6B00;
+    --green:   #39FF14;
+    --blue:    #00B4FF;
+    --purple:  #BF5FFF;
+    --pink:    #FF2D78;
+    --teal:    #00FFD1;
+    --red:     #FF3B3B;
+  }
+
+  body {
+    background: #050505;
+    font-family: 'Barlow', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 40px 20px 80px;
+    gap: 60px;
+  }
+
+  h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: var(--yellow);
+    font-size: 13px;
+    font-weight: 900;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin-bottom: -40px;
+  }
+
+  .screens-row {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .screen-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    text-align: center;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+
+  /* ── PHONE FRAME ── */
+  .phone {
+    width: 375px;
+    min-height: 812px;
+    background: var(--bg);
+    border-radius: 44px;
+    overflow: hidden;
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow:
+      0 0 0 8px #0E0E0E,
+      0 0 0 9px rgba(255,255,255,0.04),
+      0 40px 80px rgba(0,0,0,0.8),
+      0 0 120px rgba(255,214,0,0.04);
+    position: relative;
+  }
+
+  /* notch */
+  .phone::before {
+    content: '';
+    position: absolute;
+    top: 12px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 120px;
+    height: 32px;
+    background: #0E0E0E;
+    border-radius: 20px;
+    z-index: 100;
+  }
+
+  /* ─────────── WELCOME SCREEN ─────────── */
+  .welcome {
+    background: var(--bg);
+    height: 812px;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .glow-blob {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+  }
+
+  .welcome-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 100px 32px 0;
+  }
+
+  .icon-block {
+    width: 88px;
+    height: 88px;
+    border-radius: 24px;
+    background: #1A1500;
+    border: 1.5px solid rgba(255,214,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 44px;
+    margin-bottom: 28px;
+    box-shadow: 0 8px 32px rgba(255,214,0,0.25);
+  }
+
+  .slide-tag {
+    display: inline-flex;
+    padding: 5px 10px;
+    border-radius: 6px;
+    background: rgba(255,214,0,0.12);
+    border: 1px solid rgba(255,214,0,0.28);
+    margin-bottom: 14px;
+  }
+
+  .slide-tag span {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: var(--yellow);
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 2px;
+  }
+
+  .welcome-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: var(--text);
+    font-size: 52px;
+    font-weight: 900;
+    line-height: 1.0;
+    letter-spacing: -0.5px;
+    margin-bottom: 16px;
+  }
+
+  .welcome-body {
+    color: #7A776E;
+    font-size: 16px;
+    line-height: 1.5;
+    font-weight: 500;
+  }
+
+  .slide-counter {
+    position: absolute;
+    top: 58px;
+    right: 24px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .counter-cur { font-family: 'Barlow Condensed', sans-serif; color: var(--yellow); font-size: 15px; font-weight: 900; }
+  .counter-sep { font-family: 'Barlow Condensed', sans-serif; color: #2A2A28; font-size: 15px; font-weight: 700; }
+  .counter-tot { font-family: 'Barlow Condensed', sans-serif; color: #2A2A28; font-size: 15px; font-weight: 700; }
+
+  .skip-btn {
+    position: absolute;
+    top: 58px;
+    left: 24px;
+    color: #3A3835;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  .welcome-bottom {
+    padding: 0 28px 52px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .dots {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+  }
+
+  .dot {
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.12);
+  }
+
+  .dot.active {
+    width: 24px;
+    background: var(--yellow);
+  }
+
+  .dot.inactive { width: 6px; }
+
+  .cta-btn {
+    width: 100%;
+    padding: 20px;
+    border-radius: 16px;
+    background: var(--yellow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 28px rgba(255,214,0,0.35);
+  }
+
+  .cta-btn span {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: #080808;
+    font-size: 17px;
+    font-weight: 900;
+    letter-spacing: 1px;
+  }
+
+  .signin-link {
+    text-align: center;
+    color: #3A3835;
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .signin-link strong { color: var(--yellow); font-weight: 800; }
+
+  /* ─────────── HOME SCREEN ─────────── */
+  .home {
+    background: var(--bg);
+    min-height: 812px;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  /* Header hero */
+  .hero {
+    background: linear-gradient(145deg, #1A1500 0%, #0F0F00 60%, #080808 100%);
+    border-bottom: 1px solid rgba(255,214,0,0.1);
+    padding: 64px 20px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    top: -60px; right: -40px;
+    width: 200px; height: 200px;
+    border-radius: 50%;
+    background: rgba(255,214,0,0.06);
+    filter: blur(40px);
+  }
+
+  .hero-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+
+  .avatar-ring {
+    width: 72px;
+    height: 72px;
+    border-radius: 36px;
+    background: rgba(255,214,0,0.12);
+    border: 2.5px solid rgba(255,214,0,0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 32px;
+    flex-shrink: 0;
+  }
+
+  .hero-info { flex: 1; min-width: 0; }
+
+  .hero-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: var(--text);
+    font-size: 22px;
+    font-weight: 900;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .hero-sub {
+    color: rgba(255,242,232,0.5);
+    font-size: 12px;
+    margin-top: 3px;
+  }
+
+  .hero-right { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+
+  .money-pill {
+    padding: 5px 12px;
+    border-radius: 20px;
+    background: rgba(255,214,0,0.15);
+    border: 1px solid rgba(255,214,0,0.25);
+  }
+
+  .money-pill span {
+    color: var(--yellow);
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  .housing-pill {
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.06);
+  }
+
+  .housing-pill span {
+    color: rgba(245,242,232,0.7);
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  /* Wellbeing bar */
+  .wellbeing-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 16px;
+    margin-bottom: 8px;
+  }
+
+  .wb-label { color: rgba(255,255,255,0.85); font-size: 11px; font-weight: 800; letter-spacing: 0.5px; }
+  .wb-level { color: rgba(255,255,255,0.4); font-size: 11px; }
+
+  .wb-track {
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255,255,255,0.1);
+    overflow: hidden;
+  }
+
+  .wb-fill {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--yellow);
+    box-shadow: 0 0 8px rgba(255,214,0,0.5);
+  }
+
+  /* Mini stat pills */
+  .stat-pills {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-top: 12px;
+  }
+
+  .stat-pill {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 9px;
+    border-radius: 20px;
+    background: rgba(255,255,255,0.08);
+  }
+
+  .stat-pill-emoji { font-size: 11px; }
+
+  .stat-pill-bar {
+    width: 36px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255,255,255,0.12);
+    overflow: hidden;
+  }
+
+  .stat-pill-fill { height: 4px; border-radius: 2px; }
+
+  /* Body content */
+  .home-body {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  /* Section label */
+  .section-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: var(--muted);
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+  }
+
+  /* Priority card */
+  .priority-card {
+    border-radius: 20px;
+    padding: 18px;
+    background: #0F0800;
+    border: 1.5px solid rgba(255,107,0,0.2);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 4px 20px rgba(255,107,0,0.08);
+  }
+
+  .priority-icon {
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    background: rgba(255,107,0,0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 26px;
+    flex-shrink: 0;
+  }
+
+  .priority-info { flex: 1; min-width: 0; }
+
+  .priority-tag {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: var(--orange);
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+  }
+
+  .priority-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: var(--text);
+    font-size: 17px;
+    font-weight: 900;
+    margin-top: 2px;
+  }
+
+  .priority-body { color: var(--soft); font-size: 12px; margin-top: 3px; line-height: 1.4; }
+
+  .priority-cta {
+    padding: 10px 13px;
+    border-radius: 12px;
+    background: var(--orange);
+    flex-shrink: 0;
+  }
+
+  .priority-cta span {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+  }
+
+  /* Need tiles */
+  .needs-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .need-tile {
+    padding: 14px;
+    border-radius: 18px;
+    border-width: 1px;
+    border-style: solid;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .need-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .need-emoji { font-size: 20px; }
+
+  .need-value {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 22px;
+    font-weight: 900;
+  }
+
+  .need-label { font-size: 12px; font-weight: 700; color: var(--text); }
+
+  .need-track {
+    height: 5px;
+    border-radius: 3px;
+    overflow: hidden;
+    background: rgba(255,255,255,0.08);
+  }
+
+  .need-fill { height: 5px; border-radius: 3px; }
+
+  /* Action buttons */
+  .actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .action-btn {
+    padding: 14px;
+    border-radius: 18px;
+    border-width: 1px;
+    border-style: solid;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .action-btn.primary { border: none; }
+  .action-emoji { font-size: 24px; }
+
+  .action-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text);
+  }
+
+  .action-label.white { color: #fff; }
+
+  .action-gain { font-size: 11px; font-weight: 700; }
+
+  /* Nav pills */
+  .nav-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .nav-pill {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 9px 14px;
+    border-radius: 20px;
+    border-width: 1px;
+    border-style: solid;
+  }
+
+  .nav-pill-emoji { font-size: 13px; }
+
+  .nav-pill-label {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+  }
+
+  /* NPC card */
+  .npc-row { display: flex; gap: 8px; }
+
+  .npc-card {
+    flex: 1;
+    background: var(--card);
+    border-radius: 16px;
+    padding: 12px;
+    border: 1px solid rgba(255,214,0,0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 5px;
+  }
+
+  .npc-emoji { font-size: 20px; }
+  .npc-name { font-size: 12px; font-weight: 700; color: var(--text); }
+  .npc-status { font-size: 10px; color: var(--muted); }
+
+  /* JOKAIR special NPC */
+  .npc-card.vip {
+    border-color: rgba(255,214,0,0.3);
+    background: linear-gradient(145deg, #1A1500, #111111);
+  }
+
+  .vip-badge {
+    background: var(--yellow);
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 8px;
+    font-weight: 900;
+    color: #080808;
+    letter-spacing: 0.5px;
+  }
+
+  /* Feed */
+  .feed-card {
+    background: var(--card);
+    border-radius: 16px;
+    padding: 14px;
+    border: 1px solid var(--border);
+  }
+
+  .feed-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+
+  .feed-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .feed-item:last-child { border-bottom: none; }
+
+  .feed-icon {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .feed-title { font-size: 12px; font-weight: 700; color: var(--text); }
+  .feed-body  { font-size: 11px; color: var(--muted); margin-top: 1px; }
+
+  /* Tab bar */
+  .tabbar {
+    position: sticky;
+    bottom: 0;
+    background: #0E0E0E;
+    border-top: 1px solid rgba(255,214,0,0.1);
+    display: flex;
+    padding: 12px 0 20px;
+  }
+
+  .tab-item {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .tab-emoji { font-size: 20px; }
+  .tab-label { font-size: 9px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; }
+  .tab-label.active  { color: var(--yellow); }
+  .tab-label.inactive { color: var(--muted); }
+
+  .tab-dot {
+    width: 4px; height: 4px;
+    border-radius: 2px;
+    background: var(--yellow);
+  }
+
+  /* ── JOKAIR NPC SCREEN ── */
+  .jokair-screen {
+    background: var(--bg);
+    min-height: 812px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .jokair-hero {
+    background: linear-gradient(180deg, #1A0D00 0%, #100800 50%, #080808 100%);
+    padding: 80px 20px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .jokair-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 50% 0%, rgba(255,107,0,0.15) 0%, transparent 70%);
+  }
+
+  .jk-avatar {
+    width: 96px;
+    height: 96px;
+    border-radius: 48px;
+    background: linear-gradient(135deg, #FF6B00, #FF3B3B);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 48px;
+    margin: 0 auto 16px;
+    box-shadow: 0 0 40px rgba(255,107,0,0.4);
+    border: 3px solid rgba(255,107,0,0.5);
+  }
+
+  .jk-badges {
+    display: flex;
+    justify-content: center;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+
+  .badge {
+    padding: 3px 8px;
+    border-radius: 6px;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 9px;
+    font-weight: 900;
+    letter-spacing: 1px;
+  }
+
+  .badge-vip { background: var(--yellow); color: #080808; }
+  .badge-rare { background: rgba(255,107,0,0.2); color: var(--orange); border: 1px solid rgba(255,107,0,0.3); }
+
+  .jk-name {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: var(--text);
+    font-size: 32px;
+    font-weight: 900;
+    text-align: center;
+    letter-spacing: -0.5px;
+  }
+
+  .jk-tag {
+    color: var(--soft);
+    font-size: 13px;
+    text-align: center;
+    margin-top: 4px;
+  }
+
+  .jk-stats {
+    display: flex;
+    gap: 20px;
+    justify-content: center;
+    margin-top: 16px;
+  }
+
+  .jk-stat { text-align: center; }
+  .jk-stat-val { font-family: 'Barlow Condensed', sans-serif; color: var(--yellow); font-size: 22px; font-weight: 900; }
+  .jk-stat-lab { color: var(--muted); font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+
+  .jk-body {
+    flex: 1;
+    padding: 20px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .chat-bubble {
+    display: flex;
+    gap: 10px;
+    align-items: flex-end;
+  }
+
+  .bubble-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 18px;
+    background: linear-gradient(135deg, #FF6B00, #FF3B3B);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    flex-shrink: 0;
+    box-shadow: 0 0 12px rgba(255,107,0,0.3);
+  }
+
+  .bubble {
+    max-width: 75%;
+    padding: 12px 16px;
+    border-radius: 18px 18px 18px 4px;
+    background: #1A0D00;
+    border: 1px solid rgba(255,107,0,0.2);
+  }
+
+  .bubble-text { color: var(--text); font-size: 14px; line-height: 1.5; }
+  .bubble-time { color: var(--muted); font-size: 10px; margin-top: 4px; }
+
+  .bubble.me {
+    border-radius: 18px 18px 4px 18px;
+    background: #1A1500;
+    border-color: rgba(255,214,0,0.2);
+    margin-left: auto;
+  }
+
+  .chat-me { flex-direction: row-reverse; }
+
+  .jk-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .jk-action {
+    padding: 12px;
+    border-radius: 14px;
+    border: 1px solid rgba(255,107,0,0.2);
+    background: #0F0800;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .jk-action-emoji { font-size: 18px; }
+  .jk-action-label { font-size: 12px; font-weight: 700; color: var(--text); }
+  .jk-action-sub   { font-size: 10px; color: var(--muted); }
+
+  .unlock-btn {
+    padding: 18px;
+    border-radius: 16px;
+    background: var(--orange);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(255,107,0,0.35);
+  }
+
+  .unlock-btn span {
+    font-family: 'Barlow Condensed', sans-serif;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 900;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Quartier Life — Design Preview</h1>
+
+<div class="screens-row">
+
+  <!-- ═══════════════════════════════════════════
+       ÉCRAN 1 : WELCOME
+  ════════════════════════════════════════════ -->
+  <div>
+    <p class="screen-label">01 — Onboarding</p>
+    <div class="phone">
+      <div class="welcome">
+
+        <!-- Ambient glow -->
+        <div class="glow-blob" style="top:-80px;left:-60px;width:280px;height:280px;background:rgba(255,214,0,0.12)"></div>
+        <div class="glow-blob" style="bottom:200px;right:-40px;width:180px;height:180px;background:rgba(255,214,0,0.06)"></div>
+
+        <!-- Top bar -->
+        <div class="skip-btn">PASSER</div>
+        <div class="slide-counter">
+          <span class="counter-cur">01</span>
+          <span class="counter-sep">&nbsp;/&nbsp;</span>
+          <span class="counter-tot">05</span>
+        </div>
+
+        <!-- Slide content -->
+        <div class="welcome-content">
+          <div class="icon-block">🏙️</div>
+
+          <div class="slide-tag">
+            <span>BIENVENUE DANS LA CITÉ</span>
+          </div>
+
+          <div class="welcome-title">T'es dans<br>le quartier</div>
+
+          <div class="welcome-body">Gère ta vie, monte ta côte.<br>Ici chaque jour compte.</div>
+        </div>
+
+        <!-- Bottom -->
+        <div class="welcome-bottom">
+          <div class="dots">
+            <div class="dot active"></div>
+            <div class="dot inactive"></div>
+            <div class="dot inactive"></div>
+            <div class="dot inactive"></div>
+            <div class="dot inactive"></div>
+          </div>
+
+          <div class="cta-btn"><span>SUIVANT →</span></div>
+
+          <div class="signin-link">
+            Déjà dans le game ? <strong>Connexion</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       ÉCRAN 2 : HOME
+  ════════════════════════════════════════════ -->
+  <div>
+    <p class="screen-label">02 — Home Screen</p>
+    <div class="phone">
+      <div class="home">
+
+        <!-- HERO -->
+        <div class="hero">
+          <div class="hero-row">
+            <div class="avatar-ring">🧢</div>
+            <div class="hero-info">
+              <div class="hero-name">Malik_93</div>
+              <div class="hero-sub">🌙 Ce soir · Chez toi</div>
+            </div>
+            <div class="hero-right">
+              <div class="money-pill"><span>💰 420 bl</span></div>
+              <div class="housing-pill"><span>🏠 Appart HLM</span></div>
+            </div>
+          </div>
+
+          <div class="wellbeing-row">
+            <span class="wb-label">VIE 72%</span>
+            <span class="wb-level">Niv. 7</span>
+          </div>
+          <div class="wb-track">
+            <div class="wb-fill" style="width:72%"></div>
+          </div>
+
+          <div class="stat-pills">
+            <div class="stat-pill">
+              <span class="stat-pill-emoji">⚡</span>
+              <div class="stat-pill-bar"><div class="stat-pill-fill" style="width:65%;background:#00B4FF"></div></div>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-pill-emoji">🍱</span>
+              <div class="stat-pill-bar"><div class="stat-pill-fill" style="width:80%;background:#FFD600"></div></div>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-pill-emoji">😤</span>
+              <div class="stat-pill-bar"><div class="stat-pill-fill" style="width:55%;background:#BF5FFF"></div></div>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-pill-emoji">👟</span>
+              <div class="stat-pill-bar"><div class="stat-pill-fill" style="width:90%;background:#00FFD1"></div></div>
+            </div>
+            <div class="stat-pill">
+              <span class="stat-pill-emoji">💰</span>
+              <div class="stat-pill-bar"><div class="stat-pill-fill" style="width:42%;background:#39FF14"></div></div>
+              <span style="color:rgba(245,242,232,0.7);font-size:10px;font-weight:700">420</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="home-body">
+
+          <!-- Priority -->
+          <div>
+            <div class="priority-card">
+              <div class="priority-icon">😤</div>
+              <div class="priority-info">
+                <div class="priority-tag">PRIORITÉ</div>
+                <div class="priority-title">Mood à zéro</div>
+                <div class="priority-body">Pose-toi, respire.</div>
+              </div>
+              <div class="priority-cta"><span>Se poser</span></div>
+            </div>
+          </div>
+
+          <!-- Needs -->
+          <div>
+            <div class="section-label">Ton état</div>
+            <div class="needs-grid">
+              <div class="need-tile" style="background:#0D0900;border-color:rgba(255,214,0,0.18)">
+                <div class="need-top">
+                  <span class="need-emoji">🍱</span>
+                  <span class="need-value" style="color:#FFD600">80</span>
+                </div>
+                <div class="need-label">Dalle</div>
+                <div class="need-track"><div class="need-fill" style="width:80%;background:#FFD600"></div></div>
+              </div>
+              <div class="need-tile" style="background:#001524;border-color:rgba(0,180,255,0.18)">
+                <div class="need-top">
+                  <span class="need-emoji">⚡</span>
+                  <span class="need-value" style="color:#00B4FF">65</span>
+                </div>
+                <div class="need-label">Pêche</div>
+                <div class="need-track"><div class="need-fill" style="width:65%;background:#00B4FF"></div></div>
+              </div>
+              <div class="need-tile" style="background:#16082A;border-color:rgba(191,95,255,0.18)">
+                <div class="need-top">
+                  <span class="need-emoji">😤</span>
+                  <span class="need-value" style="color:#BF5FFF">30</span>
+                </div>
+                <div class="need-label">Mood</div>
+                <div class="need-track"><div class="need-fill" style="width:30%;background:#BF5FFF"></div></div>
+              </div>
+              <div class="need-tile" style="background:#001814;border-color:rgba(0,255,209,0.18)">
+                <div class="need-top">
+                  <span class="need-emoji">👟</span>
+                  <span class="need-value" style="color:#00FFD1">90</span>
+                </div>
+                <div class="need-label">Look</div>
+                <div class="need-track"><div class="need-fill" style="width:90%;background:#00FFD1"></div></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Actions -->
+          <div>
+            <div class="section-label">Ce que tu fais ce soir</div>
+            <div class="actions-grid">
+              <div class="action-btn primary" style="background:#BF5FFF;box-shadow:0 4px 16px rgba(191,95,255,0.3)">
+                <span class="action-emoji">🧘</span>
+                <span class="action-label white" style="font-family:'Barlow Condensed',sans-serif">Se poser</span>
+                <span class="action-gain" style="color:rgba(255,255,255,0.75)">-Stress +Zen</span>
+              </div>
+              <div class="action-btn" style="background:#001A2A;border-color:rgba(0,180,255,0.25)">
+                <span class="action-emoji">💼</span>
+                <span class="action-label" style="font-family:'Barlow Condensed',sans-serif">Aller au taff</span>
+                <span class="action-gain" style="color:#00B4FF">+Thunes +Côte</span>
+              </div>
+              <div class="action-btn" style="background:#0D0900;border-color:rgba(255,214,0,0.2)">
+                <span class="action-emoji">🍱</span>
+                <span class="action-label" style="font-family:'Barlow Condensed',sans-serif">Manger propre</span>
+                <span class="action-gain" style="color:#FFD600">+Dalle +Forme</span>
+              </div>
+              <div class="action-btn" style="background:#091A03;border-color:rgba(57,255,20,0.2)">
+                <span class="action-emoji">🏃</span>
+                <span class="action-label" style="font-family:'Barlow Condensed',sans-serif">Faire un tour</span>
+                <span class="action-gain" style="color:#39FF14">+Mood -Stress</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Nav pills -->
+          <div>
+            <div class="nav-pills">
+              <div class="nav-pill" style="background:#001A14;border-color:rgba(0,255,209,0.2)">
+                <span class="nav-pill-emoji">🏙️</span>
+                <span class="nav-pill-label" style="color:#00FFD1;font-family:'Barlow Condensed',sans-serif">Le Quartier</span>
+              </div>
+              <div class="nav-pill" style="background:#001A2A;border-color:rgba(0,180,255,0.2)">
+                <span class="nav-pill-emoji">🌍</span>
+                <span class="nav-pill-label" style="color:#00B4FF;font-family:'Barlow Condensed',sans-serif">Paris Live</span>
+              </div>
+              <div class="nav-pill" style="background:#18082A;border-color:rgba(191,95,255,0.2)">
+                <span class="nav-pill-emoji">🔮</span>
+                <span class="nav-pill-label" style="color:#BF5FFF;font-family:'Barlow Condensed',sans-serif">La Dalle</span>
+              </div>
+              <div class="nav-pill" style="background:#1A1500;border-color:rgba(255,214,0,0.2)">
+                <span class="nav-pill-emoji">🎯</span>
+                <span class="nav-pill-label" style="color:#FFD600;font-family:'Barlow Condensed',sans-serif">Missions</span>
+              </div>
+              <div class="nav-pill" style="background:#1A0818;border-color:rgba(255,45,120,0.2)">
+                <span class="nav-pill-emoji">👟</span>
+                <span class="nav-pill-label" style="color:#FF2D78;font-family:'Barlow Condensed',sans-serif">SNKRS</span>
+              </div>
+              <div class="nav-pill" style="background:#001A2A;border-color:rgba(0,180,255,0.2)">
+                <span class="nav-pill-emoji">💼</span>
+                <span class="nav-pill-label" style="color:#00B4FF;font-family:'Barlow Condensed',sans-serif">Le Taff</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- NPCs -->
+          <div>
+            <div class="section-label">Dans le coin</div>
+            <div class="npc-row">
+              <div class="npc-card vip">
+                <div style="display:flex;gap:4px;justify-content:center">
+                  <span class="vip-badge">VIP</span>
+                  <span class="vip-badge" style="background:rgba(255,107,0,0.2);color:#FF6B00;border:1px solid rgba(255,107,0,0.3)">RARE</span>
+                </div>
+                <span class="npc-emoji">🎤</span>
+                <span class="npc-name">Jok'air</span>
+                <span class="npc-status" style="color:#FFD600;font-size:9px">● En ligne</span>
+              </div>
+              <div class="npc-card">
+                <span class="npc-emoji">💼</span>
+                <span class="npc-name">Malik</span>
+                <span class="npc-status">au taff</span>
+              </div>
+              <div class="npc-card">
+                <span class="npc-emoji">💬</span>
+                <span class="npc-name">Ava</span>
+                <span class="npc-status">chat</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Feed -->
+          <div>
+            <div class="feed-card">
+              <div class="feed-header">
+                <span class="section-label" style="margin:0">Le Feed</span>
+                <span style="color:var(--muted);font-size:10px">4 events</span>
+              </div>
+              <div class="feed-item">
+                <div class="feed-icon" style="background:#1A1500"><span>⬆️</span></div>
+                <div>
+                  <div class="feed-title">Level Up — Niveau 7</div>
+                  <div class="feed-body" style="color:#FFD600">+50 XP · Tu progresses</div>
+                </div>
+              </div>
+              <div class="feed-item">
+                <div class="feed-icon" style="background:#18082A"><span>👤</span></div>
+                <div>
+                  <div class="feed-title">Jok'air t'a vu dans le coin</div>
+                  <div class="feed-body">Il veut te parler...</div>
+                </div>
+              </div>
+              <div class="feed-item">
+                <div class="feed-icon" style="background:#080808"><span>📖</span></div>
+                <div>
+                  <div class="feed-title">T'as bossé 3h au taff</div>
+                  <div class="feed-body" style="color:var(--muted)">+85 thunes gagnées</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Tab bar -->
+        <div class="tabbar">
+          <div class="tab-item">
+            <span class="tab-emoji">🏠</span>
+            <span class="tab-label active">Home</span>
+            <div class="tab-dot"></div>
+          </div>
+          <div class="tab-item">
+            <span class="tab-emoji">🗺️</span>
+            <span class="tab-label inactive">Ville</span>
+          </div>
+          <div class="tab-item">
+            <span class="tab-emoji">💬</span>
+            <span class="tab-label inactive">Chat</span>
+          </div>
+          <div class="tab-item">
+            <span class="tab-emoji">🧢</span>
+            <span class="tab-label inactive">Profil</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════
+       ÉCRAN 3 : JOK'AIR NPC
+  ════════════════════════════════════════════ -->
+  <div>
+    <p class="screen-label">03 — Jok'air NPC</p>
+    <div class="phone">
+      <div class="jokair-screen">
+
+        <div class="jokair-hero">
+          <div class="jk-avatar">🎤</div>
+          <div class="jk-badges">
+            <span class="badge badge-vip">VIP NPC</span>
+            <span class="badge badge-rare">RARE</span>
+          </div>
+          <div class="jk-name">Jok'air</div>
+          <div class="jk-tag">Rappeur · Paris 93 · Insta 800K</div>
+
+          <div class="jk-stats">
+            <div class="jk-stat">
+              <div class="jk-stat-val">97</div>
+              <div class="jk-stat-lab">Côte</div>
+            </div>
+            <div class="jk-stat">
+              <div class="jk-stat-val">800K</div>
+              <div class="jk-stat-lab">Fans</div>
+            </div>
+            <div class="jk-stat">
+              <div class="jk-stat-val">🔒 4</div>
+              <div class="jk-stat-lab">Objets</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="jk-body">
+
+          <!-- Chat bubbles -->
+          <div class="chat-bubble">
+            <div class="bubble-avatar">🎤</div>
+            <div class="bubble">
+              <div class="bubble-text">Eh frère, j'ai entendu parler de toi dans le quartier. T'as du flow c'est clair.</div>
+              <div class="bubble-time">À l'instant</div>
+            </div>
+          </div>
+
+          <div class="chat-bubble chat-me">
+            <div class="bubble me">
+              <div class="bubble-text">C'est quoi l'embrouille avec les autres rappeurs ?</div>
+              <div class="bubble-time" style="text-align:right">Il y a 1 min</div>
+            </div>
+          </div>
+
+          <div class="chat-bubble">
+            <div class="bubble-avatar">🎤</div>
+            <div class="bubble">
+              <div class="bubble-text">Ça, c'est une longue histoire... Viens me rejoindre au studio ce soir, je t'explique tout.</div>
+              <div class="bubble-time">À l'instant</div>
+            </div>
+          </div>
+
+          <!-- Actions disponibles -->
+          <div>
+            <div class="section-label">Interactions</div>
+            <div class="jk-actions">
+              <div class="jk-action">
+                <span class="jk-action-emoji">🎵</span>
+                <div class="jk-action-label">Écouter son son</div>
+                <div class="jk-action-sub">Gratuit</div>
+              </div>
+              <div class="jk-action">
+                <span class="jk-action-emoji">📸</span>
+                <div class="jk-action-label">Photo ensemble</div>
+                <div class="jk-action-sub">+50 côte</div>
+              </div>
+              <div class="jk-action" style="border-color:rgba(255,214,0,0.3);background:#1A1500">
+                <span class="jk-action-emoji">🎤</span>
+                <div class="jk-action-label" style="color:#FFD600">Collab studio</div>
+                <div class="jk-action-sub" style="color:#FFD600">VIP requis</div>
+              </div>
+              <div class="jk-action" style="border-color:rgba(191,95,255,0.3);background:#180820">
+                <span class="jk-action-emoji">🔑</span>
+                <div class="jk-action-label" style="color:#BF5FFF">Accès backstage</div>
+                <div class="jk-action-sub" style="color:#BF5FFF">Lvl 10 requis</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="unlock-btn">
+            <span>ALLER AU STUDIO CE SOIR →</span>
+          </div>
+
+        </div>
+
+        <!-- Tab bar -->
+        <div class="tabbar">
+          <div class="tab-item">
+            <span class="tab-emoji">🏠</span>
+            <span class="tab-label inactive">Home</span>
+          </div>
+          <div class="tab-item">
+            <span class="tab-emoji">🗺️</span>
+            <span class="tab-label inactive">Ville</span>
+          </div>
+          <div class="tab-item">
+            <span class="tab-emoji">💬</span>
+            <span class="tab-label active">Chat</span>
+            <div class="tab-dot"></div>
+          </div>
+          <div class="tab-item">
+            <span class="tab-emoji">🧢</span>
+            <span class="tab-label inactive">Profil</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>
