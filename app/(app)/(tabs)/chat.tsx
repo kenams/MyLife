@@ -780,10 +780,10 @@ export default function ChatScreen() {
             <Ionicons name="map" size={16} color={L.primary} />
             <Text style={[s.shortcutText, { color: L.primary }]}>Carte</Text>
           </Pressable>
-          <Pressable onPress={() => setRoomId("room-lounge-global")}
+          <Pressable onPress={() => router.push("/(app)/quartiers" as never)}
             style={[s.shortcut, { backgroundColor: L.tealBg, borderColor: L.teal + "30" }]}>
             <Ionicons name="radio" size={16} color={L.teal} />
-            <Text style={[s.shortcutText, { color: L.teal }]}>Live chat</Text>
+            <Text style={[s.shortcutText, { color: L.teal }]}>Quartiers live</Text>
           </Pressable>
           <Pressable onPress={() => { const room = createPrivateRoom("Groupe"); setRoomId(room.id); }}
             style={[s.shortcut, { backgroundColor: L.purpleBg, borderColor: L.purple + "30" }]}>
