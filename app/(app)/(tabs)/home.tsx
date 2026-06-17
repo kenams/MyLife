@@ -24,6 +24,7 @@ import {
 import {
   getMyCrewId, getMyCrewZone, isPlayerInZone, pingZoneActivity,
 } from "@/lib/crews";
+import { requestAndGetLocation } from "@/lib/life-map";
 
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getAvatarVisual } from "@/lib/avatar-visual";
@@ -625,9 +626,11 @@ export default function HomeScreen() {
 
   async function handleCreateRassemblement() {
     if (!avatar) return;
-    const evt = await createRassemblement(
-      "République — Paris", 48.8676, 2.3634, avatar.displayName,
-    );
+    const loc = await requestAndGetLocation();
+    const lat   = loc?.lat  ?? 48.8673;
+    const lng   = loc?.lng  ?? 2.3630;
+    const label = loc?.locationName ?? "République — Paris";
+    const evt = await createRassemblement(label, lat, lng, avatar.displayName);
     if (evt) {
       setFlashEvents((prev) => [evt, ...prev]);
       showToast("🔥 Rassemblement lancé ! Partage le lieu à tes contacts.");
