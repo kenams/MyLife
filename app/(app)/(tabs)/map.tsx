@@ -1,3 +1,4 @@
+import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
   Animated, Modal, Pressable, ScrollView,
@@ -11,9 +12,24 @@ import {
   publishPosition, requestAndGetLocation, STATUS_CONFIG, subscribeToMap,
 } from "@/lib/life-map";
 import type { MapPlayer, MapStatus } from "@/lib/life-map";
+import {
+  fetchBastions, subscribeToBastionTakeovers,
+  type TakeoverNotif,
+} from "@/lib/crews";
+import type { CrewZone } from "@/lib/crews";
+import { sendLocalNotification } from "@/lib/push-notifications";
 import { blockUser } from "@/lib/safety";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
+
+function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const aa = Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+}
 
 const L = {
   bg:       "#080808",
@@ -310,6 +326,10 @@ export default function LifeMapScreen() {
   const [onlineCount,   setOnlineCount]   = useState(MOCK_PLAYERS.filter(p => p.status !== "ghost").length);
   const [reportTarget,  setReportTarget]  = useState<MapPlayer | null>(null);
   const [blocked,       setBlocked]       = useState<string[]>([]);
+  const [bastions,      setBastions]      = useState<(CrewZone & { crew: { color: string; tag: string; emoji: string; name: string } })[]>([]);
+  const [showNearby,    setShowNearby]    = useState(false);
+  const [nearbyPlayers, setNearbyPlayers] = useState<MapPlayer[]>([]);
+  const [takeoverAlert, setTakeoverAlert] = useState<TakeoverNotif | null>(null);
 
   const mapRef = useRef<MapView>(null);
 
@@ -326,6 +346,21 @@ export default function LifeMapScreen() {
         return [...prev, updated];
       });
       setOnlineCount((n) => n);
+    });
+    return () => { sub?.unsubscribe(); };
+  }, []);
+
+  // Bastions
+  useEffect(() => {
+    fetchBastions().then(setBastions);
+  }, []);
+
+  // Subscribe takeovers
+  useEffect(() => {
+    const sub = subscribeToBastionTakeovers((notif) => {
+      setTakeoverAlert(notif);
+      void sendLocalNotification("🏴 Bastion pris !", notif.bastionName ? `${notif.newCrewEmoji} [${notif.newCrewTag}] a conquis ${notif.bastionName}` : "Un bastion vient d'être conquis");
+      setTimeout(() => setTakeoverAlert(null), 8000);
     });
     return () => { sub?.unsubscribe(); };
   }, []);
@@ -389,6 +424,17 @@ export default function LifeMapScreen() {
     await blockUser(p.user_id);
     setBlocked((prev) => [...prev, p.user_id]);
     hapticImpact("medium");
+  }
+
+  function handleShowNearby() {
+    if (!myLocation) return;
+    const nearby = players.filter((p) =>
+      p.status !== "ghost" &&
+      !blocked.includes(p.user_id) &&
+      haversineMeters(myLocation, { lat: p.lat, lng: p.lng }) < 500
+    );
+    setNearbyPlayers(nearby);
+    setShowNearby(true);
   }
 
   const visiblePlayers = players.filter((p) =>
@@ -502,6 +548,114 @@ export default function LifeMapScreen() {
         </Pressable>
       )}
 
+
+      {/* Bastions overlay (liste en bas gauche) */}
+      {bastions.length > 0 && (
+        <View style={{
+          position: "absolute", bottom: myLocation ? 170 : 180, left: 16,
+          gap: 6, maxWidth: 180,
+        }}>
+          {bastions.slice(0, 3).map((b) => (
+            <View key={b.id} style={{
+              backgroundColor: b.crew.color + "22",
+              borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7,
+              borderWidth: 1, borderColor: b.crew.color + "50",
+              flexDirection: "row", alignItems: "center", gap: 6,
+            }}>
+              <Text style={{ fontSize: 14 }}>{b.crew.emoji}</Text>
+              <View>
+                <Text style={{ color: b.crew.color, fontSize: 10, fontWeight: "900" }}>
+                  [{b.crew.tag}]
+                </Text>
+                <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 9 }} numberOfLines={1}>
+                  {b.name}
+                </Text>
+              </View>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Bouton À proximité */}
+      {myLocation && (
+        <Pressable onPress={handleShowNearby}
+          style={{
+            position: "absolute", bottom: 170, right: 20,
+            backgroundColor: L.card, borderRadius: 12,
+            paddingHorizontal: 14, paddingVertical: 10,
+            borderWidth: 1, borderColor: L.border,
+            flexDirection: "row", alignItems: "center", gap: 8,
+            shadowColor: "#000", shadowOpacity: 0.3, shadowRadius: 6,
+          }}>
+          <Text style={{ fontSize: 16 }}>👥</Text>
+          <Text style={{ color: L.text, fontSize: 12, fontWeight: "800" }}>À proximité</Text>
+        </Pressable>
+      )}
+
+      {/* Alerte takeover bastion */}
+      {takeoverAlert && (
+        <Pressable onPress={() => setTakeoverAlert(null)} style={{
+          position: "absolute", bottom: 110, left: 16, right: 16,
+          backgroundColor: takeoverAlert.newCrewColor + "22",
+          borderRadius: 14, padding: 14,
+          borderWidth: 2, borderColor: takeoverAlert.newCrewColor,
+          shadowColor: takeoverAlert.newCrewColor, shadowOpacity: 0.8, shadowRadius: 16,
+          flexDirection: "row", alignItems: "center", gap: 12,
+        }}>
+          <Text style={{ fontSize: 24 }}>{takeoverAlert.newCrewEmoji}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: takeoverAlert.newCrewColor, fontSize: 13, fontWeight: "900" }}>
+              [{takeoverAlert.newCrewTag}] a pris {takeoverAlert.bastionName} !
+            </Text>
+            <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>
+              🏴 Bastion conquis — appuie pour fermer
+            </Text>
+          </View>
+        </Pressable>
+      )}
+
+      {/* Panel joueurs à proximité */}
+      <Modal visible={showNearby} transparent animationType="slide">
+        <Pressable style={{ flex: 1 }} onPress={() => setShowNearby(false)} />
+        <View style={{
+          backgroundColor: L.card, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+          padding: 20, paddingBottom: 44, maxHeight: "50%",
+          borderTopWidth: 1, borderColor: L.border,
+        }}>
+          <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: L.border,
+            alignSelf: "center", marginBottom: 16 }} />
+          <Text style={{ color: L.text, fontSize: 16, fontWeight: "900", marginBottom: 12 }}>
+            👥 Joueurs dans un rayon de 500m
+          </Text>
+          {nearbyPlayers.length === 0 ? (
+            <Text style={{ color: L.muted, fontSize: 13, textAlign: "center", paddingVertical: 20 }}>
+              Aucun joueur à proximité pour l'instant.
+            </Text>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {nearbyPlayers.map((p) => {
+                const cfg = STATUS_CONFIG[p.status];
+                return (
+                  <Pressable key={p.id}
+                    onPress={() => { setShowNearby(false); setSelected(p); }}
+                    style={{
+                      flexDirection: "row", alignItems: "center", gap: 12,
+                      backgroundColor: L.cardAlt, borderRadius: 12, padding: 12, marginBottom: 8,
+                      borderWidth: 1, borderColor: cfg.color + "30",
+                    }}>
+                    <Text style={{ fontSize: 24 }}>{p.avatar_emoji}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: L.text, fontSize: 14, fontWeight: "800" }}>{p.display_name}</Text>
+                      <Text style={{ color: cfg.color, fontSize: 11 }}>{cfg.label}</Text>
+                    </View>
+                    <Text style={{ color: L.muted, fontSize: 12 }}>Niv. {p.level}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          )}
+        </View>
+      </Modal>
 
       {/* Modals */}
       <PlayerSheet player={selected} onClose={() => setSelected(null)}
