@@ -19,6 +19,7 @@ import {
   type CrewZoneRich, type TakeoverNotif, type RoiDeToulouse,
 } from "@/lib/crews";
 import { startNpcMapEngine, stopNpcMapEngine } from "@/lib/npc-map-engine";
+import { sendLocalNotification } from "@/lib/push-notifications";
 import { blockUser } from "@/lib/safety";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
@@ -672,6 +673,7 @@ export default function LifeMapScreen() {
   useEffect(() => {
     const sub = subscribeToBastionTakeovers((notif) => {
       setTakeoverAlert(notif);
+      void sendLocalNotification("🏴 Bastion pris !", notif.bastionName ? `${notif.newCrewEmoji} [${notif.newCrewTag}] a conquis ${notif.bastionName}` : "Un bastion vient d'être conquis");
       setTimeout(() => setTakeoverAlert(null), 8000); // auto-dismiss 8s
     });
     return () => { sub?.unsubscribe(); };
