@@ -26,12 +26,16 @@ function AuthGate() {
   // Vérif légale au premier lancement
   useEffect(() => {
     async function checkLegal() {
-      const ageOk     = await isAgeVerified();
-      const consentOk = await hasConsented();
-      if (!ageOk) {
-        router.replace("/(auth)/age-check");
-      } else if (!consentOk) {
-        router.replace("/(auth)/consent");
+      try {
+        const ageOk     = await isAgeVerified();
+        const consentOk = await hasConsented();
+        if (!ageOk) {
+          router.replace("/(auth)/age-check");
+        } else if (!consentOk) {
+          router.replace("/(auth)/consent");
+        }
+      } catch {
+        // AsyncStorage indispo au cold start — on laisse l'app continuer
       }
     }
     checkLegal();

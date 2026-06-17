@@ -97,11 +97,11 @@ function XpRing({ pct, level }: { pct: number; level: number }) {
     Animated.loop(Animated.sequence([
       Animated.parallel([
         Animated.timing(scaleAnim, { toValue: 1.03, duration: 1800, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 1, duration: 1800, useNativeDriver: false }),
       ]),
       Animated.parallel([
         Animated.timing(scaleAnim, { toValue: 0.97, duration: 1800, useNativeDriver: true }),
-        Animated.timing(glowAnim, { toValue: 0.4, duration: 1800, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.4, duration: 1800, useNativeDriver: false }),
       ]),
     ])).start();
   }, []);

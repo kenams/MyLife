@@ -62,11 +62,11 @@ export default function DmScreen() {
   const session = useGameStore((s) => s.session);
   const myId    = session?.id ?? "local_user";
 
+  const roomId  = targetId ? dmRoomId(myId, targetId) : null;
+
   useEffect(() => {
     if (!targetId) router.back();
   }, [targetId]);
-
-  const roomId  = dmRoomId(myId, targetId ?? "unknown");
 
   const [messages, setMessages] = useState<DmMessage[]>([]);
   const [input,    setInput]    = useState("");
@@ -74,6 +74,7 @@ export default function DmScreen() {
   const listRef = useRef<FlatList>(null);
 
   useEffect(() => {
+    if (!roomId) return;
     fetchDmMessages(roomId).then((msgs) => {
       setMessages(msgs);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: false }), 150);
@@ -81,8 +82,8 @@ export default function DmScreen() {
   }, [roomId]);
 
   useEffect(() => {
+    if (!roomId) return;
     const sub = subscribeDm(roomId, (msg) => {
-      // Ignore mes propres messages déjà injectés en optimiste
       if (msg.sender_id === myId) return;
       setMessages((p) => [...p, msg]);
       setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
@@ -91,6 +92,7 @@ export default function DmScreen() {
   }, [roomId]);
 
   async function send() {
+    if (!roomId) return;
     const body = input.trim();
     if (!body || sending) return;
     setInput(""); setSending(true);
@@ -107,7 +109,7 @@ export default function DmScreen() {
 
     try {
       await sendDm({
-        roomId, senderId: myId,
+        roomId: roomId!, senderId: myId,
         senderName: avatar?.displayName ?? "Moi",
         senderEmoji: "🧢", body,
       });

@@ -1,7 +1,7 @@
 "use client";
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Animated, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { Animated, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { supabase } from "@/lib/supabase";
 import {
   buildActionFeedEvent,
@@ -539,7 +539,7 @@ export default function HomeScreen() {
       if (!crewId) return;
       const zone = await getMyCrewZone(crewId);
       if (!zone) return;
-      if (!("geolocation" in navigator)) return;
+      if (Platform.OS !== "web" || typeof navigator === "undefined" || !("geolocation" in navigator)) return;
       navigator.geolocation.getCurrentPosition((pos) => {
         const inside = isPlayerInZone(pos.coords.latitude, pos.coords.longitude, zone);
         setInCrewZone(inside);

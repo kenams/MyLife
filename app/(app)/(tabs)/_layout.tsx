@@ -24,7 +24,7 @@ function Badge({ count, color }: { count: number; color: string }) {
 
 function QuestesIcon({ color, focused }: { color: string; focused: boolean }) {
   const missions     = useGameStore((s) => s.missionProgresses ?? []);
-  const stats        = useGameStore((s) => s.stats);
+  const stats        = useGameStore((s) => s.stats ?? {} as typeof s.stats);
   const claimable    = missions.filter((m) => m.status === "completed").length;
   const hoursSinceEat = stats.lastMealAt
     ? (Date.now() - new Date(stats.lastMealAt).getTime()) / 3_600_000 : 99;
@@ -39,7 +39,7 @@ function QuestesIcon({ color, focused }: { color: string; focused: boolean }) {
 }
 
 function ChatIcon({ color, focused }: { color: string; focused: boolean }) {
-  const unread = useGameStore((s) => s.conversations.reduce((n, c) => n + c.unreadCount, 0));
+  const unread = useGameStore((s) => (s.conversations ?? []).reduce((n, c) => n + c.unreadCount, 0));
   return (
     <View style={{ position: "relative" }}>
       <Ionicons name={focused ? "chatbubbles" : "chatbubbles-outline"} color={color} size={23} />

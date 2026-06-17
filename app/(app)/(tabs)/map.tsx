@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Animated, Modal, Pressable, ScrollView,
+  Animated, Modal, Platform, Pressable, ScrollView,
   Text, View, ActivityIndicator,
 } from "react-native";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
@@ -453,7 +453,7 @@ export default function LifeMapScreen() {
         provider={PROVIDER_DEFAULT}
         style={{ flex: 1 }}
         initialRegion={PARIS_REGION}
-        mapType="mutedStandard"
+        mapType={Platform.OS === "ios" ? "mutedStandard" : "standard"}
         showsUserLocation={!!myLocation}
         showsMyLocationButton={false}
         customMapStyle={DARK_MAP_STYLE}

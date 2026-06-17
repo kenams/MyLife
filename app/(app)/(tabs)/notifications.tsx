@@ -217,7 +217,7 @@ export default function NotificationsScreen() {
       route: "/(app)/work",      kind: "work"   },
     { emoji: "😊", label: "Humeur",    done: moodDone,   urgency: moodUrgency,
       detail: moodDone ? `Humeur : ${stats.mood}/100` : "Sors ou parle à quelqu'un.",
-      route: "/(app)/(tabs)/world", kind: "health" },
+      route: "/(app)/(tabs)/home", kind: "health" },
   ] as const;
 
   const doneTasks    = dailyTasks.filter((t) => t.done).length;
