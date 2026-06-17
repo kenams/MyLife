@@ -6,7 +6,7 @@ import { useGameStore } from "@/stores/game-store";
 import {
   type Crew, type CrewMember, type LeaveCrewResult, type CrewWarRecord,
   type CrewAlliance, type PlayerRank, CREW_COLORS,
-  createCrew, fetchCrews, joinCrew, getMyCrewId, leaveCrew, getCrewCooldown,
+  createCrew, fetchCrews, joinCrew, getMyCrewId, leaveCrew, getCrewCooldown, isTagAvailable,
   transferLeader, fetchCrewWars, fetchCrewMembers,
   fetchPlayerLeaderboard, fetchAlliances, proposeAlliance, acceptAlliance,
   checkLeaderInactivity, claimBastion, collectBastionPassive, fetchBastions,
@@ -145,11 +145,13 @@ export default function CrewsScreen() {
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
   // Create form state
-  const [crewName,  setCrewName]  = useState("");
-  const [crewTag,   setCrewTag]   = useState("");
-  const [crewEmoji, setCrewEmoji] = useState("🔥");
-  const [crewColor, setCrewColor] = useState(C.red);
-  const [crewDesc,  setCrewDesc]  = useState("");
+  const [crewName,    setCrewName]    = useState("");
+  const [crewTag,     setCrewTag]     = useState("");
+  const [crewEmoji,   setCrewEmoji]   = useState("🔥");
+  const [crewColor,   setCrewColor]   = useState(C.red);
+  const [crewDesc,    setCrewDesc]    = useState("");
+  const [tagStatus,   setTagStatus]   = useState<"idle" | "checking" | "ok" | "taken">("idle");
+  const tagCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -332,20 +334,24 @@ export default function CrewsScreen() {
   }
 
   async function handleCreate() {
-    if (!crewName.trim() || !crewTag.trim()) { showToast("Nom et tag requis"); return; }
+    const tag = crewTag.trim().toUpperCase().slice(0, 3);
+    if (!crewName.trim() || !tag) { showToast("Nom et tag requis"); return; }
+    if (tag.length < 2) { showToast("Tag minimum 2 lettres"); return; }
     if (myCrewId) { showToast("Tu es déjà dans un crew"); return; }
-    const crew = await createCrew(
-      crewName.trim(), crewTag.trim().toUpperCase(),
+    const result = await createCrew(
+      crewName.trim(), tag,
       crewEmoji, crewColor, crewDesc.trim(), playerName, playerEmoji
     );
-    if (crew) {
-      setCrews((prev) => [crew, ...prev]);
-      setMyCrewId(crew.id);
+    if (!result) {
+      showToast("Erreur réseau — réessaie");
+    } else if ("error" in result && result.error === "TAG_TAKEN") {
+      showToast(`❌ Tag [${tag}] déjà pris — choisis autre chose`);
+    } else if ("id" in result) {
+      setCrews((prev) => [result, ...prev]);
+      setMyCrewId(result.id);
       setShowCreate(false);
-      showToast(`Crew "${crew.name}" créé ✅`);
+      showToast(`Crew "${result.name}" [${tag}] créé ✅`);
       setCrewName(""); setCrewTag(""); setCrewDesc("");
-    } else {
-      showToast("Nom déjà pris — choisis autre chose");
     }
   }
 
@@ -697,14 +703,33 @@ export default function CrewsScreen() {
 
             <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
               <View style={{ flex: 1 }}>
-                <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 6 }}>TAG (3 lettres)</Text>
+                <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                  <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>TAG (3 LETTRES)</Text>
+                  {tagStatus === "checking" && <Text style={{ color: C.muted, fontSize: 9 }}>…</Text>}
+                  {tagStatus === "ok"       && <Text style={{ color: "#39FF14", fontSize: 9, fontWeight: "900" }}>✓ DISPO</Text>}
+                  {tagStatus === "taken"    && <Text style={{ color: "#FF3B3B", fontSize: 9, fontWeight: "900" }}>✗ PRIS</Text>}
+                </View>
                 <TextInput
-                  value={crewTag} onChangeText={(t) => setCrewTag(t.slice(0, 3).toUpperCase())}
+                  value={crewTag}
+                  onChangeText={(t) => {
+                    const val = t.slice(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, "");
+                    setCrewTag(val);
+                    setTagStatus(val.length >= 2 ? "checking" : "idle");
+                    if (tagCheckTimer.current) clearTimeout(tagCheckTimer.current);
+                    if (val.length >= 2) {
+                      tagCheckTimer.current = setTimeout(async () => {
+                        const ok = await isTagAvailable(val);
+                        setTagStatus(ok ? "ok" : "taken");
+                      }, 500);
+                    }
+                  }}
                   placeholder="BVK"
                   placeholderTextColor={C.muted}
+                  autoCapitalize="characters"
                   style={{ backgroundColor: C.cardAlt, color: C.text, borderRadius: 10, padding: 12,
                     fontSize: 14, fontWeight: "900", textAlign: "center",
-                    borderWidth: 1, borderColor: C.border }}
+                    borderWidth: 1,
+                    borderColor: tagStatus === "ok" ? "#39FF14" : tagStatus === "taken" ? "#FF3B3B" : C.border }}
                 />
               </View>
               <View style={{ flex: 1 }}>
