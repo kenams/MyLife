@@ -1,17 +1,19 @@
 import { supabase } from "./supabase";
 
 export interface Crew {
-  id:              string;
-  name:            string;
-  tag:             string;
-  emoji:           string;
-  color:           string;
-  description?:    string;
-  founder:         string;
-  member_count:    number;
-  reputation:      number;
-  created_at:      string;
+  id:               string;
+  name:             string;
+  tag:              string;
+  emoji:            string;
+  color:            string;
+  description?:     string;
+  founder:          string;
+  member_count:     number;
+  reputation:       number;
+  created_at:       string;
   bastion_zone_id?: string | null;
+  treasury:         number;
+  visitor_reward:   number;
 }
 
 export interface CrewMember {
@@ -545,6 +547,98 @@ export async function declareSiege(
   });
 
   return { ok: true };
+}
+
+// ── Trésorerie crew ───────────────────────────────────────────────────────────
+
+export async function depositToTreasury(
+  crewId: string,
+  amount: number,
+): Promise<{ ok: boolean; newBalance: number }> {
+  if (!supabase) return { ok: false, newBalance: 0 };
+  const { data: crew } = await supabase
+    .from("crews").select("treasury").eq("id", crewId).single();
+  const current = crew?.treasury ?? 0;
+  const newBalance = current + amount;
+  const { error } = await supabase
+    .from("crews").update({ treasury: newBalance }).eq("id", crewId);
+  return { ok: !error, newBalance };
+}
+
+export async function setVisitorReward(
+  crewId: string,
+  amount: number, // 0 = désactivé
+): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase
+    .from("crews").update({ visitor_reward: Math.max(0, amount) }).eq("id", crewId);
+  return !error;
+}
+
+// ── Check-in bastion ──────────────────────────────────────────────────────────
+
+export interface CheckinResult {
+  ok: boolean;
+  blEarned: number;
+  cooldownUntil?: Date;
+  error?: string;
+}
+
+export async function bastionCheckin(
+  zoneId: string,
+  crewId: string,
+  playerName: string,
+): Promise<CheckinResult> {
+  if (!supabase) return { ok: false, blEarned: 0, error: "Pas de connexion" };
+
+  // Vérifie si déjà check-in dans les 24h
+  const since = new Date(Date.now() - 86400000).toISOString();
+  const { data: recent } = await supabase
+    .from("bastion_checkins")
+    .select("checked_in_at")
+    .eq("zone_id", zoneId)
+    .eq("player_name", playerName)
+    .gte("checked_in_at", since)
+    .maybeSingle();
+
+  if (recent) {
+    const until = new Date(new Date(recent.checked_in_at).getTime() + 86400000);
+    return { ok: false, blEarned: 0, cooldownUntil: until, error: "Déjà check-in aujourd'hui." };
+  }
+
+  // Récupère la récompense configurée
+  const { data: crew } = await supabase
+    .from("crews").select("treasury, visitor_reward").eq("id", crewId).single();
+
+  const reward = crew?.visitor_reward ?? 0;
+  const treasury = crew?.treasury ?? 0;
+
+  if (reward > 0 && treasury < reward) {
+    return { ok: false, blEarned: 0, error: "Trésorerie insuffisante." };
+  }
+
+  // Enregistre le check-in
+  await supabase.from("bastion_checkins").insert({
+    zone_id: zoneId, player_name: playerName, bl_earned: reward,
+  });
+
+  // Débite la trésorerie
+  if (reward > 0) {
+    await supabase.from("crews")
+      .update({ treasury: treasury - reward })
+      .eq("id", crewId);
+  }
+
+  return { ok: true, blEarned: reward };
+}
+
+export async function getBastionCheckinCount(zoneId: string): Promise<number> {
+  if (!supabase) return 0;
+  const { count } = await supabase
+    .from("bastion_checkins")
+    .select("*", { count: "exact", head: true })
+    .eq("zone_id", zoneId);
+  return count ?? 0;
 }
 
 // ── Leaderboard joueurs ───────────────────────────────────────────────────────

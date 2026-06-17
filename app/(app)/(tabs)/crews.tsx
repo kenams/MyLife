@@ -11,6 +11,7 @@ import {
   fetchPlayerLeaderboard, fetchAlliances, proposeAlliance, acceptAlliance,
   checkLeaderInactivity, claimBastion, collectBastionPassive, fetchBastions,
   declareSiege, BASTION_MIN_DISTANCE_M,
+  depositToTreasury, setVisitorReward,
 } from "@/lib/crews";
 import { supabase } from "@/lib/supabase";
 
@@ -135,6 +136,10 @@ export default function CrewsScreen() {
   const [bastionName,    setBastionName]    = useState("");
   const [placingBastion, setPlacingBastion] = useState(false);
   const [passiveReward,  setPassiveReward]  = useState<{ xp: number; rep: number } | null>(null);
+  const [treasuryModal,  setTreasuryModal]  = useState(false);
+  const [depositAmount,  setDepositAmount]  = useState("50");
+  const [rewardAmount,   setRewardAmount]   = useState("5");
+  const [depositing,     setDepositing]     = useState(false);
   const toastAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
@@ -193,6 +198,24 @@ export default function CrewsScreen() {
       .subscribe();
     return () => { void sub.unsubscribe(); };
   }, [myCrewId]);
+
+  async function handleDeposit() {
+    if (!myCrewId) return;
+    const amount = parseInt(depositAmount, 10);
+    const reward = parseInt(rewardAmount, 10);
+    if (isNaN(amount) || amount < 1) { showToast("Montant invalide"); return; }
+    setDepositing(true);
+    const { ok, newBalance } = await depositToTreasury(myCrewId, amount);
+    if (ok && !isNaN(reward)) await setVisitorReward(myCrewId, reward);
+    setDepositing(false);
+    if (ok) {
+      showToast(`💰 ${amount} BL déposés · Trésorerie : ${newBalance} BL`);
+      setTreasuryModal(false);
+      fetchCrews().then(setCrews);
+    } else {
+      showToast("Erreur lors du dépôt");
+    }
+  }
 
   async function handleClaimBastion() {
     if (!myCrewId) return;
@@ -362,12 +385,21 @@ export default function CrewsScreen() {
               <View style={{ flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
                 {/* Bastion */}
                 {myBastion ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5,
-                    backgroundColor: C.gold + "10", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
-                    borderWidth: 1, borderColor: C.gold + "35" }}>
+                  <Pressable onPress={() => setTreasuryModal(true)}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 5,
+                      backgroundColor: C.gold + "10", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
+                      borderWidth: 1, borderColor: C.gold + "35" }}>
                     <Text style={{ fontSize: 14 }}>🏰</Text>
-                    <Text style={{ color: C.gold, fontSize: 11, fontWeight: "800" }}>Bastion actif</Text>
-                  </View>
+                    <View>
+                      <Text style={{ color: C.gold, fontSize: 11, fontWeight: "800" }}>Bastion</Text>
+                      <Text style={{ color: C.muted, fontSize: 9 }}>
+                        💰 {crews.find(c => c.id === myCrewId)?.treasury ?? 0} BL
+                        {(crews.find(c => c.id === myCrewId)?.visitor_reward ?? 0) > 0
+                          ? ` · +${crews.find(c => c.id === myCrewId)?.visitor_reward} visiteurs`
+                          : ""}
+                      </Text>
+                    </View>
+                  </Pressable>
                 ) : (
                   <Pressable onPress={() => setBastionModal(true)}
                     style={{ flexDirection: "row", alignItems: "center", gap: 5,
@@ -750,6 +782,61 @@ export default function CrewsScreen() {
               </View>
             );
           })()}
+        </View>
+      </Modal>
+
+      {/* Modal trésorerie */}
+      <Modal visible={treasuryModal} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.88)", justifyContent: "center", padding: 24 }}>
+          <View style={{ backgroundColor: C.card, borderRadius: 20, padding: 24,
+            borderWidth: 1, borderColor: C.gold + "40" }}>
+            <Text style={{ color: C.gold, fontSize: 17, fontWeight: "900", textAlign: "center" }}>
+              💰 Trésorerie du bastion
+            </Text>
+            <Text style={{ color: C.textSoft, fontSize: 12, textAlign: "center", marginTop: 6, marginBottom: 20 }}>
+              Les BL déposés financent les récompenses des visiteurs qui entrent dans ta zone.
+            </Text>
+
+            <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 6 }}>
+              DÉPOSER (BL)
+            </Text>
+            <TextInput value={depositAmount} onChangeText={setDepositAmount}
+              keyboardType="numeric" placeholderTextColor={C.muted}
+              style={{ backgroundColor: C.cardAlt, color: C.text, borderRadius: 10, padding: 12,
+                fontSize: 16, fontWeight: "900", marginBottom: 16,
+                borderWidth: 1, borderColor: C.border, textAlign: "center" }} />
+
+            <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 6 }}>
+              RÉCOMPENSE PAR VISITEUR (BL · 0 = désactivé)
+            </Text>
+            <TextInput value={rewardAmount} onChangeText={setRewardAmount}
+              keyboardType="numeric" placeholderTextColor={C.muted}
+              style={{ backgroundColor: C.cardAlt, color: C.text, borderRadius: 10, padding: 12,
+                fontSize: 16, fontWeight: "900", marginBottom: 20,
+                borderWidth: 1, borderColor: C.border, textAlign: "center" }} />
+
+            <View style={{ backgroundColor: C.cardAlt, borderRadius: 10, padding: 12,
+              marginBottom: 20, borderWidth: 1, borderColor: C.border }}>
+              <Text style={{ color: C.textSoft, fontSize: 12, lineHeight: 18 }}>
+                💡 Si un joueur entre dans ta zone bastion il verra la récompense et pourra check-in une fois par 24h.
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable onPress={() => setTreasuryModal(false)}
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center",
+                  backgroundColor: C.card, borderWidth: 1, borderColor: C.border }}>
+                <Text style={{ color: C.textSoft, fontWeight: "800" }}>Fermer</Text>
+              </Pressable>
+              <Pressable onPress={() => void handleDeposit()} disabled={depositing}
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center",
+                  backgroundColor: C.gold + "20", borderWidth: 1, borderColor: C.gold + "50" }}>
+                <Text style={{ color: C.gold, fontWeight: "900" }}>
+                  {depositing ? "..." : "Déposer"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </Modal>
 

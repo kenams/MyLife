@@ -14,7 +14,7 @@ import {
 import type { MapPlayer, MapStatus } from "@/lib/life-map";
 import {
   fetchCrewZones, checkAndTriggerWars,
-  computeGlowIntensity,
+  computeGlowIntensity, bastionCheckin,
   type CrewZoneRich,
 } from "@/lib/crews";
 import { startNpcMapEngine, stopNpcMapEngine } from "@/lib/npc-map-engine";
@@ -647,6 +647,8 @@ export default function LifeMapScreen() {
   const [blocked,         setBlocked]         = useState<string[]>([]);
   const [mapReady,        setMapReady]        = useState(false);
   const [showMatchmaking, setShowMatchmaking] = useState(false);
+  const [bastionAlert,    setBastionAlert]    = useState<{ zone: CrewZoneRich; reward: number } | null>(null);
+  const [checkinDone,     setCheckinDone]     = useState(false);
   const flyToRef = useRef<((lat: number, lng: number, zoom?: number) => void) | null>(null);
 
   const visible = players.filter((p) =>
@@ -693,6 +695,20 @@ export default function LifeMapScreen() {
     if (!loc) return;
     setMyLocation({ lat: loc.lat, lng: loc.lng });
     markQuestAction("appear-on-map");
+
+    // Détecte si on est dans un bastion ennemi avec récompense
+    const allZones = await fetchCrewZones();
+    const nearBastion = allZones.find((z) => {
+      const isBastion = (z as CrewZoneRich & { is_bastion?: boolean }).is_bastion;
+      if (!isBastion) return false;
+      const dist = haversineMeters(loc, { lat: z.lat, lng: z.lng } as { lat: number; lng: number });
+      return dist <= z.radius;
+    });
+    if (nearBastion) {
+      const reward = (nearBastion as CrewZoneRich & { visitor_reward?: number }).visitor_reward ?? 0;
+      if (reward > 0) setBastionAlert({ zone: nearBastion, reward });
+    }
+
     if (avatar) {
       const { data: authData } = await supabase?.auth.getUser() ?? { data: null };
       const resolvedUserId = authData?.user?.id ?? avatar.displayName;
@@ -861,6 +877,50 @@ export default function LifeMapScreen() {
             }}>
             <Text style={{ fontSize: 20 }}>👻</Text>
           </Pressable>
+        </View>
+      )}
+
+      {/* ── BASTION CHECK-IN ALERT ───────────────────────────────────────── */}
+      {bastionAlert && !checkinDone && (
+        <View style={{
+          position: "absolute", top: 80, left: 16, right: 16, zIndex: 20,
+          backgroundColor: C.card, borderRadius: 16, padding: 16,
+          borderWidth: 1.5, borderColor: C.gold + "60",
+          shadowColor: C.gold, shadowOpacity: 0.3, shadowRadius: 16,
+          flexDirection: "row", alignItems: "center", gap: 12,
+        }}>
+          <Text style={{ fontSize: 28 }}>🏰</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: C.gold, fontSize: 13, fontWeight: "900" }}>
+              Tu es dans le bastion [{bastionAlert.zone.crew?.tag}]
+            </Text>
+            <Text style={{ color: C.soft, fontSize: 11, marginTop: 2 }}>
+              Check-in pour gagner {bastionAlert.reward} BL · 1 fois par 24h
+            </Text>
+          </View>
+          <View style={{ gap: 6 }}>
+            <Pressable
+              onPress={() => {
+                if (!avatar) return;
+                bastionCheckin(bastionAlert.zone.id, bastionAlert.zone.crew_id, avatar.displayName)
+                  .then((r) => {
+                    setCheckinDone(true);
+                    setBastionAlert(null);
+                    if (r.ok && r.blEarned > 0) {
+                      markQuestAction("appear-on-map");
+                    }
+                  });
+              }}
+              style={{ backgroundColor: C.gold + "20", borderRadius: 10,
+                paddingHorizontal: 14, paddingVertical: 8,
+                borderWidth: 1, borderColor: C.gold + "50" }}>
+              <Text style={{ color: C.gold, fontSize: 12, fontWeight: "900" }}>Check-in</Text>
+            </Pressable>
+            <Pressable onPress={() => setBastionAlert(null)}
+              style={{ alignItems: "center" }}>
+              <Text style={{ color: C.muted, fontSize: 11 }}>Ignorer</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
