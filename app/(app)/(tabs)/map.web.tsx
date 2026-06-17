@@ -600,26 +600,26 @@ function FilterPills({ active, onChange }: {
   active: MapStatus | "all"; onChange: (f: MapStatus | "all") => void;
 }) {
   const pills: { key: MapStatus | "all"; label: string; color: string }[] = [
-    { key: "all",   label: "Tous",      color: C.gold },
-    { key: "free",  label: "🟡 Libre",  color: STATUS_CONFIG.free.color  },
-    { key: "vibe",  label: "💜 Soirée", color: STATUS_CONFIG.vibe.color  },
-    { key: "charo", label: "🔴 Charo",  color: STATUS_CONFIG.charo.color },
-    { key: "taken", label: "💍 Pris",   color: STATUS_CONFIG.taken.color },
+    { key: "all",   label: "Tous",    color: C.gold },
+    { key: "free",  label: "Libres",  color: STATUS_CONFIG.free.color  },
+    { key: "vibe",  label: "Soirée",  color: STATUS_CONFIG.vibe.color  },
+    { key: "charo", label: "Charo",   color: STATUS_CONFIG.charo.color },
+    { key: "taken", label: "En couple", color: STATUS_CONFIG.taken.color },
   ];
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}
-      style={{ position: "absolute", top: 72, left: 0, right: 0 }}
+      style={{ position: "absolute", top: 108, left: 0, right: 0 }}
       contentContainerStyle={{ paddingHorizontal: 16, gap: 8, flexDirection: "row" }}>
       {pills.map((f) => {
         const on = active === f.key;
         return (
           <Pressable key={f.key} onPress={() => onChange(f.key)}
             style={{
-              paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20,
+              paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
               backgroundColor: on ? f.color : "rgba(8,8,15,0.88)",
               borderWidth: 1, borderColor: on ? f.color : C.border,
             }}>
-            <Text style={{ color: on ? "#04040A" : C.text, fontSize: 12, fontWeight: "800" }}>
+            <Text style={{ color: on ? "#04040A" : C.soft, fontSize: 11, fontWeight: "800" }}>
               {f.label}
             </Text>
           </Pressable>
@@ -816,12 +816,15 @@ export default function LifeMapScreen() {
         <Pressable onPress={() => setShowPicker(true)}
           style={{
             backgroundColor: "rgba(8,8,15,0.88)", borderRadius: 14,
-            paddingHorizontal: 14, paddingVertical: 10,
+            paddingHorizontal: 12, paddingVertical: 10,
             borderWidth: 1, borderColor: cfg.color + "50",
-            flexDirection: "row", alignItems: "center", gap: 8,
+            flexDirection: "row", alignItems: "center", gap: 6,
           }}>
-          <Text style={{ fontSize: 16 }}>{cfg.emoji}</Text>
-          <Text style={{ color: cfg.color, fontSize: 13, fontWeight: "800" }}>{cfg.label}</Text>
+          <Text style={{ fontSize: 14 }}>{cfg.emoji}</Text>
+          <View>
+            <Text style={{ color: C.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1 }}>STATUT</Text>
+            <Text style={{ color: cfg.color, fontSize: 12, fontWeight: "900" }}>{cfg.label}</Text>
+          </View>
         </Pressable>
       </View>
 
@@ -854,28 +857,28 @@ export default function LifeMapScreen() {
           </Text>
         </View>
       ) : (
-        /* Boutons recentrage + mode discret */
-        <View style={{ position: "absolute", bottom: 160, right: 20, zIndex: 5, gap: 8 }}>
+        <View style={{ position: "absolute", bottom: 100, right: 16, zIndex: 5, gap: 10 }}>
+          {/* Recentrer */}
           <Pressable
             onPress={() => zoomAnimTrigger(myLocation.lat, myLocation.lng)}
             style={{
-              width: 48, height: 48, borderRadius: 14,
+              width: 46, height: 46, borderRadius: 13,
               backgroundColor: "rgba(8,8,15,0.92)",
               borderWidth: 1.5, borderColor: C.gold + "60",
               alignItems: "center", justifyContent: "center",
-              shadowColor: C.gold, shadowOpacity: 0.4, shadowRadius: 12,
             }}>
-            <Text style={{ fontSize: 22 }}>🎯</Text>
+            <Text style={{ fontSize: 20 }}>🎯</Text>
           </Pressable>
+          {/* Passer en discret */}
           <Pressable
             onPress={() => void handleStatusChange("ghost")}
             style={{
-              width: 48, height: 48, borderRadius: 14,
-              backgroundColor: myStatus === "ghost" ? "rgba(74,72,68,0.5)" : "rgba(8,8,15,0.92)",
-              borderWidth: 1.5, borderColor: "rgba(74,72,68,0.6)",
+              width: 46, height: 46, borderRadius: 13,
+              backgroundColor: myStatus === "ghost" ? "rgba(74,72,68,0.45)" : "rgba(8,8,15,0.92)",
+              borderWidth: 1.5, borderColor: myStatus === "ghost" ? C.muted : "rgba(74,72,68,0.5)",
               alignItems: "center", justifyContent: "center",
             }}>
-            <Text style={{ fontSize: 20 }}>👻</Text>
+            <Text style={{ fontSize: 18 }}>{myStatus === "ghost" ? "👁" : "👻"}</Text>
           </Pressable>
         </View>
       )}
@@ -930,14 +933,14 @@ export default function LifeMapScreen() {
           <Pressable
             onPress={() => setShowMatchmaking((p) => !p)}
             style={{
-              position: "absolute", bottom: 160, left: 20, zIndex: 5,
-              backgroundColor: showMatchmaking ? C.purple + "30" : "rgba(8,8,15,0.92)",
-              borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
-              borderWidth: 1.5, borderColor: C.purple + "60",
+              position: "absolute", bottom: 100, left: 16, zIndex: 5,
+              backgroundColor: showMatchmaking ? C.purple + "25" : "rgba(8,8,15,0.92)",
+              borderRadius: 13, paddingHorizontal: 12, paddingVertical: 10,
+              borderWidth: 1.5, borderColor: showMatchmaking ? C.purple : C.border,
               flexDirection: "row", alignItems: "center", gap: 6,
             }}>
-            <Text style={{ fontSize: 16 }}>🤝</Text>
-            <Text style={{ color: C.purple, fontSize: 12, fontWeight: "800" }}>Nearby</Text>
+            <Text style={{ fontSize: 16 }}>👥</Text>
+            <Text style={{ color: showMatchmaking ? C.purple : C.soft, fontSize: 12, fontWeight: "800" }}>À proximité</Text>
             {(() => {
               const count = visible.filter(
                 (p) => !p.is_npc && haversineMeters(myLocation, { lat: p.lat, lng: p.lng }) < 500
@@ -956,7 +959,7 @@ export default function LifeMapScreen() {
               .slice(0, 5);
             return (
               <View style={{
-                position: "absolute", bottom: 220, left: 20, zIndex: 10,
+                position: "absolute", bottom: 158, left: 16, zIndex: 10,
                 backgroundColor: C.card, borderRadius: 16, padding: 16, width: 240,
                 borderWidth: 1, borderColor: C.purple + "40",
                 shadowColor: C.purple, shadowOpacity: 0.3, shadowRadius: 20,
