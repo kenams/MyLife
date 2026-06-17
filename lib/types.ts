@@ -1,4 +1,5 @@
 export type UserSession = {
+  id?: string;
   email: string;
   provider: "local" | "supabase";
 };

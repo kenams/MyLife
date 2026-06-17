@@ -193,11 +193,12 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
           flyTo: (coords: number[], zoom: number, opts?: object) => void;
           remove: () => void;
         };
-        tileLayer: (url: string, opts: object) => { addTo: (map: unknown) => void };
+        tileLayer: (url: string, opts: object) => { addTo: (map: unknown) => void; remove: () => void };
         marker: (coords: number[], opts: object) => {
-          addTo: (map: unknown) => unknown;
+          addTo: (map: unknown) => { on: (e: string, h: () => void) => void; remove: () => void; bindTooltip: (t: string, opts: object) => void };
           on: (event: string, handler: () => void) => void;
           remove: () => void;
+          bindTooltip: (t: string, opts: object) => void;
         };
         icon: (opts: object) => unknown;
         circleMarker: (coords: number[], opts: object) => { addTo: (map: unknown) => void };
@@ -362,7 +363,7 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
         });
         const marker = L.marker([p.lat, p.lng], { icon }).addTo(map);
         marker.on("click", () => onPlayerClick(p.id));
-        (marker as unknown as { bindTooltip: (t: string, opts: object) => void }).bindTooltip(
+        marker.bindTooltip(
           `<b style="color:${dotColor}">${name}</b>${p.crew_tag ? ` <span style="opacity:.6">[${p.crew_tag}]</span>` : ""}`,
           { permanent: false, direction: "top", className: "mylife-tooltip" }
         );
@@ -395,13 +396,14 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
   // Mise à jour joueurs quand ils changent — replace uniquement le marqueur modifié
   useEffect(() => {
     if (!mapRef.current || !leafletLoaded) return;
+    type LMarker = {
+      addTo: (map: unknown) => LMarker;
+      on: (e: string, h: () => void) => void;
+      remove: () => void;
+      bindTooltip: (t: string, opts: object) => void;
+    };
     const L = (window as unknown as { L: unknown }).L as {
-      marker: (coords: number[], opts: object) => {
-        addTo: (map: unknown) => unknown;
-        on: (e: string, h: () => void) => void;
-        remove: () => void;
-        bindTooltip: (t: string, opts: object) => void;
-      };
+      marker: (coords: number[], opts: object) => LMarker;
       icon: (opts: object) => unknown;
     };
 
