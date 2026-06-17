@@ -184,7 +184,7 @@ export async function createCrew(
   description: string, founderName: string, founderEmoji: string
 ): Promise<Crew | { error: "TAG_TAKEN" } | null> {
   if (!supabase) return null;
-  const normalizedTag = tag.toUpperCase().trim().slice(0, 3);
+  const normalizedTag = tag.toUpperCase().trim().replace(/[^A-Z0-9]/g, "").slice(0, 5);
 
   // Vérif unicité avant insert
   const available = await isTagAvailable(normalizedTag);

@@ -704,7 +704,7 @@ export default function CrewsScreen() {
             <View style={{ flexDirection: "row", gap: 12, marginBottom: 12 }}>
               <View style={{ flex: 1 }}>
                 <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-                  <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>TAG (3 LETTRES)</Text>
+                  <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>TAG (ex: BVK42)</Text>
                   {tagStatus === "checking" && <Text style={{ color: C.muted, fontSize: 9 }}>…</Text>}
                   {tagStatus === "ok"       && <Text style={{ color: "#39FF14", fontSize: 9, fontWeight: "900" }}>✓ DISPO</Text>}
                   {tagStatus === "taken"    && <Text style={{ color: "#FF3B3B", fontSize: 9, fontWeight: "900" }}>✗ PRIS</Text>}
@@ -712,7 +712,7 @@ export default function CrewsScreen() {
                 <TextInput
                   value={crewTag}
                   onChangeText={(t) => {
-                    const val = t.slice(0, 3).toUpperCase().replace(/[^A-Z0-9]/g, "");
+                    const val = t.slice(0, 5).toUpperCase().replace(/[^A-Z0-9]/g, "");
                     setCrewTag(val);
                     setTagStatus(val.length >= 2 ? "checking" : "idle");
                     if (tagCheckTimer.current) clearTimeout(tagCheckTimer.current);
