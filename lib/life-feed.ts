@@ -88,7 +88,7 @@ const NPC_DRAMA = [
   { emoji: "🔥", body: "{name} est intouchable ce soir", kind: "npc_drama" as FeedKind },
 ];
 
-const LOCATIONS = ["Marais", "Belleville", "93", "Châtelet", "Pigalle", "Oberkampf", "Nation", "Bastille"];
+const LOCATIONS = ["Capitole", "Saint-Cyprien", "Compans", "Carmes", "Minimes", "Rangueil", "Bonnefoy", "Mirail", "Croix-Daurade", "Bagatelle"];
 
 export async function publishNpcDrama(npcName: string, npcEmoji: string, isStar = false) {
   const drama = NPC_DRAMA[Math.floor(Math.random() * NPC_DRAMA.length)];
@@ -99,4 +99,69 @@ export async function publishNpcDrama(npcName: string, npcEmoji: string, isStar 
     body, player_name: npcName, player_emoji: npcEmoji,
     location: loc, is_npc: true, is_star: isStar,
   });
+}
+
+// ── NPC cast complet Toulouse ─────────────────────────────────────────────────
+const NPC_CAST = [
+  { name: "Jok'air",     emoji: "🎤", is_star: true  },
+  { name: "Maska",       emoji: "🎭", is_star: true  },
+  { name: "Doomams",     emoji: "😤", is_star: false },
+  { name: "Lil Yaz",     emoji: "💜", is_star: false },
+  { name: "Benz",        emoji: "🔑", is_star: false },
+  { name: "Sékouba",     emoji: "🧢", is_star: false },
+  { name: "Karim_93",    emoji: "⚽", is_star: false },
+  { name: "Lina.P",      emoji: "👑", is_star: false },
+  { name: "Toxic_Nat",   emoji: "🔥", is_star: false },
+  { name: "Amina.M",     emoji: "💄", is_star: false },
+];
+
+// ── Mock feed pour dev offline (retourné si Supabase vide) ───────────────────
+function buildMockFeed(): FeedEvent[] {
+  const now = Date.now();
+  const entries: Array<{ npc: typeof NPC_CAST[0]; drama: typeof NPC_DRAMA[0]; loc: string; offset: number }> = [];
+  for (let i = 0; i < 18; i++) {
+    entries.push({
+      npc:   NPC_CAST[i % NPC_CAST.length],
+      drama: NPC_DRAMA[Math.floor(Math.random() * NPC_DRAMA.length)],
+      loc:   LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)],
+      offset: i * 45_000 + Math.random() * 20_000,
+    });
+  }
+  return entries.map((e, idx) => ({
+    id:          `mock_${idx}`,
+    kind:        e.drama.kind,
+    emoji:       e.drama.emoji,
+    body:        e.drama.body.replace("{name}", e.npc.name).replace("{loc}", e.loc),
+    player_name: e.npc.name,
+    player_emoji: e.npc.emoji,
+    location:    e.loc,
+    is_npc:      true,
+    is_star:     e.npc.is_star,
+    created_at:  new Date(now - e.offset).toISOString(),
+  }));
+}
+
+export async function fetchRecentFeedWithFallback(limit = 20): Promise<FeedEvent[]> {
+  const remote = await fetchRecentFeed(limit);
+  if (remote.length > 0) return remote;
+  return buildMockFeed().slice(0, limit);
+}
+
+// ── Génère un événement NPC local aléatoire (sans Supabase) ──────────────────
+export function buildRandomNpcEvent(): FeedEvent {
+  const npc   = NPC_CAST[Math.floor(Math.random() * NPC_CAST.length)];
+  const drama = NPC_DRAMA[Math.floor(Math.random() * NPC_DRAMA.length)];
+  const loc   = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
+  return {
+    id:          `local_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    kind:        drama.kind,
+    emoji:       drama.emoji,
+    body:        drama.body.replace("{name}", npc.name).replace("{loc}", loc),
+    player_name: npc.name,
+    player_emoji: npc.emoji,
+    location:    loc,
+    is_npc:      true,
+    is_star:     npc.is_star,
+    created_at:  new Date().toISOString(),
+  };
 }

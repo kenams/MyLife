@@ -96,16 +96,57 @@ export function seededConversations(): Conversation[] {
 }
 
 export function seededNotifications(): NotificationItem[] {
-  const createdAt = nowIso();
+  const now = Date.now();
+  const at = (offsetMs: number) => new Date(now - offsetMs).toISOString();
   return [
     {
       id: "welcome-notification",
-      kind: "tip",
+      kind: "tip" as const,
       title: "Bienvenue dans MyLife",
       body: "Le meilleur debut reste simple : mange, travaille, parle a quelqu'un, puis reviens plus tard.",
-      createdAt,
-      read: false
-    }
+      createdAt: at(0),
+      read: false,
+    },
+    {
+      id: "notif-map-live",
+      kind: "social" as const,
+      title: "🗺️ 20 joueurs actifs sur la map",
+      body: "Jok'air et Maska sont en live au Capitole. Rejoins la map pour voir.",
+      createdAt: at(120_000),
+      read: false,
+    },
+    {
+      id: "notif-crew-invite",
+      kind: "social" as const,
+      title: "📩 Invitation crew",
+      body: "Seb.Bellev t'invite a rejoindre BVK. Reponds dans l'onglet Crews.",
+      createdAt: at(300_000),
+      read: false,
+    },
+    {
+      id: "notif-flash-event",
+      kind: "reward" as const,
+      title: "⚡ Flash Event — Capitole",
+      body: "Un evenement express vient de commencer au Capitole. 45 min restantes.",
+      createdAt: at(600_000),
+      read: false,
+    },
+    {
+      id: "notif-npc-drama",
+      kind: "tip" as const,
+      title: "🔥 Toxic_Nat est en mode guerre",
+      body: "Il cherche un crew adverse a Bonnefoy. Le drama monte dans le quartier.",
+      createdAt: at(900_000),
+      read: true,
+    },
+    {
+      id: "notif-streak",
+      kind: "reward" as const,
+      title: "🔥 Streak actif",
+      body: "Tu es connecte depuis 1 jour de suite. Continue pour debloquer des bonus.",
+      createdAt: at(1_200_000),
+      read: true,
+    },
   ];
 }
 

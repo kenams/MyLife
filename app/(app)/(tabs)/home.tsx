@@ -5,10 +5,11 @@ import { Animated, Modal, Pressable, ScrollView, Text, View } from "react-native
 import { supabase } from "@/lib/supabase";
 import {
   buildActionFeedEvent,
-  fetchRecentFeed,
+  fetchRecentFeedWithFallback,
   publishFeedEvent,
   publishNpcDrama,
   subscribeToFeed,
+  buildRandomNpcEvent,
   type FeedEvent,
 } from "@/lib/life-feed";
 import {
@@ -510,13 +511,17 @@ export default function HomeScreen() {
     Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
   }, []);
 
-  // ── Feed realtime ──────────────────────────────────────────────────────────
+  // ── Feed realtime + simulateur local ─────────────────────────────────────
   useEffect(() => {
-    fetchRecentFeed(20).then((evts) => setLiveEvents(evts));
+    fetchRecentFeedWithFallback(20).then((evts) => setLiveEvents(evts));
     const sub = subscribeToFeed((evt) =>
       setLiveEvents((prev) => [evt, ...prev].slice(0, 20))
     );
-    return () => { sub?.unsubscribe(); };
+    // Injecte un événement NPC local toutes les 25s (visible même sans Supabase)
+    const localSim = setInterval(() => {
+      setLiveEvents((prev) => [buildRandomNpcEvent(), ...prev].slice(0, 20));
+    }, 25_000);
+    return () => { sub?.unsubscribe(); clearInterval(localSim); };
   }, []);
 
   // ── Flash Events — refresh toutes les 60s ─────────────────────────────────
