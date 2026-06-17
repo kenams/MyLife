@@ -1,26 +1,26 @@
 import { supabase } from "./supabase";
 import { publishFeedEvent } from "./life-feed";
 
-// Destinations NPC — points chauds de Paris avec noms humains
+// Destinations NPC — points chauds Toulouse (coordonnées test GPS)
 const PARIS_SPOTS = [
-  { name: "Belleville — Studio",          lat: 48.8720, lng: 2.3800 },
-  { name: "Marais — Galerie",             lat: 48.8590, lng: 2.3570 },
-  { name: "République — Place",           lat: 48.8676, lng: 2.3634 },
-  { name: "Châtelet — Forum",             lat: 48.8603, lng: 2.3471 },
-  { name: "6ème — Saint-Germain",         lat: 48.8530, lng: 2.3330 },
-  { name: "Pigalle — Club Privé",         lat: 48.8835, lng: 2.3340 },
-  { name: "Montmartre — Sacré-Cœur",      lat: 48.8867, lng: 2.3431 },
-  { name: "13ème — Quartier Asiatique",   lat: 48.8322, lng: 2.3561 },
-  { name: "Nation — Place",               lat: 48.8482, lng: 2.3962 },
-  { name: "Oberkampf — Terrasse",         lat: 48.8660, lng: 2.3770 },
-  { name: "Bastille — Place",             lat: 48.8531, lng: 2.3693 },
-  { name: "Opéra — Grand Bvd",            lat: 48.8718, lng: 2.3318 },
-  { name: "Vincennes — Bois Est",         lat: 48.8479, lng: 2.4338 },
-  { name: "Louvre — Jardin Tuileries",    lat: 48.8600, lng: 2.3400 },
-  { name: "Quartier Latin — Brasserie",   lat: 48.8510, lng: 2.3460 },
-  { name: "Gobelins — Rue Mouffetard",    lat: 48.8370, lng: 2.3510 },
-  { name: "Grands Boulevards — Café",     lat: 48.8700, lng: 2.3500 },
-  { name: "Saint-Denis — Stade",          lat: 48.9200, lng: 2.3600 },
+  { name: "Capitole — Place",             lat: 43.6047, lng: 1.4442 },
+  { name: "Saint-Cyprien — Quai",         lat: 43.5995, lng: 1.4380 },
+  { name: "Compans-Caffarelli",           lat: 43.6115, lng: 1.4380 },
+  { name: "Carmes — Marché",              lat: 43.5985, lng: 1.4480 },
+  { name: "Wilson — Place",               lat: 43.6089, lng: 1.4501 },
+  { name: "Minimes — Parc",               lat: 43.6200, lng: 1.4320 },
+  { name: "Esquirol — Galerie",           lat: 43.6012, lng: 1.4430 },
+  { name: "Rangueil — Campus",            lat: 43.5660, lng: 1.4680 },
+  { name: "Blagnac — Aéro",              lat: 43.6340, lng: 1.3670 },
+  { name: "Bonnefoy — Bar",               lat: 43.6050, lng: 1.4640 },
+  { name: "Croix-Daurade — Terrain",      lat: 43.6230, lng: 1.4420 },
+  { name: "Saint-Agne — Resto",           lat: 43.5830, lng: 1.4600 },
+  { name: "Bellefontaine — Dalle",        lat: 43.5750, lng: 1.4110 },
+  { name: "Mirail — Centre",              lat: 43.5780, lng: 1.4060 },
+  { name: "Bagatelle — Parc",             lat: 43.5940, lng: 1.4200 },
+  { name: "Empalot — Place",              lat: 43.5860, lng: 1.4500 },
+  { name: "Côte Pavée — Terrasse",        lat: 43.5930, lng: 1.4620 },
+  { name: "La Vache — Studio",            lat: 43.6300, lng: 1.4200 },
 ];
 
 const STATUSES: Array<"free"|"vibe"|"charo"|"ghost"> = ["free","vibe","charo","ghost"];
