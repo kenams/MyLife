@@ -17,6 +17,7 @@ import {
   computeGlowIntensity,
   type CrewZoneRich,
 } from "@/lib/crews";
+import { startNpcMapEngine, stopNpcMapEngine } from "@/lib/npc-map-engine";
 import { blockUser } from "@/lib/safety";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
@@ -588,6 +589,12 @@ export default function LifeMapScreen() {
       setCrewZones(zones);
       checkAndTriggerWars(zones);
     });
+  }, []);
+
+  // NPC map engine — démarre quand la map est ouverte, stoppe au démontage
+  useEffect(() => {
+    startNpcMapEngine();
+    return () => stopNpcMapEngine();
   }, []);
 
   // Realtime
