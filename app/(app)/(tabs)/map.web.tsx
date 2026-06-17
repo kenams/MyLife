@@ -217,9 +217,9 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
       mapEl.classList.add("mylife-map-container");
       mapEl.style.cssText = "width:100%;height:100%;position:absolute;top:0;left:0;right:0;bottom:0;";
 
-      // Créer la Leaflet map
+      // Créer la Leaflet map — centré sur Toulouse par défaut
       const map = L.map(mapEl, {
-        center: [48.8566, 2.3522],
+        center: [43.6047, 1.4442],
         zoom: 13,
         zoomControl: true,
         preferCanvas: true,
@@ -688,6 +688,12 @@ export default function LifeMapScreen() {
     return () => stopNpcMapEngine();
   }, []);
 
+  // Auto-fly vers la position du joueur dès que la map est prête + position connue
+  useEffect(() => {
+    if (!mapReady || !myLocation || !flyToRef.current) return;
+    flyToRef.current(myLocation.lat, myLocation.lng, 17);
+  }, [mapReady]); // une seule fois au montage
+
   // Fetch initial + Realtime
   useEffect(() => {
     fetchAllPlayers().then(setPlayers);
@@ -744,9 +750,9 @@ export default function LifeMapScreen() {
 
   function zoomAnimTrigger(lat: number, lng: number) {
     if (!flyToRef.current) return;
-    // 1. Dézoome animé sur Paris entier (1.2s) — on voit la ville s'éloigner
-    flyToRef.current(48.8566, 2.3522, 11);
-    // 2. Après 1.4s (fin du déZoom), fly vers ma position au zoom 17 (2.5s) — on voit la distance
+    // 1. Dézoome sur la ville (1.2s) — vue d'ensemble
+    flyToRef.current(43.6047, 1.4442, 11);
+    // 2. Fly vers la position du joueur (zoom 17 — street level)
     setTimeout(() => {
       flyToRef.current?.(lat, lng, 17);
     }, 1400);
