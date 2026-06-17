@@ -11,7 +11,7 @@ import {
   fetchPlayerLeaderboard, fetchAlliances, proposeAlliance, acceptAlliance,
   checkLeaderInactivity, claimBastion, collectBastionPassive, fetchBastions,
   declareSiege, BASTION_MIN_DISTANCE_M,
-  depositToTreasury, setVisitorReward,
+  depositToTreasury, setVisitorReward, resolveSiege,
 } from "@/lib/crews";
 import { supabase } from "@/lib/supabase";
 
@@ -198,6 +198,21 @@ export default function CrewsScreen() {
       .subscribe();
     return () => { void sub.unsubscribe(); };
   }, [myCrewId]);
+
+  async function handleResolveSiege(warId: string) {
+    if (!myCrewId) return;
+    const result = await resolveSiege(warId, myCrewId);
+    if (result.ok) {
+      showToast("🏰 Bastion conquis !");
+      fetchCrewWars(myCrewId).then(setWars);
+      fetchBastions().then((b) => {
+        const mine = b.find((x) => x.crew_id === myCrewId);
+        if (mine) setMyBastion(mine.id);
+      });
+    } else {
+      showToast("Erreur lors de la résolution");
+    }
+  }
 
   async function handleDeposit() {
     if (!myCrewId) return;
@@ -439,6 +454,7 @@ export default function CrewsScreen() {
                     const enemy = isA ? war.crew_b : war.crew_a;
                     const statusColor = war.status === "active" ? C.red : war.status === "won" ? C.green : C.muted;
                     const statusLabel = war.status === "active" ? "EN COURS" : war.status === "won" ? "VICTOIRE" : "DÉFAITE";
+                    const isFounder = members.find((m) => m.player_name === playerName && m.role === "founder");
                     return (
                       <View key={war.id} style={{ flexDirection: "row", alignItems: "center", gap: 8,
                         backgroundColor: "#111", borderRadius: 8, padding: 10, borderWidth: 1, borderColor: C.border }}>
@@ -455,6 +471,13 @@ export default function CrewsScreen() {
                           borderRadius: 5, borderWidth: 1, borderColor: statusColor + "40" }}>
                           <Text style={{ color: statusColor, fontSize: 9, fontWeight: "900" }}>{statusLabel}</Text>
                         </View>
+                        {war.status === "active" && isFounder && (
+                          <Pressable onPress={() => void handleResolveSiege(war.id)}
+                            style={{ backgroundColor: C.red + "20", paddingHorizontal: 8, paddingVertical: 5,
+                              borderRadius: 7, borderWidth: 1, borderColor: C.red + "50", marginLeft: 4 }}>
+                            <Text style={{ color: C.red, fontSize: 10, fontWeight: "900" }}>Résoudre ⚔️</Text>
+                          </Pressable>
+                        )}
                       </View>
                     );
                   })}
