@@ -1,10 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, ScrollView, Text, View } from "react-native";
 
 import type { ShiftRecord } from "@/lib/types";
-
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getAvatarVisual } from "@/lib/avatar-visual";
 import { getHousingTier } from "@/lib/housing";
@@ -15,47 +14,48 @@ import { THEMES } from "@/lib/themes";
 import type { ThemeId } from "@/lib/themes";
 import { useGameStore } from "@/stores/game-store";
 
-// ─── Light theme local ────────────────────────────────────────────────────────
 const L = {
-  bg:         "#e8edf5",
-  card:       "#f0f4fa",
-  cardAlt:    "#f8faff",
-  text:       "#1e2a3a",
-  textSoft:   "#4a5568",
-  muted:      "#8fa3b8",
-  border:     "#ccd4e0",
-  primary:    "#6366f1",
-  primaryBg:  "#eef2ff",
-  green:      "#10b981",
-  greenBg:    "#ecfdf5",
-  gold:       "#f59e0b",
-  goldBg:     "#fffbeb",
-  red:        "#ef4444",
-  redBg:      "#fef2f2",
-  blue:       "#3b82f6",
-  blueBg:     "#eff6ff",
-  pink:       "#ec4899",
-  pinkBg:     "#fdf2f8",
-  purple:     "#8b5cf6",
-  purpleBg:   "#f5f3ff",
-  teal:       "#14b8a6",
-  tealBg:     "#f0fdfa",
-  shadow:     "rgba(99,102,241,0.08)",
+  bg:        "#080808",
+  card:      "#111111",
+  cardAlt:   "#181818",
+  card2:     "#141414",
+  text:      "#F5F2E8",
+  textSoft:  "#A8A49A",
+  muted:     "#4A4844",
+  border:    "rgba(255,255,255,0.07)",
+  primary:   "#FFD600",
+  primaryBg: "#1A1500",
+  green:     "#39FF14",
+  greenBg:   "#091A03",
+  gold:      "#FFD600",
+  goldBg:    "#1A1500",
+  red:       "#FF3B3B",
+  redBg:     "#1A0808",
+  blue:      "#00B4FF",
+  blueBg:    "#001A2A",
+  pink:      "#FF2D78",
+  pinkBg:    "#1A0818",
+  purple:    "#BF5FFF",
+  purpleBg:  "#18082A",
+  teal:      "#00FFD1",
+  tealBg:    "#001A14",
+  orange:    "#FF6B00",
+  orangeBg:  "#1A0D00",
 };
 
 const XP_PER_LEVEL = 200;
 
 const RANK_LABELS: Record<string, string> = {
   precaire: "Précaire", modeste: "Modeste", stable: "Stable",
-  confortable: "Confortable", influent: "Influent", elite: "Élite"
+  confortable: "Confort", influent: "Influent", elite: "Élite"
 };
 const RANK_EMOJIS: Record<string, string> = {
   precaire: "🪨", modeste: "🌱", stable: "⚡", confortable: "💎", influent: "👑", elite: "🌟"
 };
 
-// ─── StatBar ─────────────────────────────────────────────────────────────────
-function StatBar({ label, value, icon, color, bg }: {
-  label: string; value: number; icon: string; color: string; bg: string;
+// ─── StatBar dark ─────────────────────────────────────────────────────────────
+function StatBar({ label, value, icon, color }: {
+  label: string; value: number; icon: string; color: string;
 }) {
   const pct = Math.max(0, Math.min(100, value));
   const barAnim = useRef(new Animated.Value(0)).current;
@@ -64,56 +64,71 @@ function StatBar({ label, value, icon, color, bg }: {
   }, [pct]);
   const barW = barAnim.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] });
   const urgent = pct < 25;
+  const barColor = urgent ? L.red : color;
 
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 10,
       borderBottomWidth: 1, borderBottomColor: L.border }}>
-      <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: bg,
-        alignItems: "center", justifyContent: "center" }}>
-        <Text style={{ fontSize: 16 }}>{icon}</Text>
+      <Text style={{ fontSize: 15, width: 22, textAlign: "center" }}>{icon}</Text>
+      <Text style={{ color: L.textSoft, fontSize: 12, fontWeight: "600", width: 80 }}>{label}</Text>
+      <View style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.05)" }}>
+        <Animated.View style={{ height: 3, borderRadius: 2, width: barW,
+          backgroundColor: barColor,
+          shadowColor: barColor, shadowOpacity: urgent ? 0.8 : 0.4, shadowRadius: 4 }} />
       </View>
-      <View style={{ flex: 1, gap: 5 }}>
-        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ color: L.textSoft, fontSize: 13, fontWeight: "600" }}>{label}</Text>
-          <Text style={{ color: urgent ? L.red : color, fontSize: 13, fontWeight: "800" }}>{Math.round(pct)}</Text>
-        </View>
-        <View style={{ height: 6, borderRadius: 3, backgroundColor: L.border, overflow: "hidden" }}>
-          <Animated.View style={{ height: 6, borderRadius: 3, width: barW,
-            backgroundColor: urgent ? L.red : color }} />
-        </View>
-      </View>
+      <Text style={{ color: urgent ? L.red : L.muted, fontSize: 11, fontWeight: "800", width: 28, textAlign: "right" }}>
+        {Math.round(pct)}
+      </Text>
     </View>
   );
 }
 
-// ─── QuickAction ─────────────────────────────────────────────────────────────
-function QuickAction({ emoji, label, color, bg, route }: {
-  emoji: string; label: string; color: string; bg: string; route: string;
-}) {
-  return (
-    <Pressable onPress={() => router.push(route as never)}
-      style={{ flex: 1, minWidth: 80, backgroundColor: bg, borderRadius: 16,
-        paddingVertical: 14, alignItems: "center", gap: 6,
-        borderWidth: 1, borderColor: color + "30",
-        shadowColor: color, shadowOpacity: 0.1, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } }}>
-      <Text style={{ fontSize: 22 }}>{emoji}</Text>
-      <Text style={{ color, fontSize: 11, fontWeight: "700" }}>{label}</Text>
-    </Pressable>
-  );
-}
+// ─── XP Ring SVG-like (pure RN) ──────────────────────────────────────────────
+function XpRing({ pct, level }: { pct: number; level: number }) {
+  const SIZE = 84;
+  const STROKE = 5;
+  const INNER = SIZE - STROKE * 2;
 
-// ─── AssetCard ───────────────────────────────────────────────────────────────
-function AssetCard({ emoji, label, value, color, bg }: {
-  emoji: string; label: string; value: string; color: string; bg: string;
-}) {
+  const scaleAnim = useRef(new Animated.Value(0.92)).current;
+  const glowAnim  = useRef(new Animated.Value(0.4)).current;
+
+  useEffect(() => {
+    Animated.loop(Animated.sequence([
+      Animated.parallel([
+        Animated.timing(scaleAnim, { toValue: 1.03, duration: 1800, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 1, duration: 1800, useNativeDriver: true }),
+      ]),
+      Animated.parallel([
+        Animated.timing(scaleAnim, { toValue: 0.97, duration: 1800, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.4, duration: 1800, useNativeDriver: true }),
+      ]),
+    ])).start();
+  }, []);
+
   return (
-    <View style={{ flex: 1, backgroundColor: bg, borderRadius: 14, padding: 12, gap: 4,
-      borderWidth: 1, borderColor: color + "20",
-      shadowColor: color, shadowOpacity: 0.07, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } }}>
-      <Text style={{ fontSize: 20 }}>{emoji}</Text>
-      <Text style={{ color, fontSize: 13, fontWeight: "800" }}>{value}</Text>
-      <Text style={{ color: L.muted, fontSize: 10 }}>{label}</Text>
-    </View>
+    <Animated.View style={{
+      width: SIZE, height: SIZE,
+      borderRadius: SIZE / 2,
+      borderWidth: STROKE,
+      borderColor: L.primary,
+      alignItems: "center", justifyContent: "center",
+      transform: [{ scale: scaleAnim }],
+      shadowColor: L.primary,
+      shadowOpacity: glowAnim as unknown as number,
+      shadowRadius: 16,
+      backgroundColor: L.primaryBg,
+    }}>
+      <View style={{
+        position: "absolute", bottom: -2, left: "50%",
+        transform: [{ translateX: -20 }],
+        backgroundColor: L.primary, borderRadius: 6,
+        paddingHorizontal: 6, paddingVertical: 2,
+        borderWidth: 1.5, borderColor: L.bg,
+      }}>
+        <Text style={{ color: "#080808", fontSize: 8, fontWeight: "900" }}>NIV.{level}</Text>
+      </View>
+      <Text style={{ color: L.primary, fontSize: 18, fontWeight: "900" }}>{Math.round(pct)}%</Text>
+    </Animated.View>
   );
 }
 
@@ -121,31 +136,26 @@ function AssetCard({ emoji, label, value, color, bg }: {
 function WeekBar({ value, max, label, isToday }: {
   value: number; max: number; label: string; isToday?: boolean;
 }) {
-  const BAR_HEIGHT = 64;
+  const BAR_HEIGHT = 56;
   const barAnim = useRef(new Animated.Value(0)).current;
   const pct = max > 0 ? value / max : 0;
   useEffect(() => {
-    Animated.timing(barAnim, {
-      toValue: pct * BAR_HEIGHT,
-      duration: 700,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: false,
-    }).start();
+    Animated.timing(barAnim, { toValue: pct * BAR_HEIGHT, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
   }, [pct, barAnim]);
   return (
     <View style={{ flex: 1, alignItems: "center", gap: 4 }}>
       <View style={{ height: BAR_HEIGHT, justifyContent: "flex-end", width: "100%" }}>
         <Animated.View style={{
-          height: barAnim, borderRadius: 6,
-          backgroundColor: isToday ? L.primary : L.primary + "55",
+          height: barAnim, borderRadius: 4,
+          backgroundColor: isToday ? L.primary : L.primary + "40",
+          shadowColor: isToday ? L.primary : "transparent",
+          shadowOpacity: 0.5, shadowRadius: 4,
         }} />
       </View>
       <Text style={{ color: isToday ? L.primary : L.muted, fontSize: 9, fontWeight: isToday ? "800" : "400" }}>
         {label}
       </Text>
-      {value > 0 && (
-        <Text style={{ color: L.muted, fontSize: 8 }}>{value}</Text>
-      )}
+      {value > 0 && <Text style={{ color: L.muted, fontSize: 8 }}>{value}</Text>}
     </View>
   );
 }
@@ -155,64 +165,68 @@ function WeekChart({ history }: { history: ShiftRecord[] }) {
   today.setHours(0, 0, 0, 0);
   const todayMs = today.getTime();
   const DAY_SHORT = ["D", "L", "M", "M", "J", "V", "S"];
-
   const days = Array.from({ length: 7 }, (_, i) => todayMs - (6 - i) * 86_400_000);
   const earned = days.map((dayStart) =>
-    history
-      .filter((r) => { const t = new Date(r.completedAt).getTime(); return t >= dayStart && t < dayStart + 86_400_000; })
-      .reduce((sum, r) => sum + r.earnedCoins, 0)
+    history.filter((r) => {
+      const t = new Date(r.completedAt).getTime();
+      return t >= dayStart && t < dayStart + 86_400_000;
+    }).reduce((sum, r) => sum + r.earnedCoins, 0)
   );
   const max = Math.max(...earned, 1);
-
   return (
     <View style={{ backgroundColor: L.card, borderRadius: 20, padding: 16,
-      shadowColor: L.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
       borderWidth: 1, borderColor: L.border }}>
-      <Text style={{ color: L.text, fontSize: 15, fontWeight: "800", marginBottom: 2 }}>Progression 7 jours</Text>
-      <Text style={{ color: L.muted, fontSize: 11, marginBottom: 16 }}>Revenus journaliers (thunes)</Text>
+      <Text style={{ color: L.text, fontSize: 14, fontWeight: "800", marginBottom: 2 }}>7 derniers jours</Text>
+      <Text style={{ color: L.muted, fontSize: 10, marginBottom: 14 }}>Revenus journaliers (thunes)</Text>
       <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 5 }}>
         {earned.map((val, i) => {
           const d = new Date(days[i]);
-          return (
-            <WeekBar
-              key={i}
-              value={val}
-              max={max}
-              label={DAY_SHORT[d.getDay()]}
-              isToday={days[i] === todayMs}
-            />
-          );
+          return <WeekBar key={i} value={val} max={max} label={DAY_SHORT[d.getDay()]} isToday={days[i] === todayMs} />;
         })}
       </View>
     </View>
   );
 }
 
+// ─── LivePulse ────────────────────────────────────────────────────────────────
+function LivePulse({ color = L.green }: { color?: string }) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.6, duration: 900, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+    ])).start();
+  }, []);
+  return (
+    <View style={{ width: 10, height: 10, alignItems: "center", justifyContent: "center" }}>
+      <Animated.View style={{ position: "absolute", width: 10, height: 10, borderRadius: 5,
+        backgroundColor: color, opacity: 0.35, transform: [{ scale: pulse }] }} />
+      <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: color }} />
+    </View>
+  );
+}
+
 // ─── ProfileScreen ────────────────────────────────────────────────────────────
 export default function ProfileScreen() {
-  const session          = useGameStore((s) => s.avatar);
-  const avatar           = useGameStore((s) => s.avatar);
-  const stats            = useGameStore((s) => s.stats);
-  const relationships    = useGameStore((s) => s.relationships);
-  const datePlans        = useGameStore((s) => s.datePlans);
-  const signOut          = useGameStore((s) => s.signOut);
-  const resetAll         = useGameStore((s) => s.resetAll);
-  const loadTestAccount  = useGameStore((s) => s.loadTestAccount);
-  const syncToSupabase   = useGameStore((s) => s.syncToSupabase);
-  const isPremium        = useGameStore((s) => s.isPremium);
-  const premiumTier      = useGameStore((s) => s.premiumTier);
-  const activeBoosts     = useGameStore((s) => s.activeBoosts);
-  const moneyTransfers   = useGameStore((s) => s.moneyTransfers);
-  const shiftHistory     = useGameStore((s) => s.shiftHistory);
-  const playerXp         = useGameStore((s) => s.playerXp ?? 0);
-  const playerLevel      = useGameStore((s) => s.playerLevel ?? 1);
-  const housingTier      = useGameStore((s) => s.housingTier);
-  const wealthScore      = useGameStore((s) => s.wealthScore);
-  const sessionData      = useGameStore((s) => s.session);
-  const appTheme         = useGameStore((s) => s.appTheme);
-  const setAppTheme      = useGameStore((s) => s.setAppTheme);
+  const avatar          = useGameStore((s) => s.avatar);
+  const stats           = useGameStore((s) => s.stats);
+  const relationships   = useGameStore((s) => s.relationships);
+  const datePlans       = useGameStore((s) => s.datePlans);
+  const signOut         = useGameStore((s) => s.signOut);
+  const resetAll        = useGameStore((s) => s.resetAll);
+  const loadTestAccount = useGameStore((s) => s.loadTestAccount);
+  const isPremium       = useGameStore((s) => s.isPremium);
+  const activeBoosts    = useGameStore((s) => s.activeBoosts);
+  const moneyTransfers  = useGameStore((s) => s.moneyTransfers);
+  const shiftHistory    = useGameStore((s) => s.shiftHistory);
+  const playerXp        = useGameStore((s) => s.playerXp ?? 0);
+  const playerLevel     = useGameStore((s) => s.playerLevel ?? 1);
+  const housingTier     = useGameStore((s) => s.housingTier);
+  const wealthScore     = useGameStore((s) => s.wealthScore);
+  const sessionData     = useGameStore((s) => s.session);
+  const appTheme        = useGameStore((s) => s.appTheme);
+  const setAppTheme     = useGameStore((s) => s.setAppTheme);
 
-  const momentum    = getMomentumState(stats);
   const activeBoost = getActivePremiumBoost(activeBoosts);
   const boostMult   = getBoostMultiplier(activeBoosts);
   const rp          = getSocialRankProgressData(stats);
@@ -224,206 +238,138 @@ export default function ProfileScreen() {
   const xpPct       = (xpInLevel / XP_PER_LEVEL) * 100;
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(18)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim,  { toValue: 1, duration: 400, useNativeDriver: true }),
-      Animated.timing(slideAnim, { toValue: 0, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(fadeAnim,  { toValue: 1, duration: 350, useNativeDriver: true }),
+      Animated.timing(slideAnim, { toValue: 0, duration: 330, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
   }, []);
 
-  const xpBarAnim = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(xpBarAnim, { toValue: xpPct, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-  }, [xpPct]);
-  const xpBarWidth = xpBarAnim.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] });
+  const stateLabel = stats.energy < 25 ? "À plat 🪫" : stats.hunger < 25 ? "Dalle 🍱" : stats.hygiene < 25 ? "Carton 👟" : stats.mood < 30 ? "Mood 0 😤" : "En forme 🔥";
+  const stateColor = (stats.energy < 25 || stats.hunger < 25 || stats.hygiene < 25 || stats.mood < 30) ? L.red : L.green;
 
-  // Résumé de l'état
-  const stateLabel = stats.energy < 25 ? "À plat 🪫" : stats.hunger < 25 ? "J'ai dalle 🍱" : stats.hygiene < 25 ? "Look en carton 👟" : stats.mood < 30 ? "Mood à zéro 😤" : "En forme 🔥";
-  const stateColor = stats.energy < 25 || stats.hunger < 25 || stats.hygiene < 25 || stats.mood < 30 ? L.red : L.green;
-
-  const activeRels = relationships.filter((r) => r.score > 30);
-  const showTest   = process.env.NODE_ENV !== "production";
+  const activeRels  = relationships.filter((r) => r.score > 30);
+  const showTest    = process.env.NODE_ENV !== "production";
+  const totalEarned = shiftHistory.reduce((s, r) => s + r.earnedCoins, 0);
 
   return (
-    <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
-      <ScrollView style={{ flex: 1, backgroundColor: L.bg }} showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingBottom: 40 }}>
+    <Animated.View style={{ flex: 1, opacity: fadeAnim, backgroundColor: L.bg }}>
+      <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingBottom: 110 }}>
 
-        {/* ── HERO ── */}
-        <View style={{ backgroundColor: L.primary, paddingTop: 54, paddingBottom: 32, paddingHorizontal: 20, overflow: "hidden" }}>
-          {/* Décor */}
-          <View style={{ position: "absolute", top: -40, right: -30, width: 180, height: 180, borderRadius: 90,
-            backgroundColor: "rgba(255,255,255,0.08)" }} />
-          <View style={{ position: "absolute", bottom: -20, left: -20, width: 120, height: 120, borderRadius: 60,
-            backgroundColor: "rgba(255,255,255,0.05)" }} />
+        {/* ── HERO DARK ── */}
+        <View style={{ paddingTop: 54, paddingBottom: 28, paddingHorizontal: 20,
+          backgroundColor: L.card, borderBottomWidth: 1, borderBottomColor: L.border }}>
 
-          {/* Top badges */}
-          <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+          {/* Top row — badges + edit */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
             <View style={{ flexDirection: "row", gap: 6 }}>
               {isPremium && (
-                <View style={{ backgroundColor: "rgba(255,255,255,0.2)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <Text style={{ color: "#fff", fontSize: 11, fontWeight: "800" }}>⭐ PREMIUM</Text>
+                <View style={{ backgroundColor: L.primary + "20", borderRadius: 20,
+                  paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: L.primary + "40" }}>
+                  <Text style={{ color: L.primary, fontSize: 10, fontWeight: "900" }}>⭐ PREMIUM</Text>
                 </View>
               )}
               {activeBoost && (
-                <View style={{ backgroundColor: "rgba(245,158,11,0.3)", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 }}>
-                  <Text style={{ color: "#fde68a", fontSize: 11, fontWeight: "800" }}>⚡ ×{boostMult}</Text>
+                <View style={{ backgroundColor: L.orange + "20", borderRadius: 20,
+                  paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, borderColor: L.orange + "40" }}>
+                  <Text style={{ color: L.orange, fontSize: 10, fontWeight: "900" }}>⚡ ×{boostMult}</Text>
                 </View>
               )}
             </View>
             <Pressable onPress={() => router.push("/(app)/avatar-edit" as never)}
-              style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: "rgba(255,255,255,0.15)",
-                alignItems: "center", justifyContent: "center" }}>
-              <Ionicons name="pencil" size={15} color="#fff" />
+              style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: L.cardAlt,
+                alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: L.border }}>
+              <Ionicons name="pencil" size={15} color={L.textSoft} />
             </Pressable>
           </View>
 
-          {/* Avatar + infos */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 16 }}>
-            <View style={{ position: "relative" }}>
-              {/* Glow ring basé sur état */}
-              <View style={{
-                width: 100, height: 100, borderRadius: 50,
-                backgroundColor: stateColor + "22",
-                borderWidth: 3, borderColor: stateColor + "80",
-                alignItems: "center", justifyContent: "center",
-                shadowColor: stateColor, shadowOpacity: 0.45, shadowRadius: 18,
-                overflow: "hidden",
-              }}>
-                {avatar
-                  ? <AvatarSprite visual={getAvatarVisual(avatar)} action={stats.energy < 20 ? "sleeping" : stats.mood < 25 ? "idle" : "waving"} size="md" />
-                  : <Text style={{ fontSize: 42 }}>🧑</Text>
-                }
-              </View>
-              {/* Badge état */}
-              <View style={{ position: "absolute", bottom: -4, left: "50%", transform: [{ translateX: -30 }],
-                backgroundColor: stateColor, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
-                borderWidth: 2, borderColor: "#fff", minWidth: 60, alignItems: "center" }}>
-                <Text style={{ color: "#fff", fontSize: 8, fontWeight: "900" }}>{stateLabel}</Text>
-              </View>
-            </View>
+          {/* Avatar + XP ring + infos */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 18 }}>
+            <XpRing pct={xpPct} level={playerLevel} />
 
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: "#fff", fontWeight: "900", fontSize: 24 }}>
+            <View style={{ flex: 1, gap: 4 }}>
+              <Text style={{ color: L.text, fontWeight: "900", fontSize: 22, letterSpacing: -0.5 }}>
                 {avatar?.displayName ?? "Joueur"}
               </Text>
-              <Text style={{ color: "rgba(255,255,255,0.75)", fontSize: 13, marginTop: 2 }}>
-                {housing.emoji} {housing.name} · {levelTitle}
-              </Text>
-              <Text style={{ color: "rgba(255,255,255,0.55)", fontSize: 11, marginTop: 1 }}>
+              <Text style={{ color: L.textSoft, fontSize: 12 }}>{housing.emoji} {housing.name} · {levelTitle}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
+                <LivePulse color={stateColor} />
+                <Text style={{ color: stateColor, fontSize: 11, fontWeight: "800" }}>{stateLabel}</Text>
+              </View>
+              <Text style={{ color: L.muted, fontSize: 10, marginTop: 2 }}>
                 {sessionData?.email ?? "Mode local"}
               </Text>
-              {/* Indicateur action temps réel */}
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginTop: 6,
-                backgroundColor: "rgba(255,255,255,0.1)", borderRadius: 8,
-                paddingHorizontal: 8, paddingVertical: 4, alignSelf: "flex-start" }}>
-                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: stateColor }} />
-                <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 10, fontWeight: "700" }}>
-                  {stats.energy < 20 ? "En train de dormir" : stats.mood < 25 ? "Repos — moral bas" : "Actif"}
-                </Text>
-              </View>
             </View>
           </View>
 
-          {/* XP Bar */}
-          <View style={{ marginTop: 20, gap: 6 }}>
+          {/* XP bar */}
+          <View style={{ marginTop: 18, gap: 6 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-              <Text style={{ color: "rgba(255,255,255,0.9)", fontSize: 12, fontWeight: "700" }}>
-                Niveau {playerLevel}
-              </Text>
-              <Text style={{ color: "rgba(255,255,255,0.6)", fontSize: 11 }}>{xpInLevel} / {XP_PER_LEVEL} XP</Text>
+              <Text style={{ color: L.muted, fontSize: 11 }}>XP vers niveau {playerLevel + 1}</Text>
+              <Text style={{ color: L.primary, fontSize: 11, fontWeight: "800" }}>{xpInLevel} / {XP_PER_LEVEL}</Text>
             </View>
-            <View style={{ height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.2)", overflow: "hidden" }}>
-              <Animated.View style={{ height: 8, borderRadius: 4, width: xpBarWidth,
-                backgroundColor: "#fff" }} />
+            <View style={{ height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+              <View style={{ height: 4, borderRadius: 2, width: `${xpPct}%` as `${number}%`,
+                backgroundColor: L.primary,
+                shadowColor: L.primary, shadowOpacity: 0.8, shadowRadius: 4 }} />
             </View>
           </View>
 
-          {/* Mini stats row */}
-          <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
+          {/* Mini stats */}
+          <View style={{ flexDirection: "row", gap: 6, marginTop: 14 }}>
             {[
-              { label: "Argent",    value: `${stats.money}`,           color: "#fde68a" },
-              { label: "Côte",      value: `${stats.reputation}`,      color: "rgba(255,255,255,0.9)" },
-              { label: "Streak",    value: `${stats.streak}j`,         color: "#fca5a5" },
-              { label: "Richesse",  value: `${(wealthScore/1000).toFixed(1)}k`, color: "rgba(255,255,255,0.7)" },
+              { label: "Argent",   value: `${Math.round(stats.money)}`,              color: L.gold   },
+              { label: "Côte",     value: `${stats.reputation}`,                     color: L.purple },
+              { label: "Streak",   value: `${stats.streak}j`,                        color: L.green  },
+              { label: "Revenus",  value: `${(totalEarned / 1000).toFixed(1)}k`,     color: L.teal   },
             ].map((item) => (
-              <View key={item.label} style={{ flex: 1, backgroundColor: "rgba(255,255,255,0.12)", borderRadius: 12,
-                paddingVertical: 8, alignItems: "center", gap: 2 }}>
+              <View key={item.label} style={{ flex: 1, backgroundColor: item.color + "12",
+                borderRadius: 10, paddingVertical: 8, alignItems: "center", gap: 2,
+                borderWidth: 1, borderColor: item.color + "20" }}>
                 <Text style={{ color: item.color, fontWeight: "900", fontSize: 13 }}>{item.value}</Text>
-                <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 9 }}>{item.label}</Text>
+                <Text style={{ color: L.muted, fontSize: 9 }}>{item.label}</Text>
               </View>
             ))}
           </View>
         </View>
 
-        <Animated.View style={{ transform: [{ translateY: slideAnim }], gap: 16, padding: 16 }}>
-
-          {/* ── ACTIONS RAPIDES ── */}
-          <View>
-            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 10 }}>
-              ACTIONS RAPIDES
-            </Text>
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-              <QuickAction emoji="🍽️" label="Manger"    color={L.gold}    bg={L.goldBg}    route="/(app)/health" />
-              <QuickAction emoji="😴" label="Roupiller"  color={L.blue}    bg={L.blueBg}    route="/(app)/health" />
-              <QuickAction emoji="👟" label="Se laver"   color={L.teal}    bg={L.tealBg}    route="/(app)/health" />
-              <QuickAction emoji="💼" label="Le Taff"    color={L.primary} bg={L.primaryBg} route="/(app)/work" />
-              <QuickAction emoji="💪" label="Sport"     color={L.green}   bg={L.greenBg}   route="/(app)/health" />
-              <QuickAction emoji="🌍" label="Sortir"    color={L.pink}    bg={L.pinkBg}    route="/(app)/(tabs)/world" />
-            </View>
-          </View>
+        <Animated.View style={{ transform: [{ translateY: slideAnim }], padding: 16, gap: 16 }}>
 
           {/* ── STATISTIQUES ── */}
-          <View style={{ backgroundColor: L.card, borderRadius: 20, padding: 16,
-            shadowColor: L.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+          <View style={{ backgroundColor: L.card, borderRadius: 18, padding: 16,
             borderWidth: 1, borderColor: L.border }}>
-            <Text style={{ color: L.text, fontSize: 15, fontWeight: "800", marginBottom: 4 }}>Statistiques</Text>
-            <Text style={{ color: L.muted, fontSize: 11, marginBottom: 12 }}>État actuel de ton personnage</Text>
-            <StatBar label="Pêche"       value={stats.energy}          icon="⚡"  color={L.blue}    bg={L.blueBg} />
-            <StatBar label="Faim"        value={stats.hunger}          icon="🍽️" color={L.gold}    bg={L.goldBg} />
-            <StatBar label="Forme"       value={stats.health}          icon="❤️"  color={L.red}     bg={L.redBg} />
-            <StatBar label="Look"        value={stats.hygiene}         icon="👟"  color={L.teal}    bg={L.tealBg} />
-            <StatBar label="Mood"        value={stats.mood}            icon="😤"  color={L.purple}  bg={L.purpleBg} />
-            <StatBar label="Attractivité" value={stats.attractiveness} icon="✨"  color={L.pink}    bg={L.pinkBg} />
-            <StatBar label="Fitness"     value={stats.fitness}         icon="💪"  color={L.green}   bg={L.greenBg} />
-            <StatBar label="Discipline"  value={stats.discipline}      icon="🎯"  color={L.primary} bg={L.primaryBg} />
+            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 12 }}>
+              TON ÉTAT
+            </Text>
+            <StatBar label="Pêche"        value={stats.energy}          icon="⚡"  color={L.blue}    />
+            <StatBar label="Faim"         value={stats.hunger}          icon="🍽️" color={L.gold}    />
+            <StatBar label="Forme"        value={stats.health}          icon="❤️"  color={L.red}     />
+            <StatBar label="Look"         value={stats.hygiene}         icon="👟"  color={L.teal}    />
+            <StatBar label="Mood"         value={stats.mood}            icon="😤"  color={L.purple}  />
+            <StatBar label="Attractivité" value={stats.attractiveness}  icon="✨"  color={L.pink}    />
+            <StatBar label="Fitness"      value={stats.fitness}         icon="💪"  color={L.green}   />
+            <StatBar label="Discipline"   value={stats.discipline}      icon="🎯"  color={L.primary} />
           </View>
 
-          {/* ── PROGRESSION 7 JOURS ── */}
+          {/* ── PROGRESSION ── */}
           <WeekChart history={shiftHistory} />
 
-          {/* ── POSSESSIONS ── */}
-          <View>
-            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 10 }}>
-              POSSESSIONS
-            </Text>
-            <View style={{ flexDirection: "row", gap: 8, flexWrap: "wrap" }}>
-              <AssetCard emoji={housing.emoji} label="Logement"  value={housing.name}       color={L.primary} bg={L.primaryBg} />
-              <AssetCard emoji="💰"           label="Argent"     value={`${stats.money} cr`} color={L.gold}    bg={L.goldBg} />
-              <AssetCard emoji="⭐"           label="Côte"       value={`${stats.reputation}`} color={L.purple} bg={L.purpleBg} />
-              <AssetCard emoji="📱"           label="Niveau"     value={`Niv. ${playerLevel}`} color={L.green}  bg={L.greenBg} />
-            </View>
-          </View>
-
           {/* ── RANG SOCIAL ── */}
-          <View style={{ backgroundColor: L.card, borderRadius: 20, padding: 16,
-            shadowColor: L.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+          <View style={{ backgroundColor: L.card, borderRadius: 18, padding: 16,
             borderWidth: 1, borderColor: L.border }}>
             <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
-              <View>
-                <Text style={{ color: L.text, fontSize: 15, fontWeight: "800" }}>Rang social</Text>
-                <Text style={{ color: L.muted, fontSize: 11, marginTop: 2 }}>Ta position dans la ville</Text>
-              </View>
-              <View style={{ backgroundColor: L.primaryBg, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6,
+              <Text style={{ color: L.text, fontSize: 14, fontWeight: "800" }}>Rang social</Text>
+              <View style={{ backgroundColor: L.primaryBg, borderRadius: 20,
+                paddingHorizontal: 12, paddingVertical: 5,
                 borderWidth: 1, borderColor: L.primary + "30" }}>
-                <Text style={{ color: L.primary, fontWeight: "800", fontSize: 13 }}>
+                <Text style={{ color: L.primary, fontWeight: "800", fontSize: 12 }}>
                   {RANK_EMOJIS[currentRank]} {RANK_LABELS[currentRank]}
                 </Text>
               </View>
             </View>
 
-            {/* Steps */}
             <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 14 }}>
               {RANK_ORDER.map((rank, i) => {
                 const passed  = i < currentIdx;
@@ -431,64 +377,60 @@ export default function ProfileScreen() {
                 return (
                   <View key={rank} style={{ flex: 1, alignItems: "center" }}>
                     {i > 0 && (
-                      <View style={{ position: "absolute", left: 0, right: "50%", height: 2, top: 13,
-                        backgroundColor: passed || current ? L.primary + "60" : L.border }} />
+                      <View style={{ position: "absolute", left: 0, right: "50%", height: 2, top: 11,
+                        backgroundColor: passed || current ? L.primary + "50" : "rgba(255,255,255,0.06)" }} />
                     )}
-                    <View style={{ width: current ? 28 : 20, height: current ? 28 : 20,
-                      borderRadius: current ? 14 : 10,
-                      backgroundColor: passed ? L.primary + "20" : current ? L.primary : L.border,
+                    <View style={{ width: current ? 26 : 18, height: current ? 26 : 18,
+                      borderRadius: current ? 13 : 9,
+                      backgroundColor: passed ? L.primary + "18" : current ? L.primary : "rgba(255,255,255,0.06)",
                       borderWidth: current ? 2 : 1,
-                      borderColor: passed ? L.primary + "60" : current ? L.primary : L.border,
+                      borderColor: passed ? L.primary + "50" : current ? L.primary : "rgba(255,255,255,0.1)",
                       alignItems: "center", justifyContent: "center",
-                      shadowColor: current ? L.primary : "transparent", shadowOpacity: 0.3, shadowRadius: 8 }}>
-                      <Text style={{ fontSize: current ? 12 : 9 }}>{RANK_EMOJIS[rank]}</Text>
+                      shadowColor: current ? L.primary : "transparent", shadowOpacity: 0.5, shadowRadius: 8 }}>
+                      <Text style={{ fontSize: current ? 11 : 8 }}>{RANK_EMOJIS[rank]}</Text>
                     </View>
                     <Text style={{ color: current ? L.primary : L.muted,
-                      fontSize: 7, fontWeight: current ? "800" : "400", marginTop: 4, textAlign: "center" }}>
-                      {RANK_LABELS[rank].slice(0, 4)}
+                      fontSize: 7, fontWeight: current ? "800" : "400", marginTop: 4 }}>
+                      {RANK_LABELS[rank].slice(0, 6)}
                     </Text>
                   </View>
                 );
               })}
             </View>
 
-            {/* Progress */}
             <View style={{ gap: 5 }}>
               <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-                <Text style={{ color: L.textSoft, fontSize: 12 }}>Score : {rp.score}</Text>
+                <Text style={{ color: L.textSoft, fontSize: 11 }}>Score : {rp.score}</Text>
                 {rp.nextRank
-                  ? <Text style={{ color: L.muted, fontSize: 12 }}>+{rp.scoreToNext} → {RANK_LABELS[rp.nextRank]}</Text>
-                  : <Text style={{ color: L.green, fontSize: 12, fontWeight: "700" }}>🌟 Rang max</Text>
+                  ? <Text style={{ color: L.muted, fontSize: 11 }}>+{rp.scoreToNext} → {RANK_LABELS[rp.nextRank]}</Text>
+                  : <Text style={{ color: L.green, fontSize: 11, fontWeight: "700" }}>🌟 Rang max</Text>
                 }
               </View>
-              <View style={{ height: 8, borderRadius: 4, backgroundColor: L.border, overflow: "hidden" }}>
-                <View style={{ height: 8, borderRadius: 4, width: `${rp.progress}%`,
+              <View style={{ height: 4, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.06)", overflow: "hidden" }}>
+                <View style={{ height: 4, borderRadius: 2, width: `${rp.progress}%` as `${number}%`,
                   backgroundColor: L.primary }} />
               </View>
             </View>
-
-            {rp.tips.length > 0 && (
-              <View style={{ marginTop: 10, gap: 4 }}>
-                {rp.tips.slice(0, 2).map((tip, i) => (
-                  <Text key={i} style={{ color: L.muted, fontSize: 11 }}>· {tip}</Text>
-                ))}
-              </View>
-            )}
           </View>
 
           {/* ── VIE SOCIALE ── */}
-          <View style={{ backgroundColor: L.card, borderRadius: 20, padding: 16,
-            shadowColor: L.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+          <View style={{ backgroundColor: L.card, borderRadius: 18, padding: 16,
             borderWidth: 1, borderColor: L.border }}>
-            <Text style={{ color: L.text, fontSize: 15, fontWeight: "800", marginBottom: 12 }}>Vie sociale</Text>
+            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 12 }}>
+              VIE SOCIALE
+            </Text>
             <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
               {[
-                { label: "Relations",  value: activeRels.length,                                                            emoji: "👥", color: L.primary },
-                { label: "Dates",      value: datePlans.filter((d) => d.status === "accepted" || d.status === "proposed").length, emoji: "💘", color: L.pink },
-                { label: "Transferts", value: moneyTransfers.length,                                                        emoji: "💸", color: L.gold },
+                { label: "Relations",  value: activeRels.length,
+                  emoji: "👥", color: L.primary },
+                { label: "Dates",      value: datePlans.filter((d) => d.status === "accepted" || d.status === "proposed").length,
+                  emoji: "💘", color: L.pink },
+                { label: "Transferts", value: moneyTransfers.length,
+                  emoji: "💸", color: L.gold },
               ].map((item) => (
-                <View key={item.label} style={{ flex: 1, backgroundColor: item.color + "0d", borderRadius: 14,
-                  padding: 12, alignItems: "center", gap: 4, borderWidth: 1, borderColor: item.color + "20" }}>
+                <View key={item.label} style={{ flex: 1, backgroundColor: item.color + "10",
+                  borderRadius: 14, padding: 12, alignItems: "center", gap: 4,
+                  borderWidth: 1, borderColor: item.color + "20" }}>
                   <Text style={{ fontSize: 18 }}>{item.emoji}</Text>
                   <Text style={{ color: item.color, fontWeight: "900", fontSize: 18 }}>{item.value}</Text>
                   <Text style={{ color: L.muted, fontSize: 10 }}>{item.label}</Text>
@@ -510,36 +452,37 @@ export default function ProfileScreen() {
           </View>
 
           {/* ── IDENTITÉ ── */}
-          <View style={{ backgroundColor: L.card, borderRadius: 20, padding: 16,
-            shadowColor: L.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-            borderWidth: 1, borderColor: L.border, gap: 10 }}>
-            <Text style={{ color: L.text, fontSize: 15, fontWeight: "800" }}>Identité</Text>
-            {avatar?.bio && (
-              <Text style={{ color: L.textSoft, fontSize: 13, lineHeight: 19 }}>{avatar.bio}</Text>
-            )}
-            {[
-              { icon: "🎭", label: "Trait",   value: avatar?.personalityTrait ?? "—" },
-              { icon: "🎯", label: "Ambition", value: avatar?.ambition ?? "—" },
-              { icon: "🌍", label: "Origine",  value: avatar?.originStyle ?? "—" },
-              { icon: "👗", label: "Style",    value: avatar?.outfitStyle ?? "—" },
-            ].map((item) => (
-              <View key={item.label} style={{ flexDirection: "row", alignItems: "center", gap: 10,
-                paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: L.border }}>
-                <Text style={{ fontSize: 15, width: 24 }}>{item.icon}</Text>
-                <Text style={{ color: L.muted, fontSize: 12, width: 70 }}>{item.label}</Text>
-                <Text style={{ color: L.textSoft, fontSize: 13, flex: 1 }}>{item.value}</Text>
-              </View>
-            ))}
-            <Pressable onPress={() => router.push("/(app)/avatar-edit" as never)}
-              style={{ backgroundColor: L.primaryBg, borderRadius: 12, padding: 12,
-                alignItems: "center", borderWidth: 1, borderColor: L.primary + "30" }}>
-              <Text style={{ color: L.primary, fontWeight: "700", fontSize: 13 }}>✏️ Modifier le profil</Text>
-            </Pressable>
-          </View>
+          {avatar && (
+            <View style={{ backgroundColor: L.card, borderRadius: 18, padding: 16,
+              borderWidth: 1, borderColor: L.border, gap: 10 }}>
+              <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2 }}>IDENTITÉ</Text>
+              {avatar.bio && (
+                <Text style={{ color: L.textSoft, fontSize: 13, lineHeight: 19 }}>{avatar.bio}</Text>
+              )}
+              {[
+                { icon: "🎭", label: "Trait",    value: avatar.personalityTrait ?? "—" },
+                { icon: "🎯", label: "Ambition", value: avatar.ambition ?? "—" },
+                { icon: "🌍", label: "Origine",  value: avatar.originStyle ?? "—" },
+                { icon: "👗", label: "Style",    value: avatar.outfitStyle ?? "—" },
+              ].map((item) => (
+                <View key={item.label} style={{ flexDirection: "row", alignItems: "center", gap: 10,
+                  paddingVertical: 7, borderBottomWidth: 1, borderBottomColor: L.border }}>
+                  <Text style={{ fontSize: 14, width: 22 }}>{item.icon}</Text>
+                  <Text style={{ color: L.muted, fontSize: 11, width: 70 }}>{item.label}</Text>
+                  <Text style={{ color: L.textSoft, fontSize: 13, flex: 1 }}>{item.value}</Text>
+                </View>
+              ))}
+              <Pressable onPress={() => router.push("/(app)/avatar-edit" as never)}
+                style={{ backgroundColor: L.primaryBg, borderRadius: 12, padding: 11,
+                  alignItems: "center", borderWidth: 1, borderColor: L.primary + "30" }}>
+                <Text style={{ color: L.primary, fontWeight: "700", fontSize: 12 }}>✏️ Modifier le profil</Text>
+              </Pressable>
+            </View>
+          )}
 
           {/* ── THÈME ── */}
           <View>
-            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 10 }}>
+            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 10 }}>
               DIRECTION ARTISTIQUE
             </Text>
             <View style={{ flexDirection: "row", gap: 8 }}>
@@ -548,14 +491,14 @@ export default function ProfileScreen() {
                 return (
                   <Pressable key={t.id} onPress={() => setAppTheme(t.id as ThemeId)}
                     style={{ flex: 1, borderRadius: 16, padding: 12, alignItems: "center", gap: 4,
-                      backgroundColor: active ? t.primary + "20" : L.card,
+                      backgroundColor: active ? t.primary + "15" : L.card,
                       borderWidth: active ? 2 : 1,
                       borderColor: active ? t.primary : L.border }}>
                     <Text style={{ fontSize: 22 }}>{t.emoji}</Text>
-                    <Text style={{ color: active ? t.primary : L.textSoft, fontSize: 10, fontWeight: "800", textAlign: "center" }}>
+                    <Text style={{ color: active ? t.primary : L.muted,
+                      fontSize: 9, fontWeight: "800", textAlign: "center" }}>
                       {t.name}
                     </Text>
-                    <Text style={{ color: L.muted, fontSize: 9, textAlign: "center" }}>{t.tagline}</Text>
                   </Pressable>
                 );
               })}
@@ -564,22 +507,22 @@ export default function ProfileScreen() {
 
           {/* ── ACCÈS RAPIDE ── */}
           <View>
-            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2, marginBottom: 10 }}>
+            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 10 }}>
               PAGES
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {[
-                { label: "🏆 Classement",   route: "/(app)/leaderboard",    color: L.gold,    bg: L.goldBg    },
-                { label: "⚡ Progression",   route: "/(app)/progression",    color: L.primary, bg: L.primaryBg },
-                { label: "🎯 Missions",      route: "/(app)/missions",       color: L.red,     bg: L.redBg     },
-                { label: "⭐ Premium",       route: "/(app)/premium",        color: L.purple,  bg: L.purpleBg  },
-                { label: "🏠 Logement",      route: "/(app)/housing",        color: L.teal,    bg: L.tealBg    },
-                { label: "👤 Profil public", route: "/(app)/profile-public", color: L.blue,    bg: L.blueBg    },
+                { label: "🏆 Classement",   route: "/(app)/leaderboard",    color: L.gold    },
+                { label: "⚡ Progression",   route: "/(app)/progression",    color: L.primary },
+                { label: "🎯 Missions",      route: "/(app)/missions",       color: L.red     },
+                { label: "⭐ Premium",       route: "/(app)/premium",        color: L.purple  },
+                { label: "🏠 Logement",      route: "/(app)/housing",        color: L.teal    },
+                { label: "👤 Profil public", route: "/(app)/profile-public", color: L.blue    },
               ].map((item) => (
                 <Pressable key={item.route} onPress={() => router.push(item.route as never)}
                   style={{ paddingHorizontal: 14, paddingVertical: 9, borderRadius: 22,
-                    backgroundColor: item.bg, borderWidth: 1, borderColor: item.color + "25" }}>
-                  <Text style={{ color: item.color, fontWeight: "600", fontSize: 12 }}>{item.label}</Text>
+                    backgroundColor: item.color + "12", borderWidth: 1, borderColor: item.color + "25" }}>
+                  <Text style={{ color: item.color, fontWeight: "700", fontSize: 11 }}>{item.label}</Text>
                 </Pressable>
               ))}
             </View>
@@ -589,9 +532,9 @@ export default function ProfileScreen() {
           {!isPremium && (
             <Pressable onPress={() => router.push("/(app)/premium" as never)}
               style={{ backgroundColor: L.purpleBg, borderRadius: 18, padding: 16,
-                borderWidth: 1.5, borderColor: L.purple + "30",
+                borderWidth: 1, borderColor: L.purple + "30",
                 flexDirection: "row", alignItems: "center", gap: 14,
-                shadowColor: L.purple, shadowOpacity: 0.12, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } }}>
+                shadowColor: L.purple, shadowOpacity: 0.2, shadowRadius: 12 }}>
               <Text style={{ fontSize: 28 }}>⭐</Text>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: L.purple, fontWeight: "900", fontSize: 15 }}>Passer Premium</Text>
@@ -605,10 +548,11 @@ export default function ProfileScreen() {
           {showTest && (
             <View style={{ backgroundColor: L.card, borderRadius: 14, padding: 14,
               borderWidth: 1, borderColor: L.border, gap: 8 }}>
-              <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.2 }}>MODE TEST</Text>
+              <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>MODE TEST</Text>
               <Pressable onPress={() => { loadTestAccount("live"); router.replace("/(app)/(tabs)/home"); }}
-                style={{ backgroundColor: L.border, borderRadius: 10, padding: 11, alignItems: "center" }}>
-                <Text style={{ color: L.textSoft, fontWeight: "700", fontSize: 12 }}>⚡ Activer test live</Text>
+                style={{ backgroundColor: L.primaryBg, borderRadius: 10, padding: 11,
+                  alignItems: "center", borderWidth: 1, borderColor: L.primary + "30" }}>
+                <Text style={{ color: L.primary, fontWeight: "700", fontSize: 12 }}>⚡ Activer test live</Text>
               </Pressable>
             </View>
           )}
@@ -617,13 +561,13 @@ export default function ProfileScreen() {
           <View style={{ flexDirection: "row", gap: 8 }}>
             <Pressable onPress={() => { signOut(); router.replace("/(auth)/sign-in"); }}
               style={{ flex: 1, paddingVertical: 13, borderRadius: 14,
-                backgroundColor: "#fff0f0", borderWidth: 1, borderColor: "#fecaca", alignItems: "center" }}>
+                backgroundColor: L.redBg, borderWidth: 1, borderColor: L.red + "30", alignItems: "center" }}>
               <Text style={{ color: L.red, fontWeight: "700", fontSize: 12 }}>⏏ Déconnexion</Text>
             </Pressable>
             <Pressable onPress={() => { resetAll(); router.replace("/(auth)/welcome"); }}
               style={{ flex: 1, paddingVertical: 13, borderRadius: 14,
                 backgroundColor: L.card, borderWidth: 1, borderColor: L.border, alignItems: "center" }}>
-              <Text style={{ color: L.muted, fontWeight: "700", fontSize: 12 }}>Supprimer profil local</Text>
+              <Text style={{ color: L.muted, fontWeight: "700", fontSize: 12 }}>Supprimer profil</Text>
             </Pressable>
           </View>
 

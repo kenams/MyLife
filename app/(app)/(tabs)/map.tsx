@@ -7,7 +7,7 @@ import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 
 import { hapticImpact } from "@/lib/safe-haptics";
 import {
-  fetchNearbyPlayers, goGhost, MOCK_PLAYERS, PARIS_REGION,
+  fetchAllPlayers, goGhost, MOCK_PLAYERS, PARIS_REGION,
   publishPosition, requestAndGetLocation, STATUS_CONFIG, subscribeToMap,
 } from "@/lib/life-map";
 import type { MapPlayer, MapStatus } from "@/lib/life-map";

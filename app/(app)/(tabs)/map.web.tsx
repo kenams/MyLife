@@ -8,7 +8,7 @@ import { router } from "expo-router";
 
 import { hapticImpact } from "@/lib/safe-haptics";
 import {
-  goGhost, MOCK_PLAYERS,
+  goGhost, MOCK_PLAYERS, fetchAllPlayers,
   publishPosition, requestAndGetLocation, STATUS_CONFIG, subscribeToMap,
 } from "@/lib/life-map";
 import type { MapPlayer, MapStatus } from "@/lib/life-map";
@@ -100,6 +100,17 @@ function injectMapStyles() {
     }
     .mylife-map-container .leaflet-popup-tip { background: #0E0E16 !important; }
     .mylife-map-container .leaflet-popup-close-button { color: #9A968E !important; }
+    .mylife-tooltip {
+      background: rgba(4,4,10,0.92) !important;
+      border: 1px solid rgba(255,255,255,0.1) !important;
+      border-radius: 6px !important;
+      color: #E8E4DC !important;
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      padding: 4px 8px !important;
+      box-shadow: none !important;
+    }
+    .mylife-tooltip::before { display: none !important; }
 
     /* Glow pulsé pour les grosses zones crew */
     @keyframes crewGlowPulse {
@@ -304,17 +315,34 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
         );
       });
 
-      // Marqueurs joueurs
+      // ── Points joueurs colorés par crew ──────────────────────────────────
       players.forEach((p) => {
-        const cfg   = STATUS_CONFIG[p.status];
-        const color = cfg?.color ?? "#FFD600";
-        const name  = (p.display_name ?? "").split(" ")[0];
-        const iconUrl = buildMarkerSvg(p.avatar_emoji ?? "🧢", color, name, p.is_star);
-        const size  = p.is_star ? 48 : 38;
-        const w = size + 16; const h = size + 30;
-        const icon = L.icon({ iconUrl, iconSize: [w, h], iconAnchor: [w / 2, size + 20] });
+        const dotColor = p.crew_color ?? STATUS_CONFIG[p.status]?.color ?? "#FFD600";
+        const radius   = p.is_star ? 9 : 6;
+        const name     = p.display_name.split(" ")[0];
+
+        // Dot SVG : cercle coloré + halo pour les stars
+        const svgSize = p.is_star ? 48 : 32;
+        const cx = svgSize / 2;
+        const svg = [
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${svgSize}" height="${svgSize + 14}">`,
+          p.is_star ? `<circle cx="${cx}" cy="${cx}" r="${cx - 2}" fill="${dotColor}" opacity="0.18"/>` : "",
+          `<circle cx="${cx}" cy="${cx}" r="${radius}" fill="${dotColor}" stroke="#04040A" stroke-width="2"/>`,
+          p.crew_tag ? `<rect x="${cx - p.crew_tag.length * 3.2 - 2}" y="${svgSize + 1}" width="${p.crew_tag.length * 6.4 + 4}" height="11" rx="3" fill="#04040A" opacity="0.85"/>
+          <text x="${cx}" y="${svgSize + 10}" text-anchor="middle" font-size="8" fill="${dotColor}" font-weight="900" font-family="system-ui,sans-serif">${p.crew_tag}</text>` : "",
+          `</svg>`,
+        ].join("");
+        const icon = L.icon({
+          iconUrl: "data:image/svg+xml," + encodeURIComponent(svg),
+          iconSize: [svgSize, svgSize + 14],
+          iconAnchor: [cx, cx],
+        });
         const marker = L.marker([p.lat, p.lng], { icon }).addTo(map);
         marker.on("click", () => onPlayerClick(p.id));
+        (marker as unknown as { bindTooltip: (t: string, opts: object) => void }).bindTooltip(
+          `<b style="color:${dotColor}">${name}</b>${p.crew_tag ? ` <span style="opacity:.6">[${p.crew_tag}]</span>` : ""}`,
+          { permanent: false, direction: "top", className: "mylife-tooltip" }
+        );
         markersRef.current[p.id] = marker;
       });
 
@@ -341,27 +369,48 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
     };
   }, []); // mount once
 
-  // Mise à jour joueurs quand ils changent (sans recharger la map)
+  // Mise à jour joueurs quand ils changent — replace uniquement le marqueur modifié
   useEffect(() => {
     if (!mapRef.current || !leafletLoaded) return;
     const L = (window as unknown as { L: unknown }).L as {
-      marker: (coords: number[], opts: object) => { addTo: (map: unknown) => unknown; on: (e: string, h: () => void) => void; remove: () => void };
+      marker: (coords: number[], opts: object) => {
+        addTo: (map: unknown) => unknown;
+        on: (e: string, h: () => void) => void;
+        remove: () => void;
+        bindTooltip: (t: string, opts: object) => void;
+      };
       icon: (opts: object) => unknown;
     };
-    // Supprimer anciens marqueurs
+
+    // Supprimer tous les anciens
     Object.values(markersRef.current).forEach((m) => (m as { remove: () => void }).remove());
     markersRef.current = {};
-    // Re-créer
+
     players.forEach((p) => {
-      const cfg   = STATUS_CONFIG[p.status];
-      const color = cfg?.color ?? "#FFD600";
-      const name  = (p.display_name ?? "").split(" ")[0];
-      const iconUrl = buildMarkerSvg(p.avatar_emoji ?? "🧢", color, name, p.is_star);
-      const size  = p.is_star ? 48 : 38;
-      const w = size + 16; const h = size + 30;
-      const icon = L.icon({ iconUrl, iconSize: [w, h], iconAnchor: [w / 2, size + 20] });
+      const dotColor = p.crew_color ?? STATUS_CONFIG[p.status]?.color ?? "#FFD600";
+      const radius   = p.is_star ? 9 : 6;
+      const name     = p.display_name.split(" ")[0];
+      const svgSize  = p.is_star ? 48 : 32;
+      const cx = svgSize / 2;
+      const svg = [
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${svgSize}" height="${svgSize + 14}">`,
+        p.is_star ? `<circle cx="${cx}" cy="${cx}" r="${cx - 2}" fill="${dotColor}" opacity="0.18"/>` : "",
+        `<circle cx="${cx}" cy="${cx}" r="${radius}" fill="${dotColor}" stroke="#04040A" stroke-width="2"/>`,
+        p.crew_tag ? `<rect x="${cx - p.crew_tag.length * 3.2 - 2}" y="${svgSize + 1}" width="${p.crew_tag.length * 6.4 + 4}" height="11" rx="3" fill="#04040A" opacity="0.85"/>
+        <text x="${cx}" y="${svgSize + 10}" text-anchor="middle" font-size="8" fill="${dotColor}" font-weight="900" font-family="system-ui,sans-serif">${p.crew_tag}</text>` : "",
+        `</svg>`,
+      ].join("");
+      const icon = L.icon({
+        iconUrl: "data:image/svg+xml," + encodeURIComponent(svg),
+        iconSize: [svgSize, svgSize + 14],
+        iconAnchor: [cx, cx],
+      });
       const marker = L.marker([p.lat, p.lng], { icon }).addTo(mapRef.current);
       marker.on("click", () => onPlayerClick(p.id));
+      marker.bindTooltip(
+        `<b style="color:${dotColor}">${name}</b>${p.crew_tag ? ` <span style="opacity:.6">[${p.crew_tag}]</span>` : ""}`,
+        { permanent: false, direction: "top", className: "mylife-tooltip" }
+      );
       markersRef.current[p.id] = marker;
     });
   }, [players]);
@@ -564,7 +613,7 @@ export default function LifeMapScreen() {
   const avatar      = useGameStore((s) => s.avatar);
   const playerLevel = useGameStore((s) => s.playerLevel ?? 1);
 
-  const [players,      setPlayers]      = useState<MapPlayer[]>(MOCK_PLAYERS);
+  const [players,      setPlayers]      = useState<MapPlayer[]>([]);
   const [crewZones,    setCrewZones]    = useState<CrewZoneRich[]>([]);
   const [myStatus,     setMyStatus]     = useState<MapStatus>("ghost");
   const [myLocation,   setMyLocation]   = useState<{ lat: number; lng: number } | null>(null);
@@ -597,9 +646,14 @@ export default function LifeMapScreen() {
     return () => stopNpcMapEngine();
   }, []);
 
-  // Realtime
+  // Fetch initial + Realtime
   useEffect(() => {
+    fetchAllPlayers().then(setPlayers);
     const sub = subscribeToMap((updated) => {
+      if (updated.status === "ghost") {
+        setPlayers((prev) => prev.filter((p) => p.id !== updated.id));
+        return;
+      }
       setPlayers((prev) => {
         const idx = prev.findIndex((p) => p.id === updated.id);
         if (idx >= 0) { const n = [...prev]; n[idx] = updated; return n; }

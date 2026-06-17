@@ -3,7 +3,6 @@ import { Tabs } from "expo-router";
 import { Text, View } from "react-native";
 
 import { useAppTheme } from "@/hooks/use-app-theme";
-import { buildMapEvents } from "@/lib/map-events";
 import { useGameStore } from "@/stores/game-store";
 
 const BADGE_RED  = "#ef4444";
@@ -49,16 +48,6 @@ function ChatIcon({ color, focused }: { color: string; focused: boolean }) {
   );
 }
 
-function WorldIcon({ color, focused }: { color: string; focused: boolean }) {
-  const stats  = useGameStore((s) => s.stats);
-  const urgent = buildMapEvents(stats, 5).filter((e) => e.severity !== "low").length;
-  return (
-    <View style={{ position: "relative" }}>
-      <Ionicons name={focused ? "compass" : "compass-outline"} color={color} size={23} />
-      <Badge count={urgent} color={urgent > 1 ? BADGE_RED : BADGE_GOLD} />
-    </View>
-  );
-}
 
 export default function TabsLayout() {
   const T = useAppTheme();
@@ -101,10 +90,6 @@ export default function TabsLayout() {
         tabBarIcon: ({ color, focused }) => (
           <Ionicons name={focused ? "map" : "map-outline"} color={color} size={23} />
         ),
-      }} />
-      <Tabs.Screen name="world" options={{
-        title: "Ville",
-        tabBarIcon: ({ color, focused }) => <WorldIcon color={color} focused={focused} />,
       }} />
       <Tabs.Screen name="chat" options={{
         title: "Chat",

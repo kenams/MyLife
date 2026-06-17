@@ -406,8 +406,9 @@ export type IsoCityMapProps = {
 
 export function IsoCityMap({ currentSlug, npcs, onDistrictPress, onTravel }: IsoCityMapProps) {
   const timeCtx  = useTimeContext();
-  const night    = timeCtx.hour >= 21 || timeCtx.hour < 6;
-  const evening  = timeCtx.hour >= 18 && timeCtx.hour < 21;
+  // Toujours night mode — cohérent avec le dark theme de l'app
+  const night    = true;
+  const evening  = false;
 
   const [tick, setTick] = useState(0);
   const [carProgress, setCarProgress] = useState([0, 0.33, 0.66]);

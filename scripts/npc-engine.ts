@@ -11,12 +11,17 @@
  * - Ils interagissent entre eux pour créer de la vie
  */
 
+// Bypass TLS cert verification (dev local uniquement)
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+
 import { createClient } from "@supabase/supabase-js";
 
-const supabase = createClient(
-  process.env.EXPO_PUBLIC_SUPABASE_URL ?? "https://vlofsaivgydbzghptlfj.supabase.co",
-  process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? ""
-);
+const SUPABASE_URL  = process.env.EXPO_PUBLIC_SUPABASE_URL  ?? "https://vlofsaivgydbzghptlfj.supabase.co";
+const SUPABASE_KEY  = process.env.SUPABASE_SERVICE_ROLE_KEY
+  ?? process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY
+  ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsb2ZzYWl2Z3lkYnpnaHB0bGZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzMzI3NzcsImV4cCI6MjA5MTkwODc3N30._q6ayAo3kiA9KrkS3xMGIRkitt-1_950WdbQyQtNR0I";
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 type TimeSlot = "matin" | "aprem" | "soir" | "nuit";
 type NpcStatus = "free" | "vibe" | "charo" | "taken" | "ghost";
@@ -141,7 +146,9 @@ const NPC_RESPONSES: Record<string, string[]> = {
 };
 
 async function fetchNpcs(): Promise<Npc[]> {
-  const { data } = await supabase.from("npcs").select("*");
+  const { data, error } = await supabase.from("npcs").select("*");
+  if (error) console.error("[NPC] fetchNpcs error:", error.message, error.details);
+  console.log("[NPC] fetchNpcs raw count:", data?.length ?? 0);
   return (data ?? []) as Npc[];
 }
 
