@@ -195,6 +195,71 @@ export async function joinCrew(
   return !error;
 }
 
+export async function transferLeader(
+  crewId: string,
+  currentLeader: string,
+  newLeader: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "Pas de connexion" };
+
+  const { data: target } = await supabase
+    .from("crew_members")
+    .select("id, role")
+    .eq("crew_id", crewId)
+    .eq("player_name", newLeader)
+    .single();
+
+  if (!target) return { ok: false, error: `${newLeader} n'est pas dans le crew.` };
+
+  // Promouvoir le nouveau leader
+  await supabase.from("crew_members").update({ role: "leader" }).eq("id", target.id);
+
+  // Rétrograder l'ancien leader en membre
+  await supabase.from("crew_members")
+    .update({ role: "member" })
+    .eq("crew_id", crewId)
+    .eq("player_name", currentLeader);
+
+  return { ok: true };
+}
+
+export interface CrewWarRecord {
+  id: string;
+  crew_a_id: string;
+  crew_b_id: string;
+  status: string;
+  started_at: string;
+  resolved_at: string | null;
+  crew_a?: Pick<Crew, "name" | "tag" | "color" | "emoji">;
+  crew_b?: Pick<Crew, "name" | "tag" | "color" | "emoji">;
+}
+
+export async function fetchCrewWars(crewId?: string): Promise<CrewWarRecord[]> {
+  if (!supabase) return [];
+  let query = supabase
+    .from("crew_wars")
+    .select("*, crew_a:crew_a_id(name,tag,color,emoji), crew_b:crew_b_id(name,tag,color,emoji)")
+    .order("started_at", { ascending: false })
+    .limit(20);
+
+  if (crewId) {
+    query = query.or(`crew_a_id.eq.${crewId},crew_b_id.eq.${crewId}`);
+  }
+
+  const { data } = await query;
+  return (data ?? []) as CrewWarRecord[];
+}
+
+export async function fetchCrewMembers(crewId: string): Promise<CrewMember[]> {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("crew_members")
+    .select("*")
+    .eq("crew_id", crewId)
+    .order("joined_at", { ascending: true });
+  return (data ?? []) as CrewMember[];
+}
+
 export async function getMyCrewId(playerName: string): Promise<string | null> {
   if (!supabase) return null;
   const { data } = await supabase

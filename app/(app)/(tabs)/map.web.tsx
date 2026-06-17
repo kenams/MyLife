@@ -22,6 +22,16 @@ import { blockUser } from "@/lib/safety";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
 
+// ── Matchmaking helpers ───────────────────────────────────────────────────────
+function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const R = 6371000;
+  const dLat = (b.lat - a.lat) * Math.PI / 180;
+  const dLng = (b.lng - a.lng) * Math.PI / 180;
+  const aa = Math.sin(dLat / 2) ** 2 +
+    Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(aa), Math.sqrt(1 - aa));
+}
+
 // ── Palette ───────────────────────────────────────────────────────────────────
 const C = {
   void:   "#04040A",
@@ -621,9 +631,10 @@ export default function LifeMapScreen() {
   const [selected,     setSelected]     = useState<MapPlayer | null>(null);
   const [showPicker,   setShowPicker]   = useState(false);
   const [filter,       setFilter]       = useState<MapStatus | "all">("all");
-  const [reportTarget, setReportTarget] = useState<MapPlayer | null>(null);
-  const [blocked,      setBlocked]      = useState<string[]>([]);
-  const [mapReady,     setMapReady]     = useState(false);
+  const [reportTarget,    setReportTarget]    = useState<MapPlayer | null>(null);
+  const [blocked,         setBlocked]         = useState<string[]>([]);
+  const [mapReady,        setMapReady]        = useState(false);
+  const [showMatchmaking, setShowMatchmaking] = useState(false);
   const flyToRef = useRef<((lat: number, lng: number, zoom?: number) => void) | null>(null);
 
   const visible = players.filter((p) =>
@@ -834,6 +845,74 @@ export default function LifeMapScreen() {
             <Text style={{ fontSize: 20 }}>👻</Text>
           </Pressable>
         </View>
+      )}
+
+      {/* ── MATCHMAKING BUTTON + PANEL ──────────────────────────────────── */}
+      {myLocation && (
+        <>
+          <Pressable
+            onPress={() => setShowMatchmaking((p) => !p)}
+            style={{
+              position: "absolute", bottom: 160, left: 20, zIndex: 5,
+              backgroundColor: showMatchmaking ? C.purple + "30" : "rgba(8,8,15,0.92)",
+              borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
+              borderWidth: 1.5, borderColor: C.purple + "60",
+              flexDirection: "row", alignItems: "center", gap: 6,
+            }}>
+            <Text style={{ fontSize: 16 }}>🤝</Text>
+            <Text style={{ color: C.purple, fontSize: 12, fontWeight: "800" }}>Nearby</Text>
+            {(() => {
+              const count = visible.filter(
+                (p) => !p.is_npc && haversineMeters(myLocation, { lat: p.lat, lng: p.lng }) < 500
+              ).length;
+              return count > 0 ? (
+                <View style={{ backgroundColor: C.purple, borderRadius: 8, paddingHorizontal: 5, paddingVertical: 1 }}>
+                  <Text style={{ color: "#fff", fontSize: 10, fontWeight: "900" }}>{count}</Text>
+                </View>
+              ) : null;
+            })()}
+          </Pressable>
+
+          {showMatchmaking && (() => {
+            const nearby = visible
+              .filter((p) => !p.is_npc && haversineMeters(myLocation, { lat: p.lat, lng: p.lng }) < 500)
+              .slice(0, 5);
+            return (
+              <View style={{
+                position: "absolute", bottom: 220, left: 20, zIndex: 10,
+                backgroundColor: C.card, borderRadius: 16, padding: 16, width: 240,
+                borderWidth: 1, borderColor: C.purple + "40",
+                shadowColor: C.purple, shadowOpacity: 0.3, shadowRadius: 20,
+              }}>
+                <Text style={{ color: C.purple, fontSize: 13, fontWeight: "900", marginBottom: 12 }}>
+                  🤝 Joueurs proches
+                </Text>
+                {nearby.length === 0 ? (
+                  <Text style={{ color: C.muted, fontSize: 12 }}>Personne à moins de 500m.</Text>
+                ) : (
+                  nearby.map((p) => {
+                    const dist = Math.round(haversineMeters(myLocation, { lat: p.lat, lng: p.lng }));
+                    const cfg = STATUS_CONFIG[p.status as MapStatus];
+                    return (
+                      <Pressable key={p.id} onPress={() => { setSelected(p); setShowMatchmaking(false); }}
+                        style={{ flexDirection: "row", alignItems: "center", gap: 10,
+                          paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border }}>
+                        <Text style={{ fontSize: 20 }}>{p.avatar_emoji}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: C.text, fontSize: 12, fontWeight: "700" }}>{p.display_name}</Text>
+                          <Text style={{ color: cfg?.color ?? C.muted, fontSize: 10 }}>
+                            {cfg?.label ?? p.status} · {dist < 1000 ? `${dist}m` : `${(dist / 1000).toFixed(1)}km`}
+                          </Text>
+                        </View>
+                        <Text style={{ color: C.purple, fontSize: 12 }}>→</Text>
+                      </Pressable>
+                    );
+                  })
+                )}
+              </View>
+            );
+          })()}
+        </>
       )}
 
       {/* ── MODALS ────────────────────────────────────────────────────────── */}

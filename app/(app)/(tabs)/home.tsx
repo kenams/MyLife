@@ -31,6 +31,8 @@ import { getSuggestedActions, useTimeContext } from "@/lib/time-context";
 import type { LifeActionId } from "@/lib/types";
 import { useGameStore } from "@/stores/game-store";
 import { useAppTheme } from "@/hooks/use-app-theme";
+import { NotificationsBell } from "@/components/notifications-bell";
+import { OnboardingTour } from "@/components/onboarding-tour";
 
 const L = {
   bg:        "#080808",
@@ -684,15 +686,18 @@ export default function HomeScreen() {
                 </View>
               )}
             </View>
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 4,
-              backgroundColor: L.primaryBg, borderRadius: 20,
-              paddingHorizontal: 12, paddingVertical: 6,
-              borderWidth: 1, borderColor: L.primary + "35",
-              shadowColor: L.primary, shadowOpacity: 0.2, shadowRadius: 10 }}>
-              <Text style={{ fontSize: 12 }}>💰</Text>
-              <Text style={{ color: L.primary, fontSize: 14, fontWeight: "900" }}>
-                {Math.round(stats.money)} BL
-              </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <NotificationsBell />
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 4,
+                backgroundColor: L.primaryBg, borderRadius: 20,
+                paddingHorizontal: 12, paddingVertical: 6,
+                borderWidth: 1, borderColor: L.primary + "35",
+                shadowColor: L.primary, shadowOpacity: 0.2, shadowRadius: 10 }}>
+                <Text style={{ fontSize: 12 }}>💰</Text>
+                <Text style={{ color: L.primary, fontSize: 14, fontWeight: "900" }}>
+                  {Math.round(stats.money)} BL
+                </Text>
+              </View>
             </View>
           </View>
 
@@ -996,6 +1001,7 @@ export default function HomeScreen() {
           </View>
         </Animated.View>
       )}
+      <OnboardingTour />
     </Animated.View>
   );
 }

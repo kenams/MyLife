@@ -4,8 +4,9 @@ import { Animated, Modal, Pressable, ScrollView, Text, TextInput, View } from "r
 
 import { useGameStore } from "@/stores/game-store";
 import {
-  type Crew, type LeaveCrewResult, CREW_COLORS,
+  type Crew, type CrewMember, type LeaveCrewResult, type CrewWarRecord, CREW_COLORS,
   createCrew, fetchCrews, joinCrew, getMyCrewId, leaveCrew, getCrewCooldown,
+  transferLeader, fetchCrewWars, fetchCrewMembers,
 } from "@/lib/crews";
 
 const C = {
@@ -109,10 +110,16 @@ export default function CrewsScreen() {
   const [showCreate,  setShowCreate]  = useState(false);
   const [loading,     setLoading]     = useState(true);
   const [toast,       setToast]       = useState<string | null>(null);
-  const [leaveModal,  setLeaveModal]  = useState(false);
-  const [leaveResult, setLeaveResult] = useState<LeaveCrewResult | null>(null);
-  const [leaving,     setLeaving]     = useState(false);
-  const [cooldown,    setCooldown]    = useState<Date | null>(null);
+  const [leaveModal,    setLeaveModal]    = useState(false);
+  const [leaveResult,   setLeaveResult]   = useState<LeaveCrewResult | null>(null);
+  const [leaving,       setLeaving]       = useState(false);
+  const [cooldown,      setCooldown]      = useState<Date | null>(null);
+  const [transferModal,  setTransferModal]  = useState(false);
+  const [members,        setMembers]        = useState<CrewMember[]>([]);
+  const [transferTarget, setTransferTarget] = useState<string | null>(null);
+  const [transferring,   setTransferring]   = useState(false);
+  const [wars,           setWars]           = useState<CrewWarRecord[]>([]);
+  const [showWars,       setShowWars]       = useState(false);
   const toastAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
@@ -129,6 +136,27 @@ export default function CrewsScreen() {
     getMyCrewId(playerName).then(setMyCrewId);
     getCrewCooldown(playerName).then(setCooldown);
   }, []);
+
+  useEffect(() => {
+    if (!myCrewId) { setMembers([]); setWars([]); return; }
+    fetchCrewMembers(myCrewId).then(setMembers);
+    fetchCrewWars(myCrewId).then(setWars);
+  }, [myCrewId]);
+
+  async function handleTransfer() {
+    if (!myCrewId || !transferTarget) return;
+    setTransferring(true);
+    const result = await transferLeader(myCrewId, playerName, transferTarget);
+    setTransferring(false);
+    if (result.ok) {
+      showToast(`👑 ${transferTarget} est maintenant leader`);
+      setTransferModal(false);
+      setTransferTarget(null);
+      fetchCrewMembers(myCrewId).then(setMembers);
+    } else {
+      showToast(result.error ?? "Erreur lors du transfert");
+    }
+  }
 
   function showToast(msg: string) {
     setToast(msg);
@@ -238,14 +266,61 @@ export default function CrewsScreen() {
                 </View>
                 <Text style={{ color: C.green, fontSize: 11, fontWeight: "800" }}>✓ MEMBRE</Text>
               </View>
-              <Pressable onPress={() => setLeaveModal(true)}
-                style={{ marginTop: 12, borderRadius: 10, paddingVertical: 10,
-                  alignItems: "center", borderWidth: 1,
-                  borderColor: C.red + "40", backgroundColor: C.red + "10" }}>
-                <Text style={{ color: C.red, fontSize: 12, fontWeight: "800" }}>
-                  Quitter le crew
-                </Text>
-              </Pressable>
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                <Pressable onPress={() => { void fetchCrewMembers(mc.id).then(setMembers); setTransferModal(true); }}
+                  style={{ flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center",
+                    borderWidth: 1, borderColor: C.purple + "40", backgroundColor: C.purple + "10" }}>
+                  <Text style={{ color: C.purple, fontSize: 11, fontWeight: "800" }}>👑 Transfert leader</Text>
+                </Pressable>
+                <Pressable onPress={() => setShowWars((p) => !p)}
+                  style={{ flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center",
+                    borderWidth: 1, borderColor: C.blue + "40", backgroundColor: C.blue + "10" }}>
+                  <Text style={{ color: C.blue, fontSize: 11, fontWeight: "800" }}>
+                    ⚔️ Guerres ({wars.length})
+                  </Text>
+                </Pressable>
+                <Pressable onPress={() => setLeaveModal(true)}
+                  style={{ flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center",
+                    borderWidth: 1, borderColor: C.red + "40", backgroundColor: C.red + "10" }}>
+                  <Text style={{ color: C.red, fontSize: 11, fontWeight: "800" }}>Quitter</Text>
+                </Pressable>
+              </View>
+
+              {/* Historique guerres */}
+              {showWars && wars.length > 0 && (
+                <View style={{ marginTop: 12, gap: 6 }}>
+                  <Text style={{ color: C.muted, fontSize: 9, fontWeight: "800", letterSpacing: 2 }}>
+                    HISTORIQUE GUERRES
+                  </Text>
+                  {wars.slice(0, 5).map((war) => {
+                    const isA = war.crew_a_id === myCrewId;
+                    const enemy = isA ? war.crew_b : war.crew_a;
+                    const statusColor = war.status === "active" ? C.red : war.status === "won" ? C.green : C.muted;
+                    const statusLabel = war.status === "active" ? "EN COURS" : war.status === "won" ? "VICTOIRE" : "DÉFAITE";
+                    return (
+                      <View key={war.id} style={{ flexDirection: "row", alignItems: "center", gap: 8,
+                        backgroundColor: "#111", borderRadius: 8, padding: 10, borderWidth: 1, borderColor: C.border }}>
+                        <Text style={{ fontSize: 16 }}>{enemy?.emoji ?? "⚔️"}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: C.text, fontSize: 12, fontWeight: "700" }}>
+                            vs [{enemy?.tag ?? "?"}] {enemy?.name ?? "Inconnu"}
+                          </Text>
+                          <Text style={{ color: C.muted, fontSize: 10 }}>
+                            {new Date(war.started_at).toLocaleDateString("fr-FR")}
+                          </Text>
+                        </View>
+                        <View style={{ backgroundColor: statusColor + "20", paddingHorizontal: 7, paddingVertical: 3,
+                          borderRadius: 5, borderWidth: 1, borderColor: statusColor + "40" }}>
+                          <Text style={{ color: statusColor, fontSize: 9, fontWeight: "900" }}>{statusLabel}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                  {wars.length === 0 && (
+                    <Text style={{ color: C.muted, fontSize: 12 }}>Aucune guerre enregistrée.</Text>
+                  )}
+                </View>
+              )}
             </View>
           );
         })()}
@@ -448,6 +523,64 @@ export default function CrewsScreen() {
               </View>
             );
           })()}
+        </View>
+      </Modal>
+
+      {/* Modal transfer leader */}
+      <Modal visible={transferModal} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.88)", justifyContent: "center", padding: 24 }}>
+          <View style={{ backgroundColor: C.card, borderRadius: 20, padding: 24,
+            borderWidth: 1, borderColor: C.purple + "40" }}>
+            <Text style={{ color: C.purple, fontSize: 17, fontWeight: "900", textAlign: "center", marginBottom: 6 }}>
+              👑 Transfert de leadership
+            </Text>
+            <Text style={{ color: C.textSoft, fontSize: 12, textAlign: "center", marginBottom: 20 }}>
+              Choisis un membre pour lui donner le rôle de leader.
+            </Text>
+
+            <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
+              {members.filter((m) => m.player_name !== playerName).map((m) => (
+                <Pressable key={m.id} onPress={() => setTransferTarget(m.player_name)}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12,
+                    borderRadius: 10, marginBottom: 6,
+                    backgroundColor: transferTarget === m.player_name ? C.purple + "20" : C.cardAlt,
+                    borderWidth: 1,
+                    borderColor: transferTarget === m.player_name ? C.purple + "60" : C.border }}>
+                  <Text style={{ fontSize: 20 }}>{m.player_emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: C.text, fontSize: 13, fontWeight: "700" }}>{m.player_name}</Text>
+                    <Text style={{ color: C.muted, fontSize: 10 }}>{m.role}</Text>
+                  </View>
+                  {transferTarget === m.player_name && (
+                    <Text style={{ color: C.purple, fontSize: 16 }}>✓</Text>
+                  )}
+                </Pressable>
+              ))}
+              {members.filter((m) => m.player_name !== playerName).length === 0 && (
+                <Text style={{ color: C.muted, fontSize: 13, textAlign: "center", paddingVertical: 20 }}>
+                  Aucun autre membre dans le crew.
+                </Text>
+              )}
+            </ScrollView>
+
+            <View style={{ flexDirection: "row", gap: 10, marginTop: 16 }}>
+              <Pressable onPress={() => { setTransferModal(false); setTransferTarget(null); }}
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center",
+                  backgroundColor: C.card, borderWidth: 1, borderColor: C.border }}>
+                <Text style={{ color: C.textSoft, fontWeight: "800" }}>Annuler</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => void handleTransfer()}
+                disabled={!transferTarget || transferring}
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center",
+                  backgroundColor: transferTarget ? C.purple + "20" : C.cardAlt,
+                  borderWidth: 1, borderColor: transferTarget ? C.purple + "50" : C.border }}>
+                <Text style={{ color: transferTarget ? C.purple : C.muted, fontWeight: "900" }}>
+                  {transferring ? "..." : "Confirmer"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </Modal>
 
