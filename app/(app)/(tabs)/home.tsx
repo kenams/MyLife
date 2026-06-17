@@ -3,6 +3,13 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Modal, Pressable, ScrollView, Text, View } from "react-native";
 import { supabase } from "@/lib/supabase";
+import {
+  buildActionFeedEvent,
+  fetchRecentFeed,
+  publishFeedEvent,
+  subscribeToFeed,
+  type FeedEvent,
+} from "@/lib/life-feed";
 
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getAvatarVisual } from "@/lib/avatar-visual";
@@ -407,6 +414,7 @@ export default function HomeScreen() {
   const housingTier      = useGameStore((s) => s.housingTier);
   const checkHousingRent = useGameStore((s) => s.checkHousingRent);
   const lifeFeed         = useGameStore((s) => s.lifeFeed ?? []);
+  const [liveEvents, setLiveEvents] = useState<FeedEvent[]>([]);
   const worldEvent       = useGameStore((s) => s.worldEvent);
   const worldEventJoined = useGameStore((s) => s.worldEventJoined ?? false);
   const joinWorldEvent   = useGameStore((s) => s.joinWorldEvent);
@@ -479,6 +487,38 @@ export default function HomeScreen() {
     Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
   }, []);
 
+  // ── Feed realtime ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    fetchRecentFeed(20).then((evts) => setLiveEvents(evts));
+    const sub = subscribeToFeed((evt) =>
+      setLiveEvents((prev) => [evt, ...prev].slice(0, 20))
+    );
+    return () => { sub?.unsubscribe(); };
+  }, []);
+
+  // ── NPC drama engine — 1 event toutes les 2–4 min ─────────────────────────
+  useEffect(() => {
+    const NPC_CAST = [
+      { name: "Jok'air",  emoji: "🎤", star: true },
+      { name: "Maska",    emoji: "🎭", star: true },
+      { name: "Doomams",  emoji: "😤", star: false },
+      { name: "Lil Yaz",  emoji: "💜", star: false },
+      { name: "Benz",     emoji: "🔑", star: false },
+      { name: "Sékouba",  emoji: "🧢", star: false },
+    ];
+    const scheduleNext = () => {
+      const delay = 120_000 + Math.random() * 120_000; // 2–4 min
+      return setTimeout(async () => {
+        const npc = NPC_CAST[Math.floor(Math.random() * NPC_CAST.length)];
+        const { publishNpcDrama } = await import("@/lib/life-feed");
+        await publishNpcDrama(npc.name, npc.emoji, npc.star);
+        timer = scheduleNext();
+      }, delay);
+    };
+    let timer = scheduleNext();
+    return () => clearTimeout(timer);
+  }, []);
+
   function showToast(text: string) {
     if (toastTimer.current) clearTimeout(toastTimer.current);
     setToast(text);
@@ -494,6 +534,10 @@ export default function HomeScreen() {
   function handleAction(id: LifeActionId) {
     performAction(id);
     hapticImpact("medium");
+    const playerName = avatar?.displayName ?? "Joueur";
+    const playerEmoji = avatar?.emoji ?? "🧢";
+    const evtPayload = buildActionFeedEvent(id, playerName, playerEmoji, "Paris", false);
+    if (evtPayload) publishFeedEvent(evtPayload);
     const msgs: Record<string, string> = {
       "work-shift":   "+thunes +côte 💰",
       "sleep":        "pêche rechargée ⚡",
@@ -749,24 +793,87 @@ export default function HomeScreen() {
             </Pressable>
           )}
 
-          {/* ── FEED ── 3 lignes max ── */}
-          {lifeFeed.length > 0 && (
-            <View style={{ marginTop: 28 }}>
-              <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 2 }}>
-                LE FEED
+          {/* ── FEED LIVE ── */}
+          <View style={{ marginTop: 28 }}>
+            {/* Header */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <LivePulse color={L.green} size={7} />
+              <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2.5 }}>
+                FEED PARIS
               </Text>
-              {lifeFeed.slice(0, 3).map((item, i) => (
-                <View key={item.id} style={{ flexDirection: "row", alignItems: "center", gap: 10,
-                  paddingVertical: 10,
-                  borderBottomWidth: i < 2 ? 1 : 0, borderBottomColor: L.border }}>
-                  <Text style={{ fontSize: 14 }}>
-                    {item.id.includes("lvl") ? "⬆️" : item.id.includes("encounter") ? "👤" : "·"}
-                  </Text>
-                  <Text style={{ color: L.textSoft, fontSize: 13, flex: 1 }}>{item.title}</Text>
-                </View>
-              ))}
+              <View style={{ flex: 1, height: 1, backgroundColor: L.border }} />
+              <Text style={{ color: L.muted, fontSize: 9, letterSpacing: 1 }}>
+                {liveEvents.length} événements
+              </Text>
             </View>
-          )}
+
+            {liveEvents.length === 0 ? (
+              <View style={{ backgroundColor: L.card, borderRadius: 10, padding: 16,
+                borderWidth: 1, borderColor: L.border, alignItems: "center" }}>
+                <Text style={{ color: L.muted, fontSize: 12 }}>Rien pour l'instant... sois le premier</Text>
+              </View>
+            ) : (
+              liveEvents.slice(0, 5).map((evt, i) => {
+                const isFirst = i === 0;
+                const accentC = evt.is_star ? L.gold : evt.is_npc ? L.purple : L.green;
+                const ago = (() => {
+                  const diff = Date.now() - new Date(evt.created_at).getTime();
+                  const m = Math.floor(diff / 60000);
+                  return m < 1 ? "maintenant" : m < 60 ? `${m}m` : `${Math.floor(m/60)}h`;
+                })();
+                return (
+                  <View key={evt.id} style={{
+                    flexDirection: "row", alignItems: "flex-start", gap: 10,
+                    backgroundColor: isFirst ? accentC + "10" : "transparent",
+                    borderRadius: 10, paddingVertical: 9, paddingHorizontal: isFirst ? 10 : 0,
+                    borderWidth: isFirst ? 1 : 0, borderColor: isFirst ? accentC + "25" : "transparent",
+                    marginBottom: 6,
+                  }}>
+                    {/* left accent bar */}
+                    {!isFirst && (
+                      <View style={{ width: 2, borderRadius: 2, backgroundColor: accentC + "60",
+                        alignSelf: "stretch", marginTop: 2 }} />
+                    )}
+                    {/* emoji */}
+                    <Text style={{ fontSize: isFirst ? 16 : 13, marginTop: 1 }}>{evt.emoji}</Text>
+                    {/* body */}
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: isFirst ? L.text : L.textSoft, fontSize: isFirst ? 13 : 12,
+                        fontWeight: isFirst ? "700" : "500", lineHeight: 18 }}>
+                        {evt.body}
+                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 }}>
+                        {evt.location && (
+                          <Text style={{ color: L.muted, fontSize: 10 }}>📍 {evt.location}</Text>
+                        )}
+                        <Text style={{ color: L.muted, fontSize: 10 }}>{ago}</Text>
+                        {evt.is_star && (
+                          <View style={{ backgroundColor: L.gold + "22", paddingHorizontal: 5, paddingVertical: 1,
+                            borderRadius: 4, borderWidth: 1, borderColor: L.gold + "40" }}>
+                            <Text style={{ color: L.gold, fontSize: 9, fontWeight: "800" }}>⭐ STAR</Text>
+                          </View>
+                        )}
+                        {evt.is_npc && !evt.is_star && (
+                          <View style={{ backgroundColor: L.purple + "22", paddingHorizontal: 5, paddingVertical: 1,
+                            borderRadius: 4, borderWidth: 1, borderColor: L.purple + "40" }}>
+                            <Text style={{ color: L.purple, fontSize: 9, fontWeight: "800" }}>NPC</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })
+            )}
+
+            {liveEvents.length > 5 && (
+              <View style={{ alignItems: "center", marginTop: 4 }}>
+                <Text style={{ color: L.muted, fontSize: 11, letterSpacing: 1 }}>
+                  +{liveEvents.length - 5} autres événements
+                </Text>
+              </View>
+            )}
+          </View>
 
         </View>
       </ScrollView>
