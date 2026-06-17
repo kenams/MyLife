@@ -2,6 +2,15 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { useState } from "react";
 import { Pressable, Text, TextInput, View, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { useGameStore } from "@/stores/game-store";
+
+// ── Dev bypass — à retirer avant prod publique ────────────────────────────────
+async function devBypass(loadTestAccount: (p: "balanced") => void) {
+  await AsyncStorage.setItem("@mylife_age_verified", "true");
+  await AsyncStorage.setItem("@mylife_consent_v1", "true");
+  loadTestAccount("balanced");
+  router.replace("/(app)/(tabs)/home");
+}
 
 const L = {
   bg: "#080808", card: "#111111", cardAlt: "#181818",
@@ -26,6 +35,7 @@ export default function AgeCheckScreen() {
   const [month, setMonth] = useState("");
   const [year,  setYear]  = useState("");
   const [error, setError] = useState("");
+  const loadTestAccount = useGameStore(s => s.loadTestAccount);
 
   function validate() {
     setError("");
@@ -166,6 +176,24 @@ export default function AgeCheckScreen() {
             Cette vérification est requise par la loi.{"\n"}
             Ta date de naissance n'est pas stockée sur nos serveurs.
           </Text>
+
+          {/* ── CONNEXION RAPIDE (dev) ── */}
+          <Pressable
+            onPress={() => void devBypass(loadTestAccount)}
+            style={{
+              marginTop: 24, backgroundColor: "#FFD600" + "18",
+              borderRadius: 14, paddingVertical: 14,
+              alignItems: "center", borderWidth: 1,
+              borderColor: "#FFD600" + "40",
+            }}
+          >
+            <Text style={{ color: "#FFD600", fontSize: 13, fontWeight: "900", letterSpacing: 1 }}>
+              ⚡ CONNEXION RAPIDE
+            </Text>
+            <Text style={{ color: "#A8A49A", fontSize: 11, marginTop: 3 }}>
+              Compte test · accès direct
+            </Text>
+          </Pressable>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

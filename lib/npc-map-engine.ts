@@ -140,13 +140,13 @@ export function startNpcMapEngine() {
     await moveRandomNpc();
     // Rencontre 1 fois sur 2
     if (Math.random() > 0.5) await triggerNpcEncounter();
-    // Prochain tick dans 3-6 minutes
-    const delay = 180_000 + Math.random() * 180_000;
+    // Prochain tick dans 15-30s
+    const delay = 15_000 + Math.random() * 15_000;
     engineTimer = setTimeout(tick, delay);
   };
 
-  // Premier tick dans 30s (laisser la map charger)
-  engineTimer = setTimeout(tick, 30_000);
+  // Premier tick dans 5s
+  engineTimer = setTimeout(tick, 5_000);
 }
 
 export function stopNpcMapEngine() {

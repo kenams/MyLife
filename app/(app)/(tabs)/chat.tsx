@@ -1,1181 +1,784 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useRef, useState, type ComponentProps, type ReactNode } from "react";
-import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  Animated, KeyboardAvoidingView, Platform, Pressable,
+  ScrollView, StyleSheet, Text, TextInput, View,
+} from "react-native";
 
 import { AvatarSprite } from "@/components/avatar-sprite";
-import { getAvatarVisual, getNpcVisual } from "@/lib/avatar-visual";
+import { getNpcVisual } from "@/lib/avatar-visual";
 import { activities, starterResidents } from "@/lib/game-engine";
-import { getBestProfileMatches } from "@/lib/profile-matching";
 import { buildSocialHubSnapshot, relationshipScore } from "@/lib/social-hub";
-import type { Conversation, DatePlan, InvitationRecord, LoveRoomMomentKind, NpcState, RelationshipRecord, Room, RoomMessage } from "@/lib/types";
+import type { Conversation, NpcState, RelationshipRecord, Room, RoomMessage } from "@/lib/types";
 import { useGameStore } from "@/stores/game-store";
 
-// ─── Dark theme unifié quartier-life ──────────────────────────────────────────
-const L = {
-  bg:        "#080808",
-  card:      "#111111",
-  text:      "#F5F2E8",
-  textSoft:  "#A8A49A",
-  muted:     "#4A4844",
-  border:    "rgba(255,255,255,0.07)",
-  primary:   "#FFD600",
-  primaryBg: "#1A1500",
-  green:     "#39FF14",
-  greenBg:   "#091A03",
-  gold:      "#FFD600",
-  goldBg:    "#1A1500",
-  red:       "#FF3B3B",
-  redBg:     "#1A0808",
-  blue:      "#00B4FF",
-  blueBg:    "#001A2A",
-  pink:      "#FF2D78",
-  pinkBg:    "#1A0818",
-  purple:    "#BF5FFF",
-  purpleBg:  "#18082A",
-  teal:      "#00FFD1",
-  tealBg:    "#001A14",
-  shadow:    "rgba(255,214,0,0.06)",
+const C = {
+  bg:      "#080808",
+  card:    "#111111",
+  card2:   "#161616",
+  text:    "#F5F2E8",
+  soft:    "#A8A49A",
+  muted:   "#4A4844",
+  border:  "rgba(255,255,255,0.07)",
+  gold:    "#FFD600",
+  goldBg:  "#1A1500",
+  green:   "#39FF14",
+  red:     "#FF3B3B",
+  pink:    "#FF2D78",
+  pinkBg:  "#1A0818",
+  purple:  "#BF5FFF",
+  purpleBg:"#18082A",
+  teal:    "#00FFD1",
 };
 
-type Tab = "contacts" | "rooms" | "lounge" | "love";
+type Tab = "messages" | "rooms" | "love";
 type IconName = ComponentProps<typeof Ionicons>["name"];
 
-const WIZZ_TOKEN = "[[WIZZ]]";
-const WORLD_ROOM_IDS = [
-  "room-lounge-global",
-  "room-city-neo-paris",
-  "room-city-neo-newyork",
-  "room-city-neo-tokyo",
-  "room-city-neo-london",
-  "room-city-neo-bamako",
-];
-const LOVE_MOMENTS: Array<{ key: LoveRoomMomentKind; label: string; icon: IconName }> = [
-  { key: "question", label: "Question", icon: "heart" },
-  { key: "challenge", label: "Defi", icon: "sparkles" },
-  { key: "memory", label: "Souvenir", icon: "bookmark" },
-  { key: "vibe", label: "Ambiance", icon: "musical-notes" },
-];
-const EMOJI_SHORTCUTS = ["😀", "😂", "😍", "🔥", "👍", "👀", "💯", "✨", "☕", "🎮", "💬", "❤️"];
-const REACTION_SHORTCUTS = ["❤️", "😂", "👍", "🔥"];
-const MSN_NUDGES = ["Tu es là ?", "Réponds quand tu peux.", "Je viens d'arriver.", "On se capte dans une room ?"];
+const WIZZ = "[[WIZZ]]";
+const EMOJIS = ["😀","😂","🔥","👍","👀","💯","❤️","☕","✨","😍","💬","🎮"];
 
-function relColor(score: number) {
-  if (score >= 60) return L.green;
-  if (score >= 35) return L.gold;
-  return L.muted;
-}
-
-function loveRoomAccess(input: {
-  residentId: string;
-  relationships: RelationshipRecord[];
-  conversations: Conversation[];
-  invitations: InvitationRecord[];
-  datePlans: DatePlan[];
-}) {
-  const resident = starterResidents.find((item) => item.id === input.residentId);
-  const relationship = input.relationships.find((item) => item.residentId === input.residentId);
-  const conversation = input.conversations.find((item) => item.kind === "direct" && item.peerId === input.residentId);
-  const messageCount = conversation?.messages.filter((item) => item.kind === "message").length ?? 0;
-  const acceptedInvitations = input.invitations.filter((item) =>
-    item.residentId === input.residentId && item.status === "accepted"
-  ).length;
-  const dateSignal = input.datePlans.filter((item) =>
-    item.residentId === input.residentId && (item.status === "accepted" || item.status === "completed")
-  ).length;
-  const score = relationship?.score ?? 0;
-  const romantic = resident?.lookingFor.includes("relation amoureuse") ?? false;
-  const progress = Math.min(100, Math.round(score * 0.72 + Math.min(10, messageCount) * 3 + acceptedInvitations * 8 + dateSignal * 12));
-  const unlocked = romantic && score >= 58 && (progress >= 76 || relationship?.status === "crush" || relationship?.status === "relation");
-
-  return { resident, relationship, score, progress, romantic, unlocked, messageCount, acceptedInvitations, dateSignal };
-}
-
-function Dot({ online }: { online: boolean }) {
-  return <View style={[s.dot, { backgroundColor: online ? "#22c55e" : L.muted }]} />;
-}
-
-function NpcFace({ npc, size = 44 }: { npc: NpcState; size?: number }) {
+// ── Petit avatar NPC ──────────────────────────────────────────────────────────
+function NpcAvatar({ npc, size = 44 }: { npc: NpcState; size?: number }) {
   return (
-    <View style={[s.faceWrap, { width: size, height: size }]}>
-      <View style={{ transform: [{ scale: size <= 34 ? 0.7 : 0.86 }] }}>
-        <AvatarSprite visual={getNpcVisual(npc.id)} action={npc.action as never} size={size <= 34 ? "xs" : "sm"} />
+    <View style={{ width: size, height: size, position: "relative" }}>
+      <View style={{ transform: [{ scale: size <= 36 ? 0.72 : 0.88 }] }}>
+        <AvatarSprite visual={getNpcVisual(npc.id)} action="idle" size={size <= 36 ? "xs" : "sm"} />
       </View>
-      <View style={s.dotAbs}><Dot online={npc.presenceOnline} /></View>
+      <View style={[s.onlineDot, { backgroundColor: npc.presenceOnline ? C.green : C.muted }]} />
     </View>
   );
 }
 
-function PlayerFace({ name, size = 42, visual }: {
-  name?: string; size?: number; visual?: ReturnType<typeof getNpcVisual> | null
-}) {
-  if (visual) {
-    return (
-      <View style={[s.faceWrap, { width: size, height: size, borderRadius: size / 2, overflow: "hidden",
-        borderWidth: 2, borderColor: L.primary + "40", backgroundColor: L.primaryBg }]}>
-        <View style={{ transform: [{ scale: size <= 34 ? 0.72 : 0.88 }] }}>
-          <AvatarSprite visual={visual} action="idle" size={size <= 34 ? "xs" : "sm"} />
-        </View>
-      </View>
-    );
-  }
+// ── Avatar texte ──────────────────────────────────────────────────────────────
+function InitialAvatar({ name, size = 44, color = C.gold }: { name: string; size?: number; color?: string }) {
   return (
-    <View style={[s.playerFace, { width: size, height: size }]}>
-      <Text style={s.playerInitial}>{(name ?? "Moi").slice(0, 1).toUpperCase()}</Text>
+    <View style={[s.initAvatar, { width: size, height: size, borderRadius: size / 2, borderColor: color + "40", backgroundColor: color + "12" }]}>
+      <Text style={[s.initText, { color, fontSize: size * 0.38 }]}>{name[0]?.toUpperCase()}</Text>
     </View>
   );
 }
 
-function Win({ title, subtitle, onBack, right, children }: {
-  title: string; subtitle: string; onBack?: () => void; right?: ReactNode; children: ReactNode;
-}) {
-  return (
-    <View style={s.root}>
-      <View style={s.win}>
-        <View style={s.titleBar}>
-          {onBack && (
-            <Pressable onPress={onBack} style={s.back}>
-              <Ionicons name="chevron-back" size={20} color={L.text} />
-            </Pressable>
-          )}
-          <View style={s.logo}>
-            <Ionicons name="chatbubble-ellipses" size={18} color={L.primary} />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={s.title} numberOfLines={1}>{title}</Text>
-            <Text style={s.subtitle} numberOfLines={1}>{subtitle}</Text>
-          </View>
-          {right}
-        </View>
-        {children}
-      </View>
-    </View>
-  );
-}
-
-function Status({ text, color = L.primary }: { text: string; color?: string }) {
-  return (
-    <View style={[s.status, { backgroundColor: color + "12", borderColor: color + "30" }]}>
-      <View style={[s.statusDot, { backgroundColor: color }]} />
-      <Text style={[s.statusText, { color }]} numberOfLines={1}>{text}</Text>
-    </View>
-  );
-}
-
-function Tools({ actions }: { actions: { label: string; icon: IconName; onPress: () => void; active?: boolean }[] }) {
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.tools} contentContainerStyle={s.toolsBody}>
-      {actions.map((a) => (
-        <Pressable key={a.label} onPress={a.onPress} style={[s.toolBtn, a.active && s.toolBtnActive]}>
-          <Ionicons name={a.icon} size={20} color={a.active ? L.primary : L.muted} />
-          <Text style={[s.toolText, a.active && { color: L.primary }]}>{a.label}</Text>
-        </Pressable>
-      ))}
-    </ScrollView>
-  );
-}
-
-function Quick({ items, pick }: { items: string[]; pick: (text: string) => void }) {
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={s.quick} contentContainerStyle={s.quickBody}>
-      {items.map((item) => (
-        <Pressable key={item} onPress={() => pick(item)} style={s.quickChip}>
-          <Text style={s.quickText} numberOfLines={1}>{item}</Text>
-        </Pressable>
-      ))}
-    </ScrollView>
-  );
-}
-
-function Composer({ value, change, send, macro, wizz }: {
-  value: string; change: (t: string) => void; send: () => void; macro: (t: string) => void; wizz: () => void
-}) {
-  const [emojiOpen, setEmojiOpen] = useState(false);
-  const buttons: { icon: IconName; text: string; color: string }[] = [
-    { icon: "happy",          text: "😀",                                  color: L.gold    },
-    { icon: "mic",            text: "Message vocal rapide.",                color: L.teal    },
-    { icon: "image",          text: "Je partage une image mentale.",        color: L.purple  },
-    { icon: "game-controller", text: "On lance une activite ensemble ?",   color: L.pink    },
-  ];
-  return (
-    <View style={s.composer}>
-      <View style={s.formatLine}>
-        <Text style={s.bigA}>A</Text>
-        <Pressable onPress={() => setEmojiOpen((o) => !o)}
-          style={[s.macro, { backgroundColor: L.goldBg, borderColor: L.gold + "35" }]}>
-          <Ionicons name="happy" size={18} color={L.gold} />
-        </Pressable>
-        <Pressable onPress={wizz}
-          style={[s.wizzBtn, { backgroundColor: L.primaryBg, borderColor: L.primary + "40" }]}>
-          <Ionicons name="flash" size={16} color={L.primary} />
-          <Text style={[s.wizzBtnText, { color: L.primary }]}>Wizz</Text>
-        </Pressable>
-        {buttons.map((b) => (
-          <Pressable key={b.icon} onPress={() => macro(b.text)}
-            style={[s.macro, { backgroundColor: b.color + "12", borderColor: b.color + "25" }]}>
-            <Ionicons name={b.icon} size={18} color={b.color} />
-          </Pressable>
-        ))}
-      </View>
-      {emojiOpen && (
-        <View style={s.emojiTray}>
-          {EMOJI_SHORTCUTS.map((emoji) => (
-            <Pressable key={emoji} onPress={() => change(`${value}${emoji}`)} style={s.emojiBtn}>
-              <Text style={s.emojiText}>{emoji}</Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false}
-        style={s.nudgeBar} contentContainerStyle={s.nudgeBody}>
-        {MSN_NUDGES.map((text) => (
-          <Pressable key={text} onPress={() => macro(text)} style={s.nudgeChip}>
-            <Text style={s.nudgeText}>{text}</Text>
-          </Pressable>
-        ))}
-      </ScrollView>
-      <View style={s.inputLine}>
-        <TextInput
-          value={value} onChangeText={change} onSubmitEditing={send}
-          placeholder="Écrire un message…" placeholderTextColor={L.muted}
-          returnKeyType="send" multiline style={s.input}
-        />
-        <Pressable onPress={send} style={s.send}>
-          <Ionicons name="send" size={14} color="#fff" />
-          <Text style={s.sendText}>Envoyer</Text>
-        </Pressable>
-      </View>
-    </View>
-  );
-}
-
-function Bubble({ body, time, me, author, npc, reaction, onReact }: {
-  body: string; time: string; me: boolean; author?: string;
-  npc?: NpcState | null; reaction?: string; onReact?: (emoji: string) => void;
-}) {
-  const wizz = body.includes(WIZZ_TOKEN) || /^wizz/i.test(body.trim());
-  const cleanBody = body.replace(WIZZ_TOKEN, "").trim() || "Wizz !";
+// ── Bulle de message ──────────────────────────────────────────────────────────
+function Bubble({ body, time, me, npc }: { body: string; time: string; me: boolean; npc?: NpcState | null }) {
+  const isWizz = body.includes(WIZZ);
+  const text = body.replace(WIZZ, "").trim() || "Wizz !";
   const shake = useRef(new Animated.Value(0)).current;
-  const [reactOpen, setReactOpen] = useState(false);
 
   useEffect(() => {
-    if (!wizz) return;
-    shake.setValue(0);
+    if (!isWizz) return;
     Animated.sequence([
-      Animated.timing(shake, { toValue: 1, duration: 55, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: -1, duration: 55, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: 1, duration: 55, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: -1, duration: 55, useNativeDriver: true }),
-      Animated.timing(shake, { toValue: 0, duration: 55, useNativeDriver: true }),
+      ...([1,-1,1,-1,0]).map((v) => Animated.timing(shake, { toValue: v, duration: 55, useNativeDriver: true })),
     ]).start();
-  }, [shake, wizz]);
-
-  const translateX = shake.interpolate({ inputRange: [-1, 1], outputRange: [-8, 8] });
+  }, [isWizz, shake]);
 
   return (
-    <Animated.View style={[s.msgRow, me && { flexDirection: "row-reverse" }, wizz && { transform: [{ translateX }] }]}>
+    <View style={[s.row, me && { flexDirection: "row-reverse" }]}>
       {!me && (npc
-        ? <NpcFace npc={npc} size={32} />
-        : <View style={s.anon}><Ionicons name="person" size={14} color={L.muted} /></View>
+        ? <NpcAvatar npc={npc} size={32} />
+        : <View style={s.anonDot}><Ionicons name="person" size={13} color={C.muted} /></View>
       )}
-      <View style={s.bubbleCol}>
-        {!me && author && <Text style={s.author}>{author}</Text>}
-        <Pressable
-          onPress={() => setReactOpen((o) => !o)}
-          onLongPress={() => setReactOpen(true)}
-          style={[s.bubble, me ? s.bubbleMe : s.bubbleOther, wizz && s.wizzBubble]}
-        >
-          {wizz && (
-            <View style={s.wizzHeader}>
-              <Ionicons name="flash" size={13} color={me ? "#fff" : L.gold} />
-              <Text style={[s.wizzLabel, me && { color: "rgba(255,255,255,0.9)" }]}>WIZZ</Text>
-            </View>
-          )}
-          <Text style={[s.bubbleText, me && { color: "#fff" }, wizz && !me && { color: L.gold }]}>
-            {cleanBody}
-          </Text>
-          <Text style={[s.time, me && { color: "rgba(255,255,255,0.6)", textAlign: "right" }]}>{time}</Text>
-        </Pressable>
-        {(reactOpen || reaction) && (
-          <View style={[s.reactionLine, me && { justifyContent: "flex-end" }]}>
-            {REACTION_SHORTCUTS.map((emoji) => (
-              <Pressable key={emoji}
-                onPress={() => { onReact?.(reaction === emoji ? "" : emoji); setReactOpen(false); }}
-                style={[s.reactionBtn, reaction === emoji && s.reactionBtnActive]}>
-                <Text style={s.reactionText}>{emoji}</Text>
-              </Pressable>
-            ))}
+      <Animated.View style={[
+        s.bubble,
+        me ? s.bubbleMe : s.bubbleOther,
+        isWizz && { backgroundColor: C.goldBg, borderColor: C.gold + "50" },
+        { transform: [{ translateX: shake.interpolate({ inputRange: [-1,1], outputRange: [-8,8] }) }] },
+      ]}>
+        {isWizz && (
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 3 }}>
+            <Ionicons name="flash" size={11} color={me ? "#fff" : C.gold} />
+            <Text style={{ color: me ? "rgba(255,255,255,0.8)" : C.gold, fontSize: 9, fontWeight: "900" }}>WIZZ</Text>
           </View>
         )}
-        {reaction && (
-          <View style={[s.reactionBadge, me && { alignSelf: "flex-end" }]}>
-            <Text style={s.reactionText}>{reaction}</Text>
-          </View>
-        )}
-        {me && <Text style={[s.delivery, { textAlign: "right" }]}>envoyé</Text>}
-      </View>
-    </Animated.View>
-  );
-}
-
-function TypingIndicator({ name }: { name: string }) {
-  const pulse = useRef(new Animated.Value(0.4)).current;
-  useEffect(() => {
-    const loop = Animated.loop(Animated.sequence([
-      Animated.timing(pulse, { toValue: 1, duration: 500, useNativeDriver: true }),
-      Animated.timing(pulse, { toValue: 0.4, duration: 500, useNativeDriver: true }),
-    ]));
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-
-  return (
-    <View style={s.typingRow}>
-      <Animated.View style={[s.typingBubble, { opacity: pulse }]}>
-        <View style={s.typingDots}>
-          {[0, 1, 2].map((d) => <View key={d} style={s.typingDot} />)}
-        </View>
-        <Text style={s.typingText}>{name} écrit…</Text>
+        <Text style={[s.bubbleText, me && { color: "#000" }, isWizz && !me && { color: C.gold }]}>{text}</Text>
+        <Text style={[s.timeText, me && { color: "rgba(0,0,0,0.5)", textAlign: "right" }]}>{time}</Text>
       </Animated.View>
     </View>
   );
 }
 
-function InfoPanel({ icon, title, body, action, onPress }: {
-  icon: IconName; title: string; body: string; action?: string; onPress?: () => void
-}) {
+// ── Indicateur "écrit…" ────────────────────────────────────────────────────
+function Typing({ name }: { name: string }) {
+  const op = useRef(new Animated.Value(0.4)).current;
+  useEffect(() => {
+    const loop = Animated.loop(Animated.sequence([
+      Animated.timing(op, { toValue: 1, duration: 500, useNativeDriver: true }),
+      Animated.timing(op, { toValue: 0.4, duration: 500, useNativeDriver: true }),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [op]);
   return (
-    <View style={s.infoPanel}>
-      <View style={s.infoIcon}><Ionicons name={icon} size={16} color={L.primary} /></View>
-      <View style={{ flex: 1 }}>
-        <Text style={s.infoTitle} numberOfLines={1}>{title}</Text>
-        <Text style={s.infoBody} numberOfLines={2}>{body}</Text>
+    <Animated.View style={[s.typingBubble, { opacity: op }]}>
+      <View style={{ flexDirection: "row", gap: 3 }}>
+        {[0,1,2].map((i) => <View key={i} style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: C.gold }} />)}
       </View>
-      {action && onPress && (
-        <Pressable onPress={onPress} style={s.infoAction}>
-          <Text style={s.infoActionText}>{action}</Text>
-        </Pressable>
+      <Text style={{ color: C.muted, fontSize: 11 }}>{name} écrit…</Text>
+    </Animated.View>
+  );
+}
+
+// ── Zone de saisie ────────────────────────────────────────────────────────────
+function Composer({ value, onChange, onSend, onWizz }: {
+  value: string; onChange: (t: string) => void; onSend: () => void; onWizz: () => void;
+}) {
+  const [emoji, setEmoji] = useState(false);
+  return (
+    <View style={s.composer}>
+      {emoji && (
+        <View style={s.emojiRow}>
+          {EMOJIS.map((e) => (
+            <Pressable key={e} onPress={() => onChange(value + e)} style={s.emojiBtn}>
+              <Text style={{ fontSize: 18 }}>{e}</Text>
+            </Pressable>
+          ))}
+        </View>
       )}
+      <View style={s.composerRow}>
+        <Pressable onPress={() => setEmoji((v) => !v)} style={[s.iconBtn, emoji && { borderColor: C.gold + "50" }]}>
+          <Text style={{ fontSize: 18 }}>😀</Text>
+        </Pressable>
+        <Pressable onPress={onWizz} style={s.wizzBtn}>
+          <Ionicons name="flash" size={14} color={C.gold} />
+          <Text style={{ color: C.gold, fontSize: 11, fontWeight: "800" }}>Wizz</Text>
+        </Pressable>
+        <TextInput
+          value={value} onChangeText={onChange} onSubmitEditing={onSend}
+          placeholder="Message…" placeholderTextColor={C.muted}
+          returnKeyType="send" multiline
+          style={s.input}
+        />
+        <Pressable onPress={onSend} style={s.sendBtn}>
+          <Ionicons name="send" size={16} color="#000" />
+        </Pressable>
+      </View>
     </View>
   );
 }
 
-function MemberRail({ me, online, invite }: { me: string; online: NpcState[]; invite: (id: string) => void }) {
+// ── Vue conversation ──────────────────────────────────────────────────────────
+function ConvView({ convId, back }: { convId: string; back: () => void }) {
+  const conv          = useGameStore((s) => s.conversations.find((c) => c.id === convId));
+  const npcs          = useGameStore((s) => s.npcs);
+  const avatar        = useGameStore((s) => s.avatar);
+  const session       = useGameStore((s) => s.session);
+  const sendMessage   = useGameStore((s) => s.sendMessage);
+  const markRead      = useGameStore((s) => s.markConversationRead);
+  const [input, setInput] = useState("");
+  const [typing, setTyping] = useState(false);
+  const scroll = useRef<ScrollView>(null);
+  const timer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const npc  = conv?.peerId ? npcs.find((n) => n.id === conv.peerId) ?? null : null;
+  const name = npc ? (starterResidents.find((r) => r.id === npc.id)?.name ?? conv?.title ?? "…") : conv?.title ?? "…";
+  const myId = session?.email ?? "local";
+  const me   = avatar?.displayName ?? "Moi";
+
+  useEffect(() => {
+    if (conv) markRead(conv.id);
+    setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 80);
+  }, [convId, conv, markRead]);
+
+  useEffect(() => {
+    scroll.current?.scrollToEnd({ animated: true });
+  }, [conv?.messages.length]);
+
+  function send(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    sendMessage(convId, t);
+    if (timer.current) clearTimeout(timer.current);
+    setTyping(true);
+    timer.current = setTimeout(() => setTyping(false), 1200);
+  }
+  function handleSend() { send(input); setInput(""); }
+  function sendWizz() { send(`${WIZZ} Wizz ! ${name.split(" ")[0]}, tu es là ?`); }
+
   return (
-    <View style={s.memberRail}>
-      <View style={s.memberMe}>
-        <PlayerFace name={me} size={34} />
-        <Text style={s.memberName} numberOfLines={1}>{me}</Text>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
+
+      {/* Header */}
+      <View style={s.convHeader}>
+        <Pressable onPress={back} style={s.backBtn}>
+          <Ionicons name="chevron-back" size={20} color={C.text} />
+        </Pressable>
+        {npc ? <NpcAvatar npc={npc} size={40} /> : <InitialAvatar name={name} size={40} />}
+        <View style={{ flex: 1 }}>
+          <Text style={s.convName}>{name}</Text>
+          <Text style={{ color: npc?.presenceOnline ? C.green : C.muted, fontSize: 11, fontWeight: "700" }}>
+            {npc?.presenceOnline ? "● En ligne" : "● Absent"}
+          </Text>
+        </View>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.memberList}>
-        {online.slice(0, 10).map((npc) => (
-          <Pressable key={npc.id} onPress={() => invite(npc.id)} style={s.memberItem}>
-            <NpcFace npc={npc} size={34} />
-            <Text style={s.memberName} numberOfLines={1}>{npc.name.split(" ")[0]}</Text>
+
+      {/* Messages */}
+      <ScrollView ref={scroll} style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, gap: 10 }}
+        showsVerticalScrollIndicator={false}>
+        {(!conv || conv.messages.length === 0) && (
+          <Text style={s.empty}>Commence la conversation 👋</Text>
+        )}
+        {conv?.messages.map((m) => {
+          const isMe = m.authorId === myId || ["player","user","self","local"].includes(m.authorId);
+          if (m.kind === "system") return (
+            <Text key={m.id} style={s.sysMsg}>{m.body}</Text>
+          );
+          return (
+            <Bubble key={m.id}
+              body={m.body}
+              time={new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+              me={isMe} npc={isMe ? null : npc}
+            />
+          );
+        })}
+        {typing && <Typing name={name.split(" ")[0]} />}
+      </ScrollView>
+
+      {/* Suggestions rapides */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}
+        style={{ backgroundColor: C.card, borderTopWidth: 1, borderTopColor: C.border }}
+        contentContainerStyle={{ gap: 8, paddingHorizontal: 12, paddingVertical: 8 }}>
+        {[`Salut ${name.split(" ")[0]} !`, "Tu fais quoi ?", "On se retrouve ? 📍", "☕ Café ?"].map((t) => (
+          <Pressable key={t} onPress={() => send(t)}
+            style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20,
+              backgroundColor: C.goldBg, borderWidth: 1, borderColor: C.gold + "25" }}>
+            <Text style={{ color: C.gold, fontSize: 12, fontWeight: "700" }}>{t}</Text>
           </Pressable>
         ))}
       </ScrollView>
-    </View>
-  );
-}
 
-function ConversationView({ conv, npc, back, openRoom }: { conv: Conversation; npc: NpcState | null; back: () => void; openRoom: (roomId: string) => void }) {
-  const sendMessage          = useGameStore((x) => x.sendMessage);
-  const markConversationRead = useGameStore((x) => x.markConversationRead);
-  const sendInvitation       = useGameStore((x) => x.sendInvitation);
-  const proposeDate          = useGameStore((x) => x.proposeDate);
-  const openLoveRoom         = useGameStore((x) => x.openLoveRoom);
-  const relationships        = useGameStore((x) => x.relationships);
-  const conversations        = useGameStore((x) => x.conversations);
-  const invitations          = useGameStore((x) => x.invitations);
-  const datePlans            = useGameStore((x) => x.datePlans);
-  const avatar               = useGameStore((x) => x.avatar);
-  const session              = useGameStore((x) => x.session);
-  const [input, setInput]    = useState("");
-  const [typing, setTyping]  = useState(false);
-  const [reactions, setReactions] = useState<Record<string, string>>({});
-  const scroll               = useRef<ScrollView>(null);
-  const typingTimer          = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const info                 = npc ? starterResidents.find((r) => r.id === npc.id) : null;
-  const name                 = info?.name ?? conv.title;
-  const me                   = avatar?.displayName ?? "Moi";
-  const myId                 = session?.email ?? "local";
-  const loveAccess           = npc
-    ? loveRoomAccess({ residentId: npc.id, relationships, conversations, invitations, datePlans })
-    : null;
-
-  useEffect(() => {
-    markConversationRead(conv.id);
-    setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 80);
-  }, [conv.id, markConversationRead]);
-  useEffect(() => { scroll.current?.scrollToEnd({ animated: true }); }, [conv.messages.length]);
-  useEffect(() => () => { if (typingTimer.current) clearTimeout(typingTimer.current); }, []);
-
-  function startTyping(ms = 1000) {
-    if (!conv.peerId) return;
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    setTyping(true);
-    typingTimer.current = setTimeout(() => setTyping(false), ms);
-  }
-  function post(text: string) {
-    const clean = text.trim();
-    if (!clean) return;
-    sendMessage(conv.id, clean);
-    startTyping(clean.includes(WIZZ_TOKEN) ? 520 : 1050);
-  }
-  function send() { post(input); setInput(""); }
-  function inviteCoffee() {
-    if (!npc) return post("Tu veux faire une activite ensemble ?");
-    sendInvitation(npc.id, "coffee-meetup");
-    post("Je t'ai envoye une invitation cafe.");
-  }
-  function proposeCoffeeDate() {
-    if (!npc) return post("On se fait un rendez-vous simple ?");
-    proposeDate(npc.id, name, "coffee");
-    post("Je te propose un rendez-vous cafe, simple et public.");
-  }
-  function enterLoveRoom() {
-    if (!npc) return;
-    const result = openLoveRoom(npc.id);
-    if (result.ok && result.room) {
-      openRoom(result.room.id);
-      return;
-    }
-    post(result.error ?? "La Love Room n'est pas encore debloquee.");
-  }
-  function sendWizz() { post(`${WIZZ_TOKEN} Wizz ! ${name.split(" ")[0]}, tu es là ?`); }
-
-  return (
-    <KeyboardAvoidingView style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
-      <Win
-        title={name}
-        subtitle={npc?.presenceOnline ? "En ligne" : "Absent"}
-        onBack={back}
-        right={<Status text={npc?.presenceOnline ? "En ligne" : "Absent"}
-          color={npc?.presenceOnline ? L.green : L.muted} />}
-      >
-        <Tools actions={[
-          { label: "Inviter",    icon: "person-add",     active: true, onPress: inviteCoffee },
-          { label: "Date",       icon: "calendar",       onPress: proposeCoffeeDate },
-          { label: "Love",       icon: "heart",          active: loveAccess?.unlocked, onPress: enterLoveRoom },
-          { label: "Fichiers",   icon: "folder-open",    onPress: () => post("Je t'envoie une idée à tester.") },
-          { label: "Vidéo",      icon: "videocam",       onPress: () => post("On lance un appel vidéo ?") },
-          { label: "Wizz",       icon: "flash",          active: true, onPress: sendWizz },
-          { label: "Vocal",      icon: "mic",            onPress: () => post("Message vocal : je suis connecté.") },
-          { label: "Activités",  icon: "sparkles",       onPress: () => post("On lance une activité ensemble ?") },
-          { label: "Sorties",    icon: "game-controller", onPress: () => post("Petit défi : on teste une sortie ?") },
-        ]} />
-        <InfoPanel
-          icon={npc?.presenceOnline ? "flash" : "time"}
-          title={npc?.presenceOnline ? "Contact disponible" : "Contact absent"}
-          body={info?.bio ?? "Conversation privée. Utilise les actions pour proposer une room ou une activité."}
-          action="Room"
-          onPress={() => post("Je crée une room, tu me rejoins ?")}
-        />
-        {loveAccess && (
-          <InfoPanel
-            icon={loveAccess.unlocked ? "heart" : "lock-closed"}
-            title={loveAccess.unlocked ? "Love Room disponible" : "Love Room verrouillee"}
-            body={`Affinite ${loveAccess.progress}% - ${loveAccess.messageCount} messages. ${loveAccess.unlocked ? "Espace prive debloque." : "Parle, invite et fais des activites pour l'ouvrir."}`}
-            action={loveAccess.unlocked ? "Entrer" : `${loveAccess.progress}%`}
-            onPress={loveAccess.unlocked ? enterLoveRoom : () => post("On doit encore monter notre affinite avant la Love Room.")}
-          />
-        )}
-        <ScrollView ref={scroll} style={{ flex: 1 }}
-          contentContainerStyle={s.msgList} showsVerticalScrollIndicator={false}>
-          {conv.messages.length === 0 && (
-            <Text style={s.empty}>Commence avec un message ou un Wizz.</Text>
-          )}
-          {conv.messages.map((m) => {
-            const isMe = m.authorId === myId || ["player", "user", "self", "local"].includes(m.authorId);
-            if (m.kind === "system") return <Text key={m.id} style={s.system}>{m.body}</Text>;
-            return (
-              <Bubble
-                key={m.id}
-                body={m.body}
-                time={new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                me={isMe}
-                author={isMe ? me : name}
-                npc={isMe ? null : npc}
-                reaction={reactions[m.id]}
-                onReact={(emoji) => setReactions((cur) => ({ ...cur, [m.id]: emoji }))}
-              />
-            );
-          })}
-          {typing && <TypingIndicator name={name.split(" ")[0]} />}
-        </ScrollView>
-        <Quick items={[`Salut ${name.split(" ")[0]} !`, "Tu fais quoi ? 😀", "On se retrouve quelque part ? 🔥", "Je t'invite pour un café ☕"]} pick={post} />
-        <Composer value={input} change={setInput} send={send} macro={post} wizz={sendWizz} />
-      </Win>
+      <Composer value={input} onChange={setInput} onSend={handleSend} onWizz={sendWizz} />
     </KeyboardAvoidingView>
   );
 }
 
-function RoomView({ id, name, back }: { id: string; name: string; back: () => void }) {
-  const sendRoomMessage  = useGameStore((x) => x.sendRoomMessage);
-  const messages         = useGameStore((x) => x.roomMessages[id] ?? []);
-  const npcs             = useGameStore((x) => x.npcs);
-  const rooms            = useGameStore((x) => x.rooms);
-  const avatar           = useGameStore((x) => x.avatar);
-  const session          = useGameStore((x) => x.session);
-  const inviteNpcToRoom  = useGameStore((x) => x.inviteNpcToRoom);
-  const playLoveRoomMoment = useGameStore((x) => x.playLoveRoomMoment);
-  const room             = rooms.find((r) => r.id === id);
-  const online           = npcs.filter((n) => n.presenceOnline);
-  const me               = avatar?.displayName ?? "Moi";
-  const myId             = session?.email ?? "local";
-  const [input, setInput]   = useState("");
-  const [invite, setInvite] = useState(false);
+// ── Vue room groupe ───────────────────────────────────────────────────────────
+function RoomView({ roomId, back }: { roomId: string; back: () => void }) {
+  const room         = useGameStore((s) => s.rooms.find((r) => r.id === roomId));
+  const messages     = useGameStore((s) => s.roomMessages[roomId] ?? []);
+  const npcs         = useGameStore((s) => s.npcs);
+  const avatar       = useGameStore((s) => s.avatar);
+  const session      = useGameStore((s) => s.session);
+  const sendMsg      = useGameStore((s) => s.sendRoomMessage);
+  const [input, setInput]  = useState("");
   const [typing, setTyping] = useState(false);
-  const [reactions, setReactions] = useState<Record<string, string>>({});
-  const scroll           = useRef<ScrollView>(null);
-  const typingTimer      = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => { setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 80); }, []);
-  useEffect(() => { scroll.current?.scrollToEnd({ animated: true }); }, [messages.length]);
-  useEffect(() => () => { if (typingTimer.current) clearTimeout(typingTimer.current); }, []);
-
-  function startTyping(ms = 1100) {
-    if (online.length === 0) return;
-    if (typingTimer.current) clearTimeout(typingTimer.current);
-    setTyping(true);
-    typingTimer.current = setTimeout(() => setTyping(false), ms);
-  }
-  function post(text: string) {
-    const clean = text.trim();
-    if (!clean) return;
-    sendRoomMessage(id, clean);
-    startTyping(clean.includes(WIZZ_TOKEN) ? 600 : 1200);
-  }
-  function send() { post(input); setInput(""); }
-  function playMoment(moment: LoveRoomMomentKind) {
-    playLoveRoomMoment(id, moment);
-    startTyping(900);
-  }
-  function sendWizz() { post(`${WIZZ_TOKEN} Wizz collectif ! Qui est là ?`); }
-
-  return (
-    <KeyboardAvoidingView style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
-      <Win title={name} subtitle={`${online.length + 1} en ligne`} onBack={back}
-        right={<Status text={`${online.length + 1} live`} color={L.teal} />}>
-        <Tools actions={[
-          { label: "Inviter",    icon: "person-add", active: true, onPress: () => room?.kind === "private" ? setInvite((v) => !v) : post("Qui rejoint ?") },
-          { label: "Code",       icon: "key",        onPress: () => room?.code && post(`Code room : ${room.code}`) },
-          { label: "Wizz",       icon: "flash",      active: true, onPress: sendWizz },
-          { label: "Vocal",      icon: "mic",        onPress: () => post("Message vocal : connecté.") },
-          { label: "Live",       icon: "radio",      onPress: () => post("Live check : qui est là ?") },
-          { label: "Activités",  icon: "sparkles",   onPress: () => post("Activité de groupe ?") },
-          { label: "Jeux",       icon: "game-controller", onPress: () => post("Mini-jeu social ?") },
-        ]} />
-        {room?.kind === "love" && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}
-            style={s.invites} contentContainerStyle={{ gap: 10, padding: 12 }}>
-            {LOVE_MOMENTS.map((moment) => (
-              <Pressable key={moment.key} onPress={() => playMoment(moment.key)}
-                style={[s.loveMoment, { borderColor: L.pink + "30", backgroundColor: L.pinkBg }]}>
-                <Ionicons name={moment.icon} size={16} color={L.pink} />
-                <Text style={[s.loveMomentText, { color: L.pink }]}>{moment.label}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-        {invite && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}
-            style={s.invites} contentContainerStyle={{ gap: 12, padding: 12 }}>
-            {online.map((n) => (
-              <Pressable key={n.id} onPress={() => { inviteNpcToRoom(id, n.id); setInvite(false); }} style={s.inviteNpc}>
-                <NpcFace npc={n} size={42} />
-                <Text style={s.inviteText} numberOfLines={1}>{n.name.split(" ")[0]}</Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        )}
-        <MemberRail me={me} online={online} invite={(npcId) => inviteNpcToRoom(id, npcId)} />
-        <InfoPanel
-          icon="radio"
-          title={room?.kind === "private" ? "Room privée" : "Room publique"}
-          body="Les messages partent dans la room. Invite des contacts pour qu'ils rejoignent."
-          action={room?.code ? `#${room.code}` : "Live"}
-          onPress={() => room?.code ? post(`Code : ${room.code}`) : post("Live check !")}
-        />
-        <ScrollView ref={scroll} style={{ flex: 1 }}
-          contentContainerStyle={s.msgList} showsVerticalScrollIndicator={false}>
-          {messages.length === 0 && <Text style={s.empty}>La room est ouverte. Écris ou invite un contact.</Text>}
-          {messages.map((m) => {
-            const isMe = m.authorId === myId || m.authorId === "local" || m.authorName === me;
-            const npc  = npcs.find((n) => n.id === m.authorId) ?? null;
-            if (m.kind === "system") return <Text key={m.id} style={s.systemGold}>{m.body}</Text>;
-            return (
-              <Bubble key={m.id}
-                body={m.body}
-                time={new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
-                me={isMe} author={m.authorName} npc={npc}
-                reaction={reactions[m.id]}
-                onReact={(emoji) => setReactions((cur) => ({ ...cur, [m.id]: emoji }))}
-              />
-            );
-          })}
-          {typing && <TypingIndicator name={online[0]?.name.split(" ")[0] ?? "La room"} />}
-        </ScrollView>
-        <Quick items={["Salut la room ! 😀", "Je viens d'arriver.", "Activité de groupe ? 🎮", "Qui est là ? 👀"]} pick={post} />
-        <Composer value={input} change={setInput} send={send} macro={post} wizz={sendWizz} />
-      </Win>
-    </KeyboardAvoidingView>
-  );
-}
-
-function ContactRow({ c, npc, score, open }: { c: Conversation; npc: NpcState | null; score?: number; open: () => void }) {
-  const last = c.messages.at(-1);
-  return (
-    <Pressable onPress={open} style={[s.rowCard, c.unreadCount > 0 && s.rowUnread]}>
-      {npc ? <NpcFace npc={npc} size={48} /> : <PlayerFace name={c.title} size={48} />}
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <View style={s.rowTop}>
-          <Text style={s.rowTitle} numberOfLines={1}>{c.title}</Text>
-          {last && <Text style={s.rowTime}>{new Date(last.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</Text>}
-        </View>
-        <Text style={{ color: npc?.presenceOnline ? L.green : L.muted, fontSize: 10, fontWeight: "700" }} numberOfLines={1}>
-          {npc?.presenceOnline ? "● En ligne" : score !== undefined ? `Lien ${score}%` : c.subtitle}
-        </Text>
-        <Text style={s.preview} numberOfLines={1}>{last?.body ?? "Commencer une conversation"}</Text>
-      </View>
-      {score !== undefined && (
-        <View style={s.relTrack}>
-          <View style={{ height: 4, width: `${Math.min(100, score)}%`, backgroundColor: relColor(score), borderRadius: 2 }} />
-        </View>
-      )}
-      {c.unreadCount > 0 && (
-        <View style={s.badge}><Text style={s.badgeText}>{c.unreadCount}</Text></View>
-      )}
-    </Pressable>
-  );
-}
-
-function RoomRow({ room, last, open }: { room: Room; last?: RoomMessage; open: () => void }) {
-  const prv = room.kind === "private";
-  const love = room.kind === "love";
-  return (
-    <Pressable onPress={open} style={[s.rowCard, prv && { backgroundColor: L.purpleBg, borderColor: L.purple + "30" }, love && { backgroundColor: L.pinkBg, borderColor: L.pink + "30" }]}>
-      <View style={[s.roomIcon, {
-        backgroundColor: love ? L.pinkBg : prv ? L.purpleBg : L.primaryBg,
-        borderColor: love ? L.pink + "35" : prv ? L.purple + "35" : L.primary + "30"
-      }]}>
-        <Ionicons name={love ? "heart" : prv ? "lock-closed" : "people"} size={20} color={love ? L.pink : prv ? L.purple : L.primary} />
-      </View>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <View style={s.rowTop}>
-          <Text style={s.rowTitle} numberOfLines={1}>{room.name}</Text>
-          {room.code && <Text style={s.code}>#{room.code}</Text>}
-        </View>
-        <Text style={s.rowMeta}>{room.memberCount}/{room.maxMembers} membres · {room.kind}</Text>
-        <Text style={s.preview} numberOfLines={1}>{last?.body ?? room.description}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={16} color={L.muted} />
-    </Pressable>
-  );
-}
-
-export default function ChatScreen() {
-  const conversations         = useGameStore((x) => x.conversations);
-  const npcs                  = useGameStore((x) => x.npcs);
-  const relationships         = useGameStore((x) => x.relationships);
-  const rooms                 = useGameStore((x) => x.rooms);
-  const joinedRooms           = useGameStore((x) => x.joinedRooms);
-  const roomInvites           = useGameStore((x) => x.roomInvites);
-  const createPrivateRoom     = useGameStore((x) => x.createPrivateRoom);
-  const respondRoomInvite     = useGameStore((x) => x.respondRoomInvite);
-  const invitations           = useGameStore((x) => x.invitations);
-  const datePlans             = useGameStore((x) => x.datePlans);
-  const respondInvitation     = useGameStore((x) => x.respondInvitation);
-  const startDirectConversation = useGameStore((x) => x.startDirectConversation);
-  const openLoveRoom          = useGameStore((x) => x.openLoveRoom);
-  const avatar                = useGameStore((x) => x.avatar);
-  const roomMessages          = useGameStore((x) => x.roomMessages);
-  const [tab, setTab]         = useState<Tab>("contacts");
-  const [convId, setConvId]   = useState<string | null>(null);
-  const [roomId, setRoomId]   = useState<string | null>(null);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [roomName, setRoomName]     = useState("");
-  const fade = useRef(new Animated.Value(1)).current;
+  const scroll = useRef<ScrollView>(null);
+  const timer  = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const online = npcs.filter((n) => n.presenceOnline);
+  const myId   = session?.email ?? "local";
+  const me     = avatar?.displayName ?? "Moi";
+  const name   = room?.name ?? "Room";
 
   useEffect(() => {
-    fade.setValue(0);
-    Animated.timing(fade, { toValue: 1, duration: 220, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
-  }, [tab, fade]);
+    setTimeout(() => scroll.current?.scrollToEnd({ animated: false }), 80);
+  }, []);
+  useEffect(() => { scroll.current?.scrollToEnd({ animated: true }); }, [messages.length]);
 
-  const openConv = conversations.find((c) => c.id === convId);
-  if (convId && openConv) return (
-    <ConversationView
-      conv={openConv}
-      npc={openConv.peerId ? npcs.find((n) => n.id === openConv.peerId) ?? null : null}
-      back={() => setConvId(null)}
-      openRoom={(id) => {
-        setConvId(null);
-        setRoomId(id);
-      }}
-    />
-  );
-  if (roomId) {
-    const room = rooms.find((r) => r.id === roomId);
-    return <RoomView id={roomId} name={room?.name ?? "Room"} back={() => setRoomId(null)} />;
+  function send(text: string) {
+    const t = text.trim();
+    if (!t) return;
+    sendMsg(roomId, t);
+    if (online.length > 0) {
+      if (timer.current) clearTimeout(timer.current);
+      setTyping(true);
+      timer.current = setTimeout(() => setTyping(false), 1200);
+    }
   }
-
-  const hub            = buildSocialHubSnapshot({ avatar, conversations, npcs, relationships, rooms, joinedRooms, roomInvites, invitations, roomMessages });
-  const online         = hub.onlineNpcs;
-  const sorted         = hub.sortedConversations;
-  const myRooms        = hub.myRooms;
-  const otherRooms     = hub.otherRooms;
-  const pendingRooms   = hub.pendingRoomInvites;
-  const pendingInvites = hub.pendingInvitations;
-  const unread         = hub.unreadTotal;
-  const loungeLast     = hub.loungeLastMessage;
-  const topMatches     = getBestProfileMatches(avatar, starterResidents, relationships).slice(0, 3);
-  const worldRooms     = WORLD_ROOM_IDS
-    .map((id) => rooms.find((room) => room.id === id))
-    .filter((room): room is Room => Boolean(room));
-  const loveCandidates = starterResidents
-    .filter((resident) => resident.lookingFor.includes("relation amoureuse"))
-    .map((resident) => ({
-      resident,
-      access: loveRoomAccess({ residentId: resident.id, relationships, conversations, invitations, datePlans }),
-      room: rooms.find((room) => room.id === `love-${resident.id}`)
-    }))
-    .sort((a, b) => b.access.progress - a.access.progress);
-
-  const tabMeta: Record<Tab, { label: string; icon: IconName; badge: number }> = {
-    contacts: { label: "Contacts", icon: "person",  badge: unread          },
-    rooms:    { label: "Rooms",    icon: "people",   badge: pendingRooms.length },
-    lounge:   { label: "Monde",    icon: "globe",    badge: 0               },
-    love:     { label: "Love",     icon: "heart",    badge: loveCandidates.filter((item) => item.access.unlocked).length },
-  };
-
-  function makeRoom() {
-    const room = createPrivateRoom(roomName.trim() || "Room privée");
-    setRoomName(""); setCreateOpen(false); setRoomId(room.id);
-  }
-  function openMatch(residentId: string, residentName: string) {
-    const existing = conversations.find((c) => c.kind === "direct" && c.peerId === residentId);
-    startDirectConversation(residentId, residentName);
-    setConvId(existing?.id ?? `dm-${residentId}`);
-  }
-  function enterLove(residentId: string) {
-    const result = openLoveRoom(residentId);
-    if (result.ok && result.room) setRoomId(result.room.id);
-  }
+  function handleSend() { send(input); setInput(""); }
+  function sendWizz() { send(`${WIZZ} Wizz collectif ! Qui est là ?`); }
 
   return (
-    <Win
-      title="Messages"
-      subtitle={`${online.length} en ligne${unread ? ` · ${unread} non lu` : ""}`}
-      right={<PlayerFace name={avatar?.displayName} visual={avatar ? getAvatarVisual(avatar) : null} size={38} />}
-    >
-      {/* Hub */}
-      <View style={s.hub}>
-        {/* Shortcuts */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.shortcuts}>
-          <Pressable onPress={() => router.push("/(app)/(tabs)/world")}
-            style={[s.shortcut, { backgroundColor: L.primaryBg, borderColor: L.primary + "30" }]}>
-            <Ionicons name="map" size={16} color={L.primary} />
-            <Text style={[s.shortcutText, { color: L.primary }]}>Carte</Text>
-          </Pressable>
-          <Pressable onPress={() => router.push("/(app)/quartiers" as never)}
-            style={[s.shortcut, { backgroundColor: L.tealBg, borderColor: L.teal + "30" }]}>
-            <Ionicons name="radio" size={16} color={L.teal} />
-            <Text style={[s.shortcutText, { color: L.teal }]}>Quartiers live</Text>
-          </Pressable>
-          <Pressable onPress={() => { const room = createPrivateRoom("Groupe"); setRoomId(room.id); }}
-            style={[s.shortcut, { backgroundColor: L.purpleBg, borderColor: L.purple + "30" }]}>
-            <Ionicons name="add-circle" size={16} color={L.purple} />
-            <Text style={[s.shortcutText, { color: L.purple }]}>Groupe</Text>
-          </Pressable>
-        </ScrollView>
+    <KeyboardAvoidingView style={{ flex: 1, backgroundColor: C.bg }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined} keyboardVerticalOffset={90}>
 
-        {/* Métriques */}
-        <View style={s.dashboard}>
-          {[
-            { value: online.length, label: "en ligne",  color: L.green  },
-            { value: unread,        label: "non lus",   color: unread > 0 ? L.red : L.muted },
-            { value: myRooms.length, label: "rooms",    color: L.primary },
-            { value: pendingInvites.length + pendingRooms.length, label: "invitations", color: L.gold },
-          ].map((m) => (
-            <View key={m.label} style={[s.metric, { borderColor: m.color + "20", backgroundColor: m.color + "08" }]}>
-              <Text style={[s.metricValue, { color: m.color }]}>{m.value}</Text>
-              <Text style={s.metricLabel}>{m.label}</Text>
+      {/* Header */}
+      <View style={s.convHeader}>
+        <Pressable onPress={back} style={s.backBtn}>
+          <Ionicons name="chevron-back" size={20} color={C.text} />
+        </Pressable>
+        <View style={[s.roomIconWrap, {
+          backgroundColor: room?.kind === "love" ? C.pinkBg : room?.kind === "private" ? C.purpleBg : C.goldBg,
+          borderColor: room?.kind === "love" ? C.pink + "40" : room?.kind === "private" ? C.purple + "40" : C.gold + "40",
+        }]}>
+          <Ionicons
+            name={room?.kind === "love" ? "heart" : room?.kind === "private" ? "lock-closed" : "people"}
+            size={18}
+            color={room?.kind === "love" ? C.pink : room?.kind === "private" ? C.purple : C.gold}
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={s.convName}>{name}</Text>
+          <Text style={{ color: C.muted, fontSize: 11 }}>{online.length + 1} membre{online.length > 0 ? "s" : ""} · en ligne</Text>
+        </View>
+        {room?.code && (
+          <View style={{ backgroundColor: C.goldBg, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, borderWidth: 1, borderColor: C.gold + "30" }}>
+            <Text style={{ color: C.gold, fontSize: 10, fontWeight: "800" }}>#{room.code}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Membres online */}
+      {online.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          style={{ backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.border }}
+          contentContainerStyle={{ gap: 12, paddingHorizontal: 14, paddingVertical: 8 }}>
+          <View style={{ alignItems: "center", gap: 3 }}>
+            <InitialAvatar name={me} size={32} />
+            <Text style={{ color: C.soft, fontSize: 9, fontWeight: "700" }}>{me.split(" ")[0]}</Text>
+          </View>
+          {online.slice(0, 8).map((n) => (
+            <View key={n.id} style={{ alignItems: "center", gap: 3 }}>
+              <NpcAvatar npc={n} size={32} />
+              <Text style={{ color: C.soft, fontSize: 9, fontWeight: "700" }}>{n.name.split(" ")[0]}</Text>
             </View>
           ))}
-        </View>
+        </ScrollView>
+      )}
 
-        {/* Contacts en ligne */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.onlineStrip}>
+      {/* Messages */}
+      <ScrollView ref={scroll} style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, gap: 10 }}
+        showsVerticalScrollIndicator={false}>
+        {messages.length === 0 && <Text style={s.empty}>La room est ouverte. Dis bonjour 👋</Text>}
+        {messages.map((m) => {
+          const isMe = m.authorId === myId || m.authorId === "local" || m.authorName === me;
+          const npc  = npcs.find((n) => n.id === m.authorId) ?? null;
+          if (m.kind === "system") return <Text key={m.id} style={[s.sysMsg, { color: C.gold }]}>{m.body}</Text>;
+          return (
+            <Bubble key={m.id}
+              body={m.body}
+              time={new Date(m.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+              me={isMe} npc={isMe ? null : npc}
+            />
+          );
+        })}
+        {typing && <Typing name={online[0]?.name.split(" ")[0] ?? "…"} />}
+      </ScrollView>
+
+      <Composer value={input} onChange={setInput} onSend={handleSend} onWizz={sendWizz} />
+    </KeyboardAvoidingView>
+  );
+}
+
+// ── Ligne de contact ──────────────────────────────────────────────────────────
+function ConvRow({ c, npc, score, onPress }: { c: Conversation; npc: NpcState | null; score?: number; onPress: () => void }) {
+  const last = c.messages.at(-1);
+  const online = npc?.presenceOnline;
+  return (
+    <Pressable onPress={onPress} style={[s.convRow, c.unreadCount > 0 && { borderColor: C.gold + "30", backgroundColor: C.goldBg }]}>
+      {npc ? <NpcAvatar npc={npc} size={48} /> : <InitialAvatar name={c.title} size={48} />}
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={[s.convRowName, c.unreadCount > 0 && { color: C.gold }]} numberOfLines={1}>{c.title}</Text>
+          {last && <Text style={{ color: C.muted, fontSize: 10, marginLeft: "auto" }}>
+            {new Date(last.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}
+          </Text>}
+        </View>
+        <Text style={{ color: online ? C.green : score !== undefined ? C.gold : C.muted, fontSize: 10, fontWeight: "700", marginTop: 1 }}>
+          {online ? "● En ligne" : score !== undefined ? `Lien ${score}%` : ""}
+        </Text>
+        <Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+          {last?.body ?? "Commencer une conversation"}
+        </Text>
+      </View>
+      {c.unreadCount > 0 && (
+        <View style={s.unreadBadge}><Text style={s.badgeText}>{c.unreadCount}</Text></View>
+      )}
+    </Pressable>
+  );
+}
+
+// ── Ligne room ────────────────────────────────────────────────────────────────
+function RoomRow({ room, last, onPress }: { room: Room; last?: RoomMessage; onPress: () => void }) {
+  const isLove = room.kind === "love";
+  const isPriv = room.kind === "private";
+  return (
+    <Pressable onPress={onPress} style={[s.convRow,
+      isLove && { backgroundColor: C.pinkBg, borderColor: C.pink + "25" },
+      isPriv && { backgroundColor: C.purpleBg, borderColor: C.purple + "25" },
+    ]}>
+      <View style={[s.roomIconWrap, {
+        backgroundColor: isLove ? C.pinkBg : isPriv ? C.purpleBg : C.goldBg,
+        borderColor: isLove ? C.pink + "40" : isPriv ? C.purple + "40" : C.gold + "40",
+      }]}>
+        <Ionicons name={isLove ? "heart" : isPriv ? "lock-closed" : "people"} size={20}
+          color={isLove ? C.pink : isPriv ? C.purple : C.gold} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Text style={s.convRowName} numberOfLines={1}>{room.name}</Text>
+          {room.code && <Text style={{ color: C.gold, fontSize: 10, fontWeight: "800" }}>#{room.code}</Text>}
+        </View>
+        <Text style={{ color: C.muted, fontSize: 11, marginTop: 1 }}>{room.memberCount}/{room.maxMembers} membres</Text>
+        <Text style={{ color: C.muted, fontSize: 12, marginTop: 2 }} numberOfLines={1}>
+          {last?.body ?? room.description}
+        </Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={C.muted} />
+    </Pressable>
+  );
+}
+
+// ── Écran principal ────────────────────────────────────────────────────────────
+export default function ChatScreen() {
+  const conversations       = useGameStore((s) => s.conversations);
+  const npcs                = useGameStore((s) => s.npcs);
+  const relationships       = useGameStore((s) => s.relationships);
+  const rooms               = useGameStore((s) => s.rooms);
+  const joinedRooms         = useGameStore((s) => s.joinedRooms);
+  const roomInvites         = useGameStore((s) => s.roomInvites);
+  const roomMessages        = useGameStore((s) => s.roomMessages);
+  const invitations         = useGameStore((s) => s.invitations);
+  const respondInvitation   = useGameStore((s) => s.respondInvitation);
+  const respondRoomInvite   = useGameStore((s) => s.respondRoomInvite);
+  const createPrivateRoom   = useGameStore((s) => s.createPrivateRoom);
+  const startDirectConv     = useGameStore((s) => s.startDirectConversation);
+  const avatar              = useGameStore((s) => s.avatar);
+
+  const [tab, setTab]     = useState<Tab>("messages");
+  const [convId, setConvId] = useState<string | null>(null);
+  const [roomId, setRoomId] = useState<string | null>(null);
+  const [newRoom, setNewRoom] = useState(false);
+  const [roomName, setRoomName] = useState("");
+
+  // Ouvre directement si on vient de la map (DM deep-link)
+  useEffect(() => {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    const match = url.match(/targetId=([^&]+)/);
+    if (match) {
+      const targetId = decodeURIComponent(match[1]);
+      const targetName = decodeURIComponent((url.match(/targetName=([^&]+)/) ?? [])[1] ?? targetId);
+      startDirectConv(targetId, targetName);
+      const c = conversations.find((cv) => cv.peerId === targetId);
+      if (c) setConvId(c.id);
+    }
+  }, []);
+
+  if (convId) return <ConvView convId={convId} back={() => setConvId(null)} />;
+  if (roomId) return <RoomView roomId={roomId} back={() => setRoomId(null)} />;
+
+  const hub          = buildSocialHubSnapshot({ avatar, conversations, npcs, relationships, rooms, joinedRooms, roomInvites, invitations, roomMessages });
+  const online       = hub.onlineNpcs;
+  const sorted       = hub.sortedConversations;
+  const myRooms      = hub.myRooms;
+  const otherRooms   = hub.otherRooms;
+  const pending      = hub.pendingInvitations;
+  const pendingRooms = hub.pendingRoomInvites;
+  const unread       = hub.unreadTotal;
+
+  // Love candidates
+  const loveCandidates = starterResidents
+    .filter((r) => r.lookingFor.includes("relation amoureuse"))
+    .map((r) => {
+      const rel  = relationships.find((x) => x.residentId === r.id);
+      const msgs = conversations.find((c) => c.peerId === r.id)?.messages.filter((m) => m.kind === "message").length ?? 0;
+      const prog = Math.min(100, Math.round((rel?.score ?? 0) * 0.72 + Math.min(10, msgs) * 3));
+      return { r, npc: npcs.find((n) => n.id === r.id) ?? null, prog, unlocked: prog >= 76 };
+    })
+    .sort((a, b) => b.prog - a.prog);
+
+  const TABS: { key: Tab; label: string; icon: IconName; badge: number }[] = [
+    { key: "messages", label: "Messages", icon: "chatbubble-ellipses", badge: unread },
+    { key: "rooms",    label: "Rooms",    icon: "people",              badge: pendingRooms.length },
+    { key: "love",     label: "Love",     icon: "heart",               badge: loveCandidates.filter((l) => l.unlocked).length },
+  ];
+
+  function openConv(residentId: string, residentName: string) {
+    startDirectConv(residentId, residentName);
+    const c = conversations.find((cv) => cv.peerId === residentId);
+    if (c) setConvId(c.id);
+    else setTimeout(() => {
+      const nc = useGameStore.getState().conversations.find((cv) => cv.peerId === residentId);
+      if (nc) setConvId(nc.id);
+    }, 50);
+  }
+
+  function makeRoom() {
+    const r = createPrivateRoom(roomName.trim() || "Room privée");
+    setRoomName(""); setNewRoom(false); setRoomId(r.id);
+  }
+
+  return (
+    <View style={{ flex: 1, backgroundColor: C.bg }}>
+
+      {/* Header */}
+      <View style={s.header}>
+        <View>
+          <Text style={s.headerTitle}>Messages</Text>
+          <Text style={{ color: C.muted, fontSize: 11, fontWeight: "600", marginTop: 1 }}>
+            {online.length} en ligne{unread > 0 ? ` · ${unread} non lu` : ""}
+          </Text>
+        </View>
+        <Pressable onPress={() => router.push("/(app)/(tabs)/map" as never)}
+          style={{ backgroundColor: C.goldBg, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: C.gold + "30", flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Ionicons name="map" size={14} color={C.gold} />
+          <Text style={{ color: C.gold, fontSize: 12, fontWeight: "700" }}>Map</Text>
+        </Pressable>
+      </View>
+
+      {/* Contacts online */}
+      {online.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          style={{ backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.border }}
+          contentContainerStyle={{ paddingHorizontal: 14, paddingVertical: 10, gap: 14 }}>
           {online.map((npc) => {
-            const c     = conversations.find((conv) => conv.peerId === npc.id);
-            const score = relationshipScore(relationships, npc.id);
+            const c = conversations.find((cv) => cv.peerId === npc.id);
             return (
-              <Pressable key={npc.id} onPress={() => c && setConvId(c.id)} style={s.onlineItem}>
-                <NpcFace npc={npc} size={48} />
-                <Text style={{ color: score >= 40 ? L.primary : L.muted, fontSize: 10, fontWeight: "700" }} numberOfLines={1}>
+              <Pressable key={npc.id} onPress={() => c ? setConvId(c.id) : openConv(npc.id, npc.name)}
+                style={{ alignItems: "center", gap: 4, width: 52 }}>
+                <NpcAvatar npc={npc} size={44} />
+                <Text style={{ color: C.soft, fontSize: 10, fontWeight: "700" }} numberOfLines={1}>
                   {npc.name.split(" ")[0]}
                 </Text>
               </Pressable>
             );
           })}
         </ScrollView>
+      )}
 
-        {/* Tabs */}
-        <View style={s.tabs}>
-          {(["contacts", "rooms", "lounge", "love"] as Tab[]).map((key) => (
-            <Pressable key={key} onPress={() => setTab(key)} style={[s.tab, tab === key && s.tabActive]}>
-              <Ionicons name={tabMeta[key].icon} size={14} color={tab === key ? L.primary : L.muted} />
-              <Text style={{ color: tab === key ? L.primary : L.muted, fontSize: 12, fontWeight: "800" }}>
-                {tabMeta[key].label}
-              </Text>
-              {tabMeta[key].badge > 0 && (
-                <View style={s.tabBadge}><Text style={s.badgeText}>{tabMeta[key].badge}</Text></View>
-              )}
-            </Pressable>
-          ))}
-        </View>
+      {/* Tabs */}
+      <View style={s.tabs}>
+        {TABS.map((t) => (
+          <Pressable key={t.key} onPress={() => setTab(t.key)} style={[s.tabItem, tab === t.key && s.tabActive]}>
+            <Ionicons name={t.icon} size={15} color={tab === t.key ? C.gold : C.muted} />
+            <Text style={{ color: tab === t.key ? C.gold : C.muted, fontSize: 12, fontWeight: "800" }}>{t.label}</Text>
+            {t.badge > 0 && (
+              <View style={s.tabBadge}><Text style={s.badgeText}>{t.badge}</Text></View>
+            )}
+          </Pressable>
+        ))}
       </View>
 
-      {/* Contenu */}
-      <Animated.View style={{ flex: 1, opacity: fade }}>
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 28 }} showsVerticalScrollIndicator={false}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14, paddingBottom: 32 }} showsVerticalScrollIndicator={false}>
 
-          {/* Invitations */}
-          {(pendingInvites.length > 0 || pendingRooms.length > 0) && (
-            <View style={s.inviteBox}>
-              <Text style={s.inviteTitle}>Invitations en attente</Text>
-              {pendingInvites.map((i) => (
-                <View key={i.id} style={s.inviteLine}>
-                  <Text style={s.inviteBody}>{i.residentName} propose {activities.find((a) => a.slug === i.activitySlug)?.name ?? i.activitySlug}</Text>
-                  <Pressable onPress={() => respondInvitation(i.id, "accepted")} style={s.ok}><Ionicons name="checkmark" size={16} color={L.green} /></Pressable>
-                  <Pressable onPress={() => respondInvitation(i.id, "declined")} style={s.no}><Ionicons name="close" size={16} color={L.red} /></Pressable>
-                </View>
-              ))}
-              {pendingRooms.map((i) => (
-                <View key={i.id} style={s.inviteLine}>
-                  <Text style={s.inviteBody}>{i.fromName} t'invite dans {i.roomName}</Text>
-                  <Pressable onPress={() => respondRoomInvite(i.id, "accepted")} style={s.ok}><Ionicons name="checkmark" size={16} color={L.green} /></Pressable>
-                  <Pressable onPress={() => respondRoomInvite(i.id, "declined")} style={s.no}><Ionicons name="close" size={16} color={L.red} /></Pressable>
-                </View>
-              ))}
-            </View>
-          )}
-
-          {tab === "contacts" && (
-            <View>
-              <Text style={s.section}>SUGGESTIONS</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.matchStrip}>
-                {topMatches.map((match) => {
-                  const npc = npcs.find((item) => item.id === match.resident.id) ?? null;
-                  return (
-                    <Pressable key={match.resident.id}
-                      onPress={() => openMatch(match.resident.id, match.resident.name)} style={s.matchCard}>
-                      {npc ? <NpcFace npc={npc} size={42} /> : <PlayerFace name={match.resident.name} size={42} />}
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text style={s.matchName} numberOfLines={1}>{match.resident.name}</Text>
-                        <Text style={s.matchScore}>Match {match.score}%</Text>
-                        <Text style={s.matchReason} numberOfLines={1}>{match.reasons[0]}</Text>
-                      </View>
-                      <Ionicons name="chatbubble-ellipses" size={16} color={L.primary} />
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
-
-              <Text style={s.section}>EN LIGNE</Text>
-              {hub.friendOnline.length === 0 && (
-                <InfoPanel icon="person" title="Aucun proche en ligne" body="Les contacts restent accessibles dans Messages. Rejoins le lounge pour trouver du monde."
-                  action="Monde" onPress={() => setRoomId("room-lounge-global")} />
-              )}
-              {hub.friendOnline.map((npc) => {
-                const c = conversations.find((conv) => conv.peerId === npc.id);
-                const score = relationships.find((r) => r.residentId === npc.id)?.score;
-                return c ? <ContactRow key={npc.id} c={c} npc={npc} score={score} open={() => setConvId(c.id)} /> : null;
-              })}
-
-              <Text style={s.section}>MESSAGES</Text>
-              {sorted.map((c) => {
-                const npc   = c.peerId ? npcs.find((n) => n.id === c.peerId) ?? null : null;
-                const score = c.peerId ? relationships.find((r) => r.residentId === c.peerId)?.score : undefined;
-                return <ContactRow key={c.id} c={c} npc={npc} score={score} open={() => setConvId(c.id)} />;
-              })}
-            </View>
-          )}
-
-          {tab === "rooms" && (
-            <View>
-              <View style={s.createBox}>
-                {!createOpen
-                  ? <Pressable onPress={() => setCreateOpen(true)} style={s.createBtn}>
-                      <Ionicons name="add-circle" size={20} color={L.primary} />
-                      <Text style={s.createText}>Créer une room groupée</Text>
-                    </Pressable>
-                  : <View style={{ gap: 10 }}>
-                      <TextInput value={roomName} onChangeText={setRoomName} placeholder="Nom de la room"
-                        placeholderTextColor={L.muted} style={s.createInput} />
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        <Pressable onPress={makeRoom} style={s.createOk}><Text style={s.createOkText}>Créer</Text></Pressable>
-                        <Pressable onPress={() => { setCreateOpen(false); setRoomName(""); }} style={s.createCancel}>
-                          <Text style={s.createCancelText}>Annuler</Text>
-                        </Pressable>
-                      </View>
-                    </View>
-                }
-              </View>
-              <Text style={s.section}>MES ROOMS</Text>
-              {myRooms.map((r) => <RoomRow key={r.id} room={r} last={(roomMessages[r.id] ?? []).at(-1)} open={() => setRoomId(r.id)} />)}
-              {myRooms.length === 0 && (
-                <InfoPanel icon="people" title="Pas encore de room active"
-                  body="Crée une room groupée pour inviter des contacts et tester le chat live."
-                  action="Créer" onPress={makeRoom} />
-              )}
-              <Text style={s.section}>REJOINDRE</Text>
-              {otherRooms.map((r) => <RoomRow key={r.id} room={r} last={(roomMessages[r.id] ?? []).at(-1)} open={() => setRoomId(r.id)} />)}
-            </View>
-          )}
-
-          {tab === "lounge" && (
-            <View>
-              <View style={s.loungeCard}>
-                <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: L.tealBg,
-                  alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: L.teal + "30" }}>
-                  <Ionicons name="globe" size={26} color={L.teal} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.loungeTitle}>Chat Monde</Text>
-                  <Text style={s.loungeBody}>Global, villes, rooms et presence live.</Text>
-                  {loungeLast && (
-                    <Text style={s.loungeLast} numberOfLines={2}>{loungeLast.authorName}: {loungeLast.body}</Text>
-                  )}
-                </View>
-                <Pressable onPress={() => setRoomId("room-lounge-global")} style={s.loungeBtn}>
-                  <Ionicons name="enter" size={16} color="#fff" />
-                  <Text style={s.loungeBtnText}>Entrer</Text>
+        {/* Invitations en attente */}
+        {(pending.length > 0 || pendingRooms.length > 0) && (
+          <View style={s.inviteBox}>
+            <Text style={s.inviteTitle}>⏳ Invitations en attente</Text>
+            {pending.map((i) => (
+              <View key={i.id} style={s.inviteLine}>
+                <Text style={s.inviteBody} numberOfLines={1}>
+                  {i.residentName} — {activities.find((a) => a.slug === i.activitySlug)?.name ?? i.activitySlug}
+                </Text>
+                <Pressable onPress={() => respondInvitation(i.id, "accepted")} style={s.okBtn}>
+                  <Ionicons name="checkmark" size={16} color={C.green} />
+                </Pressable>
+                <Pressable onPress={() => respondInvitation(i.id, "declined")} style={s.noBtn}>
+                  <Ionicons name="close" size={16} color={C.red} />
                 </Pressable>
               </View>
-              <Text style={s.section}>SALONS MONDE</Text>
-              {worldRooms.map((room) => (
-                <RoomRow key={room.id} room={room} last={(roomMessages[room.id] ?? []).at(-1)} open={() => setRoomId(room.id)} />
-              ))}
-              <Text style={s.section}>DERNIERS MESSAGES</Text>
-              {(roomMessages["room-lounge-global"] ?? []).slice(-10).reverse().map((m) =>
-                m.kind === "system" ? null : (
-                  <View key={m.id} style={s.publicMsg}>
-                    <Text style={s.publicAuthor}>{m.authorName}</Text>
-                    <Text style={s.preview} numberOfLines={2}>{m.body}</Text>
-                  </View>
-                )
-              )}
-            </View>
-          )}
+            ))}
+            {pendingRooms.map((i) => (
+              <View key={i.id} style={s.inviteLine}>
+                <Text style={s.inviteBody} numberOfLines={1}>{i.fromName} t'invite dans {i.roomName}</Text>
+                <Pressable onPress={() => respondRoomInvite(i.id, "accepted")} style={s.okBtn}>
+                  <Ionicons name="checkmark" size={16} color={C.green} />
+                </Pressable>
+                <Pressable onPress={() => respondRoomInvite(i.id, "declined")} style={s.noBtn}>
+                  <Ionicons name="close" size={16} color={C.red} />
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
 
-          {tab === "love" && (
-            <View>
-              <View style={s.loveHero}>
-                <View style={s.loveHeroIcon}>
-                  <Ionicons name="heart" size={24} color={L.pink} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={s.loveHeroTitle}>Love Rooms</Text>
-                  <Text style={s.loveHeroBody}>
-                    Acces bloque tant qu'il n'y a pas assez d'affinite, de messages reciproques et d'activites partagees.
-                  </Text>
+        {/* ── TAB MESSAGES ── */}
+        {tab === "messages" && (
+          <View style={{ gap: 8 }}>
+            {sorted.length === 0 && (
+              <View style={s.emptyState}>
+                <Text style={{ fontSize: 32, marginBottom: 8 }}>💬</Text>
+                <Text style={{ color: C.soft, fontSize: 15, fontWeight: "700" }}>Aucun message</Text>
+                <Text style={{ color: C.muted, fontSize: 13, textAlign: "center", marginTop: 4 }}>
+                  Clique sur un contact en ligne ci-dessus pour commencer.
+                </Text>
+              </View>
+            )}
+            {sorted.map((c) => {
+              const npc   = c.peerId ? npcs.find((n) => n.id === c.peerId) ?? null : null;
+              const score = c.peerId ? relationships.find((r) => r.residentId === c.peerId)?.score : undefined;
+              return <ConvRow key={c.id} c={c} npc={npc} score={score} onPress={() => setConvId(c.id)} />;
+            })}
+          </View>
+        )}
+
+        {/* ── TAB ROOMS ── */}
+        {tab === "rooms" && (
+          <View style={{ gap: 8 }}>
+            {/* Créer une room */}
+            {!newRoom ? (
+              <Pressable onPress={() => setNewRoom(true)} style={s.createRoomBtn}>
+                <Ionicons name="add-circle" size={18} color={C.gold} />
+                <Text style={{ color: C.gold, fontSize: 13, fontWeight: "700" }}>Créer une room</Text>
+              </Pressable>
+            ) : (
+              <View style={{ backgroundColor: C.card, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: C.border, gap: 10 }}>
+                <TextInput value={roomName} onChangeText={setRoomName} placeholder="Nom de la room"
+                  placeholderTextColor={C.muted} style={s.input} autoFocus />
+                <View style={{ flexDirection: "row", gap: 8 }}>
+                  <Pressable onPress={makeRoom} style={[s.sendBtn, { flex: 1, height: 44, borderRadius: 12 }]}>
+                    <Text style={{ color: "#000", fontWeight: "800", fontSize: 13 }}>Créer</Text>
+                  </Pressable>
+                  <Pressable onPress={() => { setNewRoom(false); setRoomName(""); }}
+                    style={{ flex: 1, height: 44, borderRadius: 12, backgroundColor: C.bg, borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ color: C.soft, fontWeight: "700", fontSize: 13 }}>Annuler</Text>
+                  </Pressable>
                 </View>
               </View>
+            )}
 
-              <Text style={s.section}>ACCES</Text>
-              {loveCandidates.map(({ resident, access, room }) => {
-                const npc = npcs.find((item) => item.id === resident.id) ?? null;
-                return (
-                  <View key={resident.id} style={[s.loveCandidate, access.unlocked && { borderColor: L.pink + "40", backgroundColor: L.pinkBg }]}>
-                    {npc ? <NpcFace npc={npc} size={48} /> : <PlayerFace name={resident.name} size={48} />}
-                    <View style={{ flex: 1, minWidth: 0 }}>
-                      <View style={s.rowTop}>
-                        <Text style={s.rowTitle} numberOfLines={1}>{resident.name}</Text>
-                        <Text style={{ color: access.unlocked ? L.pink : L.muted, fontSize: 11, fontWeight: "900" }}>
-                          {access.progress}%
-                        </Text>
-                      </View>
-                      <View style={s.loveProgress}>
-                        <View style={{ width: `${access.progress}%`, height: 6, borderRadius: 3, backgroundColor: access.unlocked ? L.pink : L.gold }} />
-                      </View>
-                      <Text style={s.preview} numberOfLines={1}>
-                        {access.unlocked ? "Match relationnel debloque" : `Messages ${access.messageCount} - activites ${access.acceptedInvitations + access.dateSignal}`}
-                      </Text>
-                    </View>
-                    <Pressable
-                      onPress={() => access.unlocked ? enterLove(resident.id) : openMatch(resident.id, resident.name)}
-                      style={[s.loveAction, { backgroundColor: access.unlocked ? L.pink : L.primary }]}>
-                      <Text style={s.loveActionText}>{access.unlocked ? (room ? "Entrer" : "Creer") : "DM"}</Text>
-                    </Pressable>
-                  </View>
-                );
-              })}
+            {myRooms.length > 0 && (
+              <>
+                <Text style={s.sectionLabel}>MES ROOMS</Text>
+                {myRooms.map((r) => <RoomRow key={r.id} room={r} last={(roomMessages[r.id] ?? []).at(-1)} onPress={() => setRoomId(r.id)} />)}
+              </>
+            )}
+            {otherRooms.length > 0 && (
+              <>
+                <Text style={s.sectionLabel}>REJOINDRE</Text>
+                {otherRooms.map((r) => <RoomRow key={r.id} room={r} last={(roomMessages[r.id] ?? []).at(-1)} onPress={() => setRoomId(r.id)} />)}
+              </>
+            )}
+            {myRooms.length === 0 && otherRooms.length === 0 && (
+              <View style={s.emptyState}>
+                <Text style={{ fontSize: 32, marginBottom: 8 }}>🏠</Text>
+                <Text style={{ color: C.soft, fontSize: 15, fontWeight: "700" }}>Pas encore de room</Text>
+                <Text style={{ color: C.muted, fontSize: 13, textAlign: "center", marginTop: 4 }}>Crée une room pour inviter tes contacts.</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* ── TAB LOVE ── */}
+        {tab === "love" && (
+          <View style={{ gap: 8 }}>
+            <View style={{ backgroundColor: C.pinkBg, borderRadius: 16, borderWidth: 1, borderColor: C.pink + "25", padding: 16, marginBottom: 4, flexDirection: "row", gap: 12, alignItems: "center" }}>
+              <Ionicons name="heart" size={24} color={C.pink} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: C.text, fontSize: 15, fontWeight: "900" }}>Love Rooms</Text>
+                <Text style={{ color: C.soft, fontSize: 12, marginTop: 3, lineHeight: 17 }}>
+                  Parle, invite et fais des activités pour débloquer l'accès.
+                </Text>
+              </View>
             </View>
-          )}
+            {loveCandidates.map(({ r, npc, prog, unlocked }) => (
+              <Pressable key={r.id}
+                onPress={() => unlocked
+                  ? setRoomId(`love-${r.id}`)
+                  : openConv(r.id, r.name)
+                }
+                style={[s.convRow, unlocked && { borderColor: C.pink + "40", backgroundColor: C.pinkBg }]}>
+                {npc ? <NpcAvatar npc={npc} size={48} /> : <InitialAvatar name={r.name} size={48} color={C.pink} />}
+                <View style={{ flex: 1, minWidth: 0, gap: 4 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center" }}>
+                    <Text style={[s.convRowName, { flex: 1 }]} numberOfLines={1}>{r.name}</Text>
+                    <Text style={{ color: unlocked ? C.pink : C.muted, fontSize: 11, fontWeight: "900" }}>{prog}%</Text>
+                  </View>
+                  <View style={{ height: 5, borderRadius: 3, backgroundColor: C.border, overflow: "hidden" }}>
+                    <View style={{ width: `${prog}%`, height: 5, borderRadius: 3, backgroundColor: unlocked ? C.pink : C.gold }} />
+                  </View>
+                  <Text style={{ color: C.muted, fontSize: 11 }} numberOfLines={1}>
+                    {unlocked ? "💕 Love Room débloquée — Entrer" : "Continue à parler pour débloquer"}
+                  </Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
-        </ScrollView>
-      </Animated.View>
-    </Win>
+      </ScrollView>
+    </View>
   );
 }
 
 const s = StyleSheet.create({
-  root:               { flex: 1, backgroundColor: L.bg },
-  win:                { flex: 1, backgroundColor: L.bg },
-  titleBar:           { paddingTop: 52, paddingBottom: 12, paddingHorizontal: 16,
-                        backgroundColor: L.card, flexDirection: "row", alignItems: "center", gap: 10,
-                        borderBottomWidth: 1, borderBottomColor: L.border,
-                        shadowColor: "rgba(0,0,0,0.04)", shadowOpacity: 1, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
-  back:               { width: 34, height: 34, borderRadius: 10, backgroundColor: L.bg, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: L.border },
-  logo:               { width: 36, height: 36, borderRadius: 10, backgroundColor: L.primaryBg, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: L.primary + "30" },
-  title:              { color: L.text, fontSize: 17, fontWeight: "900" },
-  subtitle:           { color: L.muted, fontSize: 11, fontWeight: "600" },
-  status:             { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 999, borderWidth: 1 },
-  statusDot:          { width: 7, height: 7, borderRadius: 4 },
-  statusText:         { fontSize: 10, fontWeight: "800" },
-  dot:                { width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: L.card },
-  dotAbs:             { position: "absolute", right: 0, bottom: 0 },
-  faceWrap:           { position: "relative", alignItems: "center", justifyContent: "center" },
-  playerFace:         { borderRadius: 12, backgroundColor: L.primaryBg, borderWidth: 2, borderColor: L.primary + "40", alignItems: "center", justifyContent: "center" },
-  playerInitial:      { color: L.primary, fontSize: 14, fontWeight: "900" },
-  tools:              { backgroundColor: L.card, borderBottomWidth: 1, borderBottomColor: L.border },
-  toolsBody:          { paddingHorizontal: 12, paddingVertical: 8, gap: 8 },
-  toolBtn:            { width: 68, minHeight: 54, borderRadius: 12, alignItems: "center", justifyContent: "center", gap: 4, backgroundColor: L.bg, borderWidth: 1, borderColor: L.border },
-  toolBtnActive:      { backgroundColor: L.primaryBg, borderColor: L.primary + "40" },
-  toolText:           { color: L.muted, fontSize: 9, fontWeight: "700", textAlign: "center" },
-  quick:              { backgroundColor: L.card, borderTopWidth: 1, borderTopColor: L.border },
-  quickBody:          { gap: 8, paddingHorizontal: 14, paddingVertical: 8 },
-  quickChip:          { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: L.primaryBg, borderWidth: 1, borderColor: L.primary + "25" },
-  quickText:          { color: L.primary, fontSize: 12, fontWeight: "700" },
-  composer:           { backgroundColor: L.card, borderTopWidth: 1, borderTopColor: L.border },
-  formatLine:         { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
-  bigA:               { color: L.muted, fontSize: 18, fontWeight: "900" },
-  macro:              { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  wizzBtn:            { height: 34, borderRadius: 10, paddingHorizontal: 10, alignItems: "center", justifyContent: "center", borderWidth: 1, flexDirection: "row", gap: 4 },
-  wizzBtnText:        { fontSize: 11, fontWeight: "800" },
-  emojiTray:          { flexDirection: "row", flexWrap: "wrap", gap: 6, paddingHorizontal: 12, paddingBottom: 8 },
-  emojiBtn:           { width: 34, height: 34, borderRadius: 10, alignItems: "center", justifyContent: "center", backgroundColor: L.bg, borderWidth: 1, borderColor: L.border },
-  emojiText:          { fontSize: 18 },
-  nudgeBar:           { borderTopWidth: 1, borderTopColor: L.border },
-  nudgeBody:          { gap: 8, paddingHorizontal: 12, paddingBottom: 8 },
-  nudgeChip:          { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, backgroundColor: L.bg, borderWidth: 1, borderColor: L.border },
-  nudgeText:          { color: L.textSoft, fontSize: 11, fontWeight: "600" },
-  inputLine:          { flexDirection: "row", alignItems: "flex-end", gap: 10, paddingHorizontal: 12, paddingBottom: 10 },
-  input:              { flex: 1, minHeight: 44, maxHeight: 110, backgroundColor: L.bg, borderRadius: 14, paddingHorizontal: 14, paddingVertical: 11, color: L.text, fontSize: 14, borderWidth: 1, borderColor: L.border },
-  send:               { width: 80, height: 44, borderRadius: 14, backgroundColor: L.primary, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6 },
-  sendText:           { color: "#fff", fontSize: 12, fontWeight: "800" },
-  msgList:            { padding: 16, gap: 10 },
-  msgRow:             { flexDirection: "row", gap: 8, alignItems: "flex-end" },
-  anon:               { width: 32, height: 32, borderRadius: 10, backgroundColor: L.bg, borderWidth: 1, borderColor: L.border, alignItems: "center", justifyContent: "center" },
-  bubbleCol:          { maxWidth: "78%", gap: 3 },
-  author:             { color: L.primary, fontSize: 10, fontWeight: "800", marginLeft: 6 },
-  bubble:             { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 18, borderWidth: 1 },
-  bubbleMe:           { backgroundColor: L.primary, borderColor: L.primary, borderBottomRightRadius: 4 },
-  bubbleOther:        { backgroundColor: L.card, borderColor: L.border, borderBottomLeftRadius: 4,
-                        shadowColor: "rgba(0,0,0,0.04)", shadowOpacity: 1, shadowRadius: 4, shadowOffset: { width: 0, height: 1 } },
-  wizzBubble:         { backgroundColor: L.goldBg, borderColor: L.gold + "60" },
-  wizzHeader:         { flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 3 },
-  wizzLabel:          { color: L.gold, fontSize: 9, fontWeight: "900" },
-  wizzText:           { fontWeight: "900" },
-  bubbleText:         { color: L.text, fontSize: 14, lineHeight: 20 },
-  time:               { color: L.muted, fontSize: 9, marginTop: 4 },
-  delivery:           { color: L.muted, fontSize: 9, marginTop: 2, paddingHorizontal: 4 },
-  reactionLine:       { flexDirection: "row", gap: 4, marginTop: 4 },
-  reactionBtn:        { width: 28, height: 28, borderRadius: 14, backgroundColor: L.bg, borderWidth: 1, borderColor: L.border, alignItems: "center", justifyContent: "center" },
-  reactionBtnActive:  { backgroundColor: L.primaryBg, borderColor: L.primary + "50" },
-  reactionBadge:      { marginTop: -4, minWidth: 28, height: 22, borderRadius: 11, backgroundColor: L.card, borderWidth: 1, borderColor: L.border, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, alignSelf: "flex-start" },
-  reactionText:       { fontSize: 14 },
-  typingRow:          { flexDirection: "row", alignItems: "center", marginTop: 2 },
-  typingBubble:       { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, backgroundColor: L.card, borderWidth: 1, borderColor: L.border, alignSelf: "flex-start" },
-  typingDots:         { flexDirection: "row", gap: 3 },
-  typingDot:          { width: 5, height: 5, borderRadius: 3, backgroundColor: L.primary },
-  typingText:         { color: L.muted, fontSize: 11, fontWeight: "600" },
-  system:             { color: L.muted, fontSize: 11, textAlign: "center" },
-  systemGold:         { color: L.gold, fontSize: 11, textAlign: "center" },
-  empty:              { color: L.muted, textAlign: "center", marginTop: 30, fontSize: 13 },
-  invites:            { backgroundColor: L.card, borderBottomWidth: 1, borderBottomColor: L.border },
-  inviteNpc:          { width: 62, alignItems: "center", gap: 4 },
-  inviteText:         { color: L.textSoft, fontSize: 10, fontWeight: "700" },
-  hub:                { backgroundColor: L.card, borderBottomWidth: 1, borderBottomColor: L.border },
-  shortcuts:          { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
-  shortcut:           { minWidth: 100, borderRadius: 14, paddingVertical: 9, paddingHorizontal: 12, borderWidth: 1, flexDirection: "row", alignItems: "center", gap: 7 },
-  shortcutText:       { fontSize: 12, fontWeight: "700" },
-  onlineStrip:        { paddingHorizontal: 14, paddingBottom: 12, gap: 12 },
-  onlineItem:         { alignItems: "center", gap: 4, width: 56 },
-  tabs:               { flexDirection: "row", paddingHorizontal: 12, gap: 4, borderTopWidth: 1, borderTopColor: L.border },
-  tab:                { flex: 1, paddingVertical: 11, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 5, position: "relative" },
-  tabActive:          { borderBottomWidth: 2.5, borderBottomColor: L.primary },
-  tabBadge:           { position: "absolute", top: 5, right: 10, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: L.red, alignItems: "center", justifyContent: "center", paddingHorizontal: 3 },
-  badgeText:          { color: "#fff", fontSize: 9, fontWeight: "900" },
-  inviteBox:          { backgroundColor: L.goldBg, borderRadius: 16, borderWidth: 1, borderColor: L.gold + "30", padding: 12, gap: 8, marginBottom: 14 },
-  inviteTitle:        { color: L.gold, fontSize: 12, fontWeight: "800" },
-  inviteLine:         { flexDirection: "row", alignItems: "center", gap: 8 },
-  inviteBody:         { color: L.textSoft, fontSize: 12, flex: 1 },
-  ok:                 { padding: 7, borderRadius: 8, backgroundColor: L.greenBg, borderWidth: 1, borderColor: L.green + "25" },
-  no:                 { padding: 7, borderRadius: 8, backgroundColor: L.redBg, borderWidth: 1, borderColor: L.red + "25" },
-  section:            { color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1, marginTop: 10, marginBottom: 8 },
-  rowCard:            { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 16, backgroundColor: L.card, borderWidth: 1, borderColor: L.border, marginBottom: 8,
-                        shadowColor: "rgba(0,0,0,0.04)", shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } },
-  rowUnread:          { backgroundColor: L.primaryBg, borderColor: L.primary + "25" },
-  rowTop:             { flexDirection: "row", alignItems: "center", gap: 6 },
-  rowTitle:           { color: L.text, fontSize: 14, fontWeight: "800", flex: 1 },
-  rowTime:            { color: L.muted, fontSize: 10 },
-  rowMeta:            { color: L.muted, fontSize: 11, marginTop: 2 },
-  preview:            { color: L.muted, fontSize: 12, marginTop: 3 },
-  relTrack:           { width: 40, height: 4, borderRadius: 2, backgroundColor: L.border, overflow: "hidden" },
-  badge:              { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: L.red, alignItems: "center", justifyContent: "center", paddingHorizontal: 5 },
-  roomIcon:           { width: 46, height: 46, borderRadius: 14, alignItems: "center", justifyContent: "center", borderWidth: 1 },
-  code:               { color: L.gold, fontSize: 10, fontWeight: "800" },
-  createBox:          { backgroundColor: L.card, borderRadius: 16, borderWidth: 1, borderColor: L.border, padding: 12, marginBottom: 14 },
-  createBtn:          { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, backgroundColor: L.primaryBg, borderRadius: 12, padding: 13, borderWidth: 1, borderColor: L.primary + "30" },
-  createText:         { color: L.primary, fontSize: 13, fontWeight: "700" },
-  createInput:        { backgroundColor: L.bg, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 11, color: L.text, borderWidth: 1, borderColor: L.border },
-  createOk:           { flex: 1, borderRadius: 12, padding: 12, alignItems: "center", backgroundColor: L.primary },
-  createOkText:       { color: "#fff", fontSize: 12, fontWeight: "800" },
-  createCancel:       { flex: 1, borderRadius: 12, padding: 12, alignItems: "center", backgroundColor: L.bg, borderWidth: 1, borderColor: L.border },
-  createCancelText:   { color: L.textSoft, fontSize: 12, fontWeight: "700" },
-  loungeCard:         { backgroundColor: L.card, borderRadius: 18, borderWidth: 1, borderColor: L.teal + "25", padding: 16, marginBottom: 14, gap: 12, flexDirection: "row", alignItems: "flex-start",
-                        shadowColor: L.teal, shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 3 } },
-  loungeTitle:        { color: L.text, fontSize: 16, fontWeight: "800" },
-  loungeBody:         { color: L.muted, fontSize: 12, marginTop: 2 },
-  loungeLast:         { color: L.textSoft, fontSize: 12, backgroundColor: L.bg, borderRadius: 10, padding: 8, marginTop: 6 },
-  loungeBtn:          { borderRadius: 12, backgroundColor: L.teal, paddingHorizontal: 14, paddingVertical: 10, alignItems: "center", flexDirection: "row", gap: 6, marginTop: 4 },
-  loungeBtnText:      { color: "#fff", fontSize: 12, fontWeight: "800" },
-  publicMsg:          { padding: 11, borderRadius: 12, backgroundColor: L.card, borderWidth: 1, borderColor: L.border, marginBottom: 8 },
-  publicAuthor:       { color: L.primary, fontSize: 11, fontWeight: "800" },
-  loveMoment:         { minWidth: 96, height: 42, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center", flexDirection: "row", gap: 6, paddingHorizontal: 10 },
-  loveMomentText:     { fontSize: 12, fontWeight: "800" },
-  loveHero:           { backgroundColor: L.pinkBg, borderRadius: 18, borderWidth: 1, borderColor: L.pink + "25", padding: 16, marginBottom: 14, flexDirection: "row", gap: 12, alignItems: "center" },
-  loveHeroIcon:       { width: 48, height: 48, borderRadius: 16, backgroundColor: "#fff", alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: L.pink + "25" },
-  loveHeroTitle:      { color: L.text, fontSize: 16, fontWeight: "900" },
-  loveHeroBody:       { color: L.textSoft, fontSize: 12, marginTop: 3, lineHeight: 17 },
-  loveCandidate:      { flexDirection: "row", alignItems: "center", gap: 12, padding: 12, borderRadius: 16, backgroundColor: L.card, borderWidth: 1, borderColor: L.border, marginBottom: 8 },
-  loveProgress:       { height: 6, borderRadius: 3, backgroundColor: L.border, overflow: "hidden", marginTop: 5 },
-  loveAction:         { minWidth: 64, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
-  loveActionText:     { color: "#fff", fontSize: 11, fontWeight: "900" },
-  infoPanel:          { flexDirection: "row", alignItems: "center", gap: 10, marginHorizontal: 12, marginTop: 8, marginBottom: 6, padding: 12, borderRadius: 14, backgroundColor: L.primaryBg, borderWidth: 1, borderColor: L.primary + "20" },
-  infoIcon:           { width: 32, height: 32, borderRadius: 10, backgroundColor: L.primaryBg, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: L.primary + "30" },
-  infoTitle:          { color: L.text, fontSize: 12, fontWeight: "800" },
-  infoBody:           { color: L.muted, fontSize: 11, lineHeight: 16, marginTop: 2 },
-  infoAction:         { paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, backgroundColor: L.primary },
-  infoActionText:     { color: "#fff", fontSize: 11, fontWeight: "800" },
-  memberRail:         { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: L.bg, borderBottomWidth: 1, borderBottomColor: L.border },
-  memberMe:           { width: 70, alignItems: "center", gap: 3, borderRightWidth: 1, borderRightColor: L.border, paddingRight: 10 },
-  memberList:         { gap: 10 },
-  memberItem:         { width: 54, alignItems: "center", gap: 3 },
-  memberName:         { color: L.muted, fontSize: 9, fontWeight: "700", textAlign: "center" },
-  dashboard:          { flexDirection: "row", gap: 8, paddingHorizontal: 12, paddingBottom: 10 },
-  metric:             { flex: 1, minHeight: 56, borderRadius: 14, borderWidth: 1, alignItems: "center", justifyContent: "center", gap: 2 },
-  metricValue:        { fontSize: 18, fontWeight: "900" },
-  metricLabel:        { color: L.muted, fontSize: 9, fontWeight: "700" },
-  matchStrip:         { gap: 10, paddingBottom: 10 },
-  matchCard:          { width: 220, minHeight: 72, flexDirection: "row", alignItems: "center", gap: 10, padding: 11, borderRadius: 16, backgroundColor: L.primaryBg, borderWidth: 1, borderColor: L.primary + "25",
-                        shadowColor: L.primary, shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 2 } },
-  matchName:          { color: L.text, fontSize: 13, fontWeight: "800" },
-  matchScore:         { color: L.primary, fontSize: 11, fontWeight: "800", marginTop: 2 },
-  matchReason:        { color: L.muted, fontSize: 10, marginTop: 2 },
+  header:       { paddingTop: 54, paddingBottom: 14, paddingHorizontal: 18, flexDirection: "row",
+                  alignItems: "center", justifyContent: "space-between",
+                  backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.border },
+  headerTitle:  { color: C.text, fontSize: 22, fontWeight: "900" },
+  tabs:         { flexDirection: "row", backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.border },
+  tabItem:      { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+                  gap: 6, paddingVertical: 12, position: "relative" },
+  tabActive:    { borderBottomWidth: 2.5, borderBottomColor: C.gold },
+  tabBadge:     { position: "absolute", top: 6, right: 12, minWidth: 16, height: 16,
+                  borderRadius: 8, backgroundColor: C.red, alignItems: "center",
+                  justifyContent: "center", paddingHorizontal: 3 },
+  badgeText:    { color: "#fff", fontSize: 9, fontWeight: "900" },
+
+  sectionLabel: { color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1, marginTop: 6, marginBottom: 4 },
+
+  convRow:      { flexDirection: "row", alignItems: "center", gap: 12, padding: 12,
+                  borderRadius: 16, backgroundColor: C.card, borderWidth: 1,
+                  borderColor: C.border },
+  convRowName:  { color: C.text, fontSize: 14, fontWeight: "800" },
+  unreadBadge:  { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: C.red,
+                  alignItems: "center", justifyContent: "center", paddingHorizontal: 4 },
+
+  convHeader:   { paddingTop: 52, paddingBottom: 12, paddingHorizontal: 14,
+                  backgroundColor: C.card, borderBottomWidth: 1, borderBottomColor: C.border,
+                  flexDirection: "row", alignItems: "center", gap: 10 },
+  convName:     { color: C.text, fontSize: 16, fontWeight: "900" },
+  backBtn:      { width: 36, height: 36, borderRadius: 10, backgroundColor: C.bg,
+                  alignItems: "center", justifyContent: "center",
+                  borderWidth: 1, borderColor: C.border },
+  roomIconWrap: { width: 44, height: 44, borderRadius: 14, alignItems: "center",
+                  justifyContent: "center", borderWidth: 1 },
+
+  row:          { flexDirection: "row", gap: 8, alignItems: "flex-end" },
+  anonDot:      { width: 32, height: 32, borderRadius: 10, backgroundColor: C.card,
+                  borderWidth: 1, borderColor: C.border, alignItems: "center", justifyContent: "center" },
+  bubble:       { maxWidth: "78%", paddingHorizontal: 14, paddingVertical: 10,
+                  borderRadius: 18, borderWidth: 1 },
+  bubbleMe:     { backgroundColor: C.gold, borderColor: C.gold, borderBottomRightRadius: 4 },
+  bubbleOther:  { backgroundColor: C.card, borderColor: C.border, borderBottomLeftRadius: 4 },
+  bubbleText:   { color: C.text, fontSize: 14, lineHeight: 20 },
+  timeText:     { color: C.muted, fontSize: 9, marginTop: 4 },
+
+  typingBubble: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12,
+                  paddingVertical: 8, borderRadius: 16, backgroundColor: C.card,
+                  borderWidth: 1, borderColor: C.border, alignSelf: "flex-start", marginTop: 4 },
+
+  composer:     { backgroundColor: C.card, borderTopWidth: 1, borderTopColor: C.border },
+  composerRow:  { flexDirection: "row", alignItems: "flex-end", gap: 8,
+                  paddingHorizontal: 12, paddingVertical: 10 },
+  emojiRow:     { flexDirection: "row", flexWrap: "wrap", gap: 6,
+                  paddingHorizontal: 12, paddingTop: 10 },
+  emojiBtn:     { width: 36, height: 36, borderRadius: 10, alignItems: "center",
+                  justifyContent: "center", backgroundColor: C.bg,
+                  borderWidth: 1, borderColor: C.border },
+  iconBtn:      { width: 40, height: 40, borderRadius: 12, alignItems: "center",
+                  justifyContent: "center", backgroundColor: C.bg,
+                  borderWidth: 1, borderColor: C.border },
+  wizzBtn:      { flexDirection: "row", alignItems: "center", gap: 4, height: 40,
+                  paddingHorizontal: 10, borderRadius: 12, backgroundColor: C.goldBg,
+                  borderWidth: 1, borderColor: C.gold + "35" },
+  input:        { flex: 1, minHeight: 40, maxHeight: 100, backgroundColor: C.bg,
+                  borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10,
+                  color: C.text, fontSize: 14, borderWidth: 1, borderColor: C.border },
+  sendBtn:      { width: 40, height: 40, borderRadius: 12, backgroundColor: C.gold,
+                  alignItems: "center", justifyContent: "center" },
+
+  onlineDot:    { position: "absolute", right: 0, bottom: 0, width: 10, height: 10,
+                  borderRadius: 5, borderWidth: 2, borderColor: C.card },
+  initAvatar:   { alignItems: "center", justifyContent: "center", borderWidth: 2 },
+  initText:     { fontWeight: "900" },
+
+  inviteBox:    { backgroundColor: C.goldBg, borderRadius: 16, borderWidth: 1,
+                  borderColor: C.gold + "30", padding: 14, gap: 10, marginBottom: 14 },
+  inviteTitle:  { color: C.gold, fontSize: 12, fontWeight: "800" },
+  inviteLine:   { flexDirection: "row", alignItems: "center", gap: 8 },
+  inviteBody:   { color: C.soft, fontSize: 12, flex: 1 },
+  okBtn:        { padding: 7, borderRadius: 8, backgroundColor: "#0B1F07",
+                  borderWidth: 1, borderColor: C.green + "25" },
+  noBtn:        { padding: 7, borderRadius: 8, backgroundColor: "#1F0707",
+                  borderWidth: 1, borderColor: C.red + "25" },
+
+  createRoomBtn:{ flexDirection: "row", alignItems: "center", justifyContent: "center",
+                  gap: 8, backgroundColor: C.goldBg, borderRadius: 14, padding: 14,
+                  borderWidth: 1, borderColor: C.gold + "30" },
+
+  emptyState:   { alignItems: "center", paddingVertical: 48 },
+  empty:        { color: C.muted, textAlign: "center", marginTop: 30, fontSize: 13 },
+  sysMsg:       { color: C.muted, fontSize: 11, textAlign: "center", marginVertical: 4 },
 });

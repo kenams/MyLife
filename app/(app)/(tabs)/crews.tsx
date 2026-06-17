@@ -4,7 +4,8 @@ import { Animated, Modal, Pressable, ScrollView, Text, TextInput, View } from "r
 
 import { useGameStore } from "@/stores/game-store";
 import {
-  type Crew, CREW_COLORS, createCrew, fetchCrews, joinCrew, getMyCrewId,
+  type Crew, type LeaveCrewResult, CREW_COLORS,
+  createCrew, fetchCrews, joinCrew, getMyCrewId, leaveCrew, getCrewCooldown,
 } from "@/lib/crews";
 
 const C = {
@@ -99,11 +100,19 @@ export default function CrewsScreen() {
   const playerName   = avatar?.displayName ?? "Joueur";
   const playerEmoji  = "🧢";
 
+  const playerXp         = useGameStore((s) => s.stats?.socialRankScore ?? 0);
+  const playerReputation = useGameStore((s) => s.stats?.reputation ?? 0);
+  const playerMoney      = useGameStore((s) => s.stats?.money ?? 0);
+
   const [crews,       setCrews]       = useState<Crew[]>([]);
   const [myCrewId,    setMyCrewId]    = useState<string | null>(null);
   const [showCreate,  setShowCreate]  = useState(false);
   const [loading,     setLoading]     = useState(true);
   const [toast,       setToast]       = useState<string | null>(null);
+  const [leaveModal,  setLeaveModal]  = useState(false);
+  const [leaveResult, setLeaveResult] = useState<LeaveCrewResult | null>(null);
+  const [leaving,     setLeaving]     = useState(false);
+  const [cooldown,    setCooldown]    = useState<Date | null>(null);
   const toastAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
@@ -118,6 +127,7 @@ export default function CrewsScreen() {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
     fetchCrews().then((data) => { setCrews(data); setLoading(false); });
     getMyCrewId(playerName).then(setMyCrewId);
+    getCrewCooldown(playerName).then(setCooldown);
   }, []);
 
   function showToast(msg: string) {
@@ -130,8 +140,38 @@ export default function CrewsScreen() {
     ]).start(() => setToast(null));
   }
 
+  async function handleLeave() {
+    if (!myCrewId) return;
+    setLeaving(true);
+    const result = await leaveCrew(myCrewId, playerName, playerXp, playerReputation, playerMoney);
+    setLeaving(false);
+    if (result.blocked) {
+      showToast(result.error ?? "Impossible de quitter");
+      setLeaveModal(false);
+      return;
+    }
+    if (result.ok) {
+      setCrews((prev) => prev.map((x) =>
+        x.id === myCrewId ? { ...x, member_count: Math.max(0, x.member_count - 1) } : x
+      ));
+      setMyCrewId(null);
+      setLeaveResult(result);
+      setLeaveModal(false);
+      const until = new Date(Date.now() + result.penalties.cooldownDays * 86400000);
+      setCooldown(until);
+    } else {
+      showToast(result.error ?? "Erreur");
+      setLeaveModal(false);
+    }
+  }
+
   async function handleJoin(crewId: string) {
     if (myCrewId) { showToast("Tu es déjà dans un crew"); return; }
+    if (cooldown && cooldown > new Date()) {
+      const days = Math.ceil((cooldown.getTime() - Date.now()) / 86400000);
+      showToast(`Cooldown actif — encore ${days}j avant de rejoindre`);
+      return;
+    }
     const ok = await joinCrew(crewId, playerName, playerEmoji);
     if (ok) {
       setMyCrewId(crewId);
@@ -184,22 +224,58 @@ export default function CrewsScreen() {
           const mc = crews.find((c) => c.id === myCrewId);
           if (!mc) return null;
           return (
-            <View style={{ backgroundColor: mc.color + "12", borderRadius: 12, padding: 14,
-              borderWidth: 1, borderColor: mc.color + "35", marginBottom: 20,
-              flexDirection: "row", alignItems: "center", gap: 10 }}>
-              <Text style={{ fontSize: 22 }}>{mc.emoji}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: mc.color, fontSize: 13, fontWeight: "900" }}>
-                  [{mc.tag}] {mc.name}
-                </Text>
-                <Text style={{ color: C.textSoft, fontSize: 11 }}>
-                  {mc.member_count} membres · {mc.reputation} rep
-                </Text>
+            <View style={{ backgroundColor: mc.color + "12", borderRadius: 14, padding: 14,
+              borderWidth: 1, borderColor: mc.color + "35", marginBottom: 20 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+                <Text style={{ fontSize: 24 }}>{mc.emoji}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: mc.color, fontSize: 14, fontWeight: "900" }}>
+                    [{mc.tag}] {mc.name}
+                  </Text>
+                  <Text style={{ color: C.textSoft, fontSize: 11, marginTop: 1 }}>
+                    {mc.member_count} membres · {mc.reputation} rep
+                  </Text>
+                </View>
+                <Text style={{ color: C.green, fontSize: 11, fontWeight: "800" }}>✓ MEMBRE</Text>
               </View>
-              <Text style={{ color: C.green, fontSize: 11, fontWeight: "800" }}>✓ MEMBRE</Text>
+              <Pressable onPress={() => setLeaveModal(true)}
+                style={{ marginTop: 12, borderRadius: 10, paddingVertical: 10,
+                  alignItems: "center", borderWidth: 1,
+                  borderColor: C.red + "40", backgroundColor: C.red + "10" }}>
+                <Text style={{ color: C.red, fontSize: 12, fontWeight: "800" }}>
+                  Quitter le crew
+                </Text>
+              </Pressable>
             </View>
           );
         })()}
+
+        {/* Cooldown banner */}
+        {!myCrewId && cooldown && cooldown > new Date() && (
+          <View style={{ backgroundColor: "#1A0808", borderRadius: 12, padding: 14,
+            borderWidth: 1, borderColor: C.red + "30", marginBottom: 20 }}>
+            <Text style={{ color: C.red, fontSize: 13, fontWeight: "800" }}>⏳ Cooldown actif</Text>
+            <Text style={{ color: C.textSoft, fontSize: 12, marginTop: 4 }}>
+              Tu as quitté un crew. Tu peux en rejoindre un autre le{" "}
+              {cooldown.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}.
+            </Text>
+          </View>
+        )}
+
+        {/* Résultat après avoir quitté */}
+        {leaveResult?.ok && (
+          <View style={{ backgroundColor: "#1A0808", borderRadius: 12, padding: 14,
+            borderWidth: 1, borderColor: C.red + "30", marginBottom: 20, gap: 6 }}>
+            <Text style={{ color: C.red, fontSize: 13, fontWeight: "900" }}>⚠ Crew quitté — pénalités appliquées</Text>
+            <Text style={{ color: C.textSoft, fontSize: 12 }}>−{leaveResult.penalties.xpLost} XP</Text>
+            <Text style={{ color: C.textSoft, fontSize: 12 }}>−{leaveResult.penalties.reputationLost} réputation (−15%)</Text>
+            <Text style={{ color: C.textSoft, fontSize: 12 }}>−{leaveResult.penalties.moneyLost} coins</Text>
+            <Text style={{ color: C.textSoft, fontSize: 12 }}>🚫 Cooldown {leaveResult.penalties.cooldownDays} jours</Text>
+            <Pressable onPress={() => setLeaveResult(null)} style={{ marginTop: 4 }}>
+              <Text style={{ color: C.muted, fontSize: 11 }}>Fermer</Text>
+            </Pressable>
+          </View>
+        )}
 
         {/* Créer crew CTA */}
         {!myCrewId && (
@@ -317,6 +393,61 @@ export default function CrewsScreen() {
               </Pressable>
             </View>
           </View>
+        </View>
+      </Modal>
+
+      {/* Modale quitter crew */}
+      <Modal visible={leaveModal} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.88)", justifyContent: "center", padding: 24 }}>
+          {(() => {
+            const mc = crews.find((c) => c.id === myCrewId);
+            if (!mc) return null;
+            const repLoss = Math.round(playerReputation * 0.15);
+            return (
+              <View style={{ backgroundColor: C.card, borderRadius: 20, padding: 24,
+                borderWidth: 1, borderColor: C.red + "40" }}>
+                <Text style={{ color: C.red, fontSize: 18, fontWeight: "900", textAlign: "center" }}>
+                  ⚠ Quitter [{mc.tag}] {mc.name} ?
+                </Text>
+                <Text style={{ color: C.textSoft, fontSize: 13, textAlign: "center",
+                  marginTop: 8, marginBottom: 20, lineHeight: 20 }}>
+                  Cette action est définitive. Les pénalités s'appliquent immédiatement.
+                </Text>
+
+                {/* Pénalités */}
+                <View style={{ backgroundColor: "#1A0808", borderRadius: 12, padding: 14, gap: 8,
+                  borderWidth: 1, borderColor: C.red + "25", marginBottom: 20 }}>
+                  <Text style={{ color: C.red, fontSize: 11, fontWeight: "900", letterSpacing: 1 }}>PÉNALITÉS</Text>
+                  {[
+                    ["📉", "−250 XP"],
+                    ["💔", `−${repLoss} réputation (−15%)`],
+                    ["💸", "−500 coins"],
+                    ["🚫", "Cooldown 7 jours (impossible de rejoindre un autre crew)"],
+                  ].map(([icon, label]) => (
+                    <View key={label} style={{ flexDirection: "row", alignItems: "flex-start", gap: 8 }}>
+                      <Text style={{ fontSize: 14 }}>{icon}</Text>
+                      <Text style={{ color: C.textSoft, fontSize: 13, flex: 1 }}>{label}</Text>
+                    </View>
+                  ))}
+                </View>
+
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <Pressable onPress={() => setLeaveModal(false)}
+                    style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center",
+                      backgroundColor: C.card, borderWidth: 1, borderColor: C.border }}>
+                    <Text style={{ color: C.textSoft, fontWeight: "800" }}>Annuler</Text>
+                  </Pressable>
+                  <Pressable onPress={() => void handleLeave()} disabled={leaving}
+                    style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center",
+                      backgroundColor: C.red + "20", borderWidth: 1, borderColor: C.red + "50" }}>
+                    <Text style={{ color: C.red, fontWeight: "900" }}>
+                      {leaving ? "..." : "Confirmer"}
+                    </Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })()}
         </View>
       </Modal>
 

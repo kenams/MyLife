@@ -810,19 +810,30 @@ export default function LifeMapScreen() {
           </Text>
         </View>
       ) : (
-        /* Bouton recentrage — en bas à droite au-dessus des contrôles zoom */
-        <Pressable
-          onPress={() => zoomAnimTrigger(myLocation.lat, myLocation.lng)}
-          style={{
-            position: "absolute", bottom: 160, right: 20, zIndex: 5,
-            width: 48, height: 48, borderRadius: 14,
-            backgroundColor: "rgba(8,8,15,0.92)",
-            borderWidth: 1.5, borderColor: C.gold + "60",
-            alignItems: "center", justifyContent: "center",
-            shadowColor: C.gold, shadowOpacity: 0.4, shadowRadius: 12,
-          }}>
-          <Text style={{ fontSize: 22 }}>🎯</Text>
-        </Pressable>
+        /* Boutons recentrage + mode discret */
+        <View style={{ position: "absolute", bottom: 160, right: 20, zIndex: 5, gap: 8 }}>
+          <Pressable
+            onPress={() => zoomAnimTrigger(myLocation.lat, myLocation.lng)}
+            style={{
+              width: 48, height: 48, borderRadius: 14,
+              backgroundColor: "rgba(8,8,15,0.92)",
+              borderWidth: 1.5, borderColor: C.gold + "60",
+              alignItems: "center", justifyContent: "center",
+              shadowColor: C.gold, shadowOpacity: 0.4, shadowRadius: 12,
+            }}>
+            <Text style={{ fontSize: 22 }}>🎯</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => void handleStatusChange("ghost")}
+            style={{
+              width: 48, height: 48, borderRadius: 14,
+              backgroundColor: myStatus === "ghost" ? "rgba(74,72,68,0.5)" : "rgba(8,8,15,0.92)",
+              borderWidth: 1.5, borderColor: "rgba(74,72,68,0.6)",
+              alignItems: "center", justifyContent: "center",
+            }}>
+            <Text style={{ fontSize: 20 }}>👻</Text>
+          </Pressable>
+        </View>
       )}
 
       {/* ── MODALS ────────────────────────────────────────────────────────── */}

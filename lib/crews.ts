@@ -230,6 +230,100 @@ export async function claimZone(
   return !error;
 }
 
+// ── Pénalités de quitter un crew ──────────────────────────────────────────────
+export interface LeaveCrewResult {
+  ok: boolean;
+  blocked?: boolean;    // leader ne peut pas quitter sans transférer
+  penalties: {
+    xpLost: number;       // -250 XP
+    reputationLost: number; // -15% réputation
+    cooldownDays: number;   // 7 jours sans rejoindre un autre crew
+    moneyLost: number;      // -500 coins de trésorerie crew
+  };
+  error?: string;
+}
+
+export async function leaveCrew(
+  crewId: string,
+  playerName: string,
+  playerXp: number,
+  playerReputation: number,
+  playerMoney: number,
+): Promise<LeaveCrewResult> {
+  const penalties = {
+    xpLost: 250,
+    reputationLost: Math.round(playerReputation * 0.15),
+    cooldownDays: 7,
+    moneyLost: 500,
+  };
+
+  if (!supabase) return { ok: false, penalties, error: "Pas de connexion" };
+
+  // Vérifier si le joueur est leader
+  const { data: member } = await supabase
+    .from("crew_members")
+    .select("role")
+    .eq("crew_id", crewId)
+    .eq("player_name", playerName)
+    .single();
+
+  if (member?.role === "leader" || member?.role === "founder") {
+    return {
+      ok: false,
+      blocked: true,
+      penalties,
+      error: "Tu es leader — transfère le rôle avant de quitter.",
+    };
+  }
+
+  // Retirer le membre
+  const { error: leaveError } = await supabase
+    .from("crew_members")
+    .delete()
+    .eq("crew_id", crewId)
+    .eq("player_name", playerName);
+
+  if (leaveError) return { ok: false, penalties, error: "Impossible de quitter le crew." };
+
+  // Décrémenter member_count
+  const { data: crew } = await supabase
+    .from("crews")
+    .select("member_count, reputation")
+    .eq("id", crewId)
+    .single();
+
+  if (crew) {
+    const newCount  = Math.max(0, (crew.member_count ?? 1) - 1);
+    const newRadius = computeZoneRadius(newCount, crew.reputation ?? 0);
+    await supabase.from("crews").update({ member_count: newCount }).eq("id", crewId);
+    await supabase.from("crew_zones").update({ radius: newRadius }).eq("crew_id", crewId);
+  }
+
+  // Stocker le cooldown dans life_map_players (champ last_action = flag)
+  await supabase
+    .from("life_map_players")
+    .update({
+      crew_color: null,
+      crew_tag: null,
+      last_action: `CREW_COOLDOWN_UNTIL:${new Date(Date.now() + penalties.cooldownDays * 86400000).toISOString()}`,
+    })
+    .eq("display_name", playerName);
+
+  return { ok: true, penalties };
+}
+
+export async function getCrewCooldown(playerName: string): Promise<Date | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from("life_map_players")
+    .select("last_action")
+    .eq("display_name", playerName)
+    .single();
+  if (!data?.last_action?.startsWith("CREW_COOLDOWN_UNTIL:")) return null;
+  const until = new Date(data.last_action.replace("CREW_COOLDOWN_UNTIL:", ""));
+  return until > new Date() ? until : null;
+}
+
 export const CREW_COLORS = [
   "#FF3B3B", "#FFD600", "#39FF14", "#BF5FFF", "#00B4FF",
   "#FF2D78", "#00FFD1", "#FF6B00", "#FFFFFF",

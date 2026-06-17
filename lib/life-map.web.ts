@@ -14,7 +14,10 @@ export type MapPlayer = {
   location_verified: boolean;
   last_action: string | null;
   is_star: boolean;
+  is_npc: boolean;
   level: number;
+  crew_color: string | null;
+  crew_tag: string | null;
   updated_at: string;
 };
 
@@ -122,13 +125,16 @@ export async function goGhost(userId: string) {
     .eq("user_id", userId);
 }
 
-// ── Récupère les joueurs proches ──────────────────────────────────────────────
-export async function fetchNearbyPlayers(lat: number, lng: number, radiusKm = 5): Promise<MapPlayer[]> {
+// ── Fetch tous les joueurs visibles (non-ghost) ───────────────────────────────
+export async function fetchAllPlayers(): Promise<MapPlayer[]> {
   if (!supabase) return MOCK_PLAYERS;
-  const { data, error } = await supabase.rpc("players_nearby", {
-    ref_lat: lat, ref_lng: lng, radius_km: radiusKm,
-  });
-  if (error || !data || (data as MapPlayer[]).length === 0) return MOCK_PLAYERS;
+  const { data, error } = await supabase
+    .from("life_map_players")
+    .select("*")
+    .neq("status", "ghost")
+    .order("updated_at", { ascending: false })
+    .limit(200);
+  if (error || !data || data.length === 0) return MOCK_PLAYERS;
   return data as MapPlayer[];
 }
 
@@ -152,43 +158,43 @@ export const MOCK_PLAYERS: MapPlayer[] = [
   {
     id: "m1", user_id: "u1", display_name: "Jok'air ✓", avatar_emoji: "🎤",
     status: "vibe", lat: 48.8867, lng: 2.3431, location_name: "Montmartre",
-    location_verified: true, last_action: "Studio session", is_star: true, level: 99,
-    updated_at: new Date().toISOString(),
+    location_verified: true, last_action: "Studio session", is_star: true, is_npc: true,
+    level: 99, crew_color: "#FFD600", crew_tag: "BVK", updated_at: new Date().toISOString(),
   },
   {
     id: "m2", user_id: "u2", display_name: "Karim_93", avatar_emoji: "🧢",
     status: "free", lat: 48.9132, lng: 2.3814, location_name: "Aubervilliers",
-    location_verified: true, last_action: "Au taff", is_star: false, level: 6,
-    updated_at: new Date().toISOString(),
+    location_verified: true, last_action: "Au taff", is_star: false, is_npc: true,
+    level: 6, crew_color: null, crew_tag: null, updated_at: new Date().toISOString(),
   },
   {
     id: "m3", user_id: "u3", display_name: "Lina.Paris", avatar_emoji: "👑",
     status: "vibe", lat: 48.8673, lng: 2.3630, location_name: "République",
-    location_verified: false, last_action: "Terrasse", is_star: false, level: 4,
-    updated_at: new Date().toISOString(),
+    location_verified: false, last_action: "Terrasse", is_star: false, is_npc: true,
+    level: 4, crew_color: null, crew_tag: null, updated_at: new Date().toISOString(),
   },
   {
     id: "m4", user_id: "u4", display_name: "Seb_Belleville", avatar_emoji: "🎨",
     status: "free", lat: 48.8720, lng: 2.3785, location_name: "Belleville",
-    location_verified: true, last_action: "Manger propre", is_star: false, level: 8,
-    updated_at: new Date().toISOString(),
+    location_verified: true, last_action: "Manger propre", is_star: false, is_npc: true,
+    level: 8, crew_color: "#FFD600", crew_tag: "BVK", updated_at: new Date().toISOString(),
   },
   {
     id: "m5", user_id: "u5", display_name: "Amina.Montreuil", avatar_emoji: "💄",
-    status: "taken", lat: 48.8640, lng: 2.4425, location_name: "Montreuil",
-    location_verified: true, last_action: "Roupiller", is_star: false, level: 3,
-    updated_at: new Date().toISOString(),
+    status: "vibe", lat: 48.8640, lng: 2.4425, location_name: "Montreuil",
+    location_verified: true, last_action: "Roupiller", is_star: false, is_npc: true,
+    level: 3, crew_color: "#BF5FFF", crew_tag: "MTR", updated_at: new Date().toISOString(),
   },
   {
     id: "m6", user_id: "u6", display_name: "Toxic_Nation", avatar_emoji: "🔥",
     status: "charo", lat: 48.8484, lng: 2.3960, location_name: "Nation",
-    location_verified: false, last_action: "Faire un tour", is_star: false, level: 11,
-    updated_at: new Date().toISOString(),
+    location_verified: false, last_action: "Faire un tour", is_star: false, is_npc: true,
+    level: 11, crew_color: "#FF3B3B", crew_tag: "NAT", updated_at: new Date().toISOString(),
   },
   {
     id: "m7", user_id: "u7", display_name: "Djo.SDenis", avatar_emoji: "⚽",
     status: "free", lat: 48.9362, lng: 2.3574, location_name: "Saint-Denis",
-    location_verified: true, last_action: "Terrain de foot", is_star: false, level: 5,
-    updated_at: new Date().toISOString(),
+    location_verified: true, last_action: "Terrain de foot", is_star: false, is_npc: true,
+    level: 5, crew_color: null, crew_tag: null, updated_at: new Date().toISOString(),
   },
 ];
