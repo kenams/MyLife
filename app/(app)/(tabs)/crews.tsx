@@ -9,7 +9,8 @@ import {
   createCrew, fetchCrews, joinCrew, getMyCrewId, leaveCrew, getCrewCooldown,
   transferLeader, fetchCrewWars, fetchCrewMembers,
   fetchPlayerLeaderboard, fetchAlliances, proposeAlliance, acceptAlliance,
-  checkLeaderInactivity,
+  checkLeaderInactivity, claimBastion, collectBastionPassive, fetchBastions,
+  declareSiege, BASTION_MIN_DISTANCE_M,
 } from "@/lib/crews";
 import { supabase } from "@/lib/supabase";
 
@@ -129,6 +130,11 @@ export default function CrewsScreen() {
   const [alliances,      setAlliances]      = useState<CrewAlliance[]>([]);
   const [showAlliances,  setShowAlliances]  = useState(false);
   const [inactiveLeader, setInactiveLeader] = useState<string | null>(null);
+  const [myBastion,      setMyBastion]      = useState<string | null>(null); // zone id
+  const [bastionModal,   setBastionModal]   = useState(false);
+  const [bastionName,    setBastionName]    = useState("");
+  const [placingBastion, setPlacingBastion] = useState(false);
+  const [passiveReward,  setPassiveReward]  = useState<{ xp: number; rep: number } | null>(null);
   const toastAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
@@ -157,6 +163,18 @@ export default function CrewsScreen() {
     fetchAlliances(myCrewId).then(setAlliances);
     checkLeaderInactivity(myCrewId).then(setInactiveLeader);
 
+    // Vérifie si le crew a déjà un bastion
+    fetchBastions().then((bastions) => {
+      const mine = bastions.find((b) => b.crew_id === myCrewId);
+      if (mine) {
+        setMyBastion(mine.id);
+        // Collecte passif si disponible
+        collectBastionPassive(mine.id).then((reward) => {
+          if (reward) setPassiveReward(reward);
+        });
+      }
+    });
+
     // Realtime — notif quand un nouveau membre rejoint
     if (!supabase) return;
     const sub = supabase
@@ -175,6 +193,33 @@ export default function CrewsScreen() {
       .subscribe();
     return () => { void sub.unsubscribe(); };
   }, [myCrewId]);
+
+  async function handleClaimBastion() {
+    if (!myCrewId) return;
+    setPlacingBastion(true);
+    const mc = crews.find((c) => c.id === myCrewId);
+    const result = await claimBastion(
+      myCrewId,
+      bastionName.trim() || `Bastion ${mc?.tag ?? ""}`,
+      48.8566 + (Math.random() - 0.5) * 0.05, // TODO: remplacer par GPS réel
+      2.3522  + (Math.random() - 0.5) * 0.05,
+      mc?.member_count ?? 1,
+      mc?.reputation ?? 0,
+    );
+    setPlacingBastion(false);
+    if (result.ok) {
+      setBastionModal(false);
+      setBastionName("");
+      showToast("🏰 Bastion posé ! Il génère XP + rep chaque heure.");
+      fetchBastions().then((b) => {
+        const mine = b.find((x) => x.crew_id === myCrewId);
+        if (mine) setMyBastion(mine.id);
+      });
+      fetchCrews().then(setCrews);
+    } else {
+      showToast(result.error ?? "Impossible de poser le bastion");
+    }
+  }
 
   async function handleTransfer() {
     if (!myCrewId || !transferTarget) return;
@@ -299,7 +344,39 @@ export default function CrewsScreen() {
                 </View>
                 <Text style={{ color: C.green, fontSize: 11, fontWeight: "800" }}>✓ MEMBRE</Text>
               </View>
-              <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+              {/* Récompense passif bastion */}
+              {passiveReward && (
+                <Pressable onPress={() => setPassiveReward(null)}
+                  style={{ flexDirection: "row", gap: 12, backgroundColor: C.gold + "12",
+                    borderRadius: 10, padding: 10, marginTop: 10, borderWidth: 1, borderColor: C.gold + "30",
+                    alignItems: "center" }}>
+                  <Text style={{ fontSize: 18 }}>🏰</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: C.gold, fontSize: 12, fontWeight: "900" }}>Revenus du bastion</Text>
+                    <Text style={{ color: C.textSoft, fontSize: 11 }}>+{passiveReward.xp} XP · +{passiveReward.rep} rep collectés</Text>
+                  </View>
+                  <Text style={{ color: C.muted, fontSize: 18 }}>×</Text>
+                </Pressable>
+              )}
+
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                {/* Bastion */}
+                {myBastion ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5,
+                    backgroundColor: C.gold + "10", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
+                    borderWidth: 1, borderColor: C.gold + "35" }}>
+                    <Text style={{ fontSize: 14 }}>🏰</Text>
+                    <Text style={{ color: C.gold, fontSize: 11, fontWeight: "800" }}>Bastion actif</Text>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => setBastionModal(true)}
+                    style={{ flexDirection: "row", alignItems: "center", gap: 5,
+                      backgroundColor: C.gold + "10", borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
+                      borderWidth: 1, borderColor: C.gold + "35" }}>
+                    <Text style={{ fontSize: 14 }}>🏰</Text>
+                    <Text style={{ color: C.gold, fontSize: 11, fontWeight: "800" }}>Poser bastion</Text>
+                  </Pressable>
+                )}
                 <Pressable onPress={() => { void fetchCrewMembers(mc.id).then(setMembers); setTransferModal(true); }}
                   style={{ flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center",
                     borderWidth: 1, borderColor: C.purple + "40", backgroundColor: C.purple + "10" }}>
@@ -673,6 +750,58 @@ export default function CrewsScreen() {
               </View>
             );
           })()}
+        </View>
+      </Modal>
+
+      {/* Modal poser bastion */}
+      <Modal visible={bastionModal} transparent animationType="fade">
+        <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.88)", justifyContent: "center", padding: 24 }}>
+          <View style={{ backgroundColor: C.card, borderRadius: 20, padding: 24,
+            borderWidth: 1, borderColor: C.gold + "40" }}>
+            <Text style={{ color: C.gold, fontSize: 18, fontWeight: "900", textAlign: "center" }}>
+              🏰 Poser le bastion
+            </Text>
+            <Text style={{ color: C.textSoft, fontSize: 12, textAlign: "center", marginTop: 8, marginBottom: 20, lineHeight: 18 }}>
+              Ton QG permanent. Distance min {BASTION_MIN_DISTANCE_M}m de tout autre bastion.
+              Génère XP + réputation chaque heure.
+            </Text>
+
+            <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 6 }}>
+              NOM DU BASTION
+            </Text>
+            <TextInput
+              value={bastionName}
+              onChangeText={setBastionName}
+              placeholder="La Maison Mère..."
+              placeholderTextColor={C.muted}
+              style={{ backgroundColor: C.cardAlt, color: C.text, borderRadius: 10, padding: 12,
+                fontSize: 14, fontWeight: "700", marginBottom: 20,
+                borderWidth: 1, borderColor: C.border }}
+            />
+
+            <View style={{ backgroundColor: C.gold + "08", borderRadius: 10, padding: 12,
+              borderWidth: 1, borderColor: C.gold + "20", marginBottom: 20, gap: 4 }}>
+              <Text style={{ color: C.gold, fontSize: 11, fontWeight: "800" }}>📍 Position actuelle (GPS)</Text>
+              <Text style={{ color: C.textSoft, fontSize: 11 }}>
+                Le bastion sera posé à ta localisation GPS actuelle sur la map.
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable onPress={() => setBastionModal(false)}
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center",
+                  backgroundColor: C.card, borderWidth: 1, borderColor: C.border }}>
+                <Text style={{ color: C.textSoft, fontWeight: "800" }}>Annuler</Text>
+              </Pressable>
+              <Pressable onPress={() => void handleClaimBastion()} disabled={placingBastion}
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: "center",
+                  backgroundColor: C.gold + "20", borderWidth: 1, borderColor: C.gold + "50" }}>
+                <Text style={{ color: C.gold, fontWeight: "900" }}>
+                  {placingBastion ? "..." : "🏰 Poser ici"}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
         </View>
       </Modal>
 

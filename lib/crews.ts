@@ -1,16 +1,17 @@
 import { supabase } from "./supabase";
 
 export interface Crew {
-  id:           string;
-  name:         string;
-  tag:          string;
-  emoji:        string;
-  color:        string;
-  description?: string;
-  founder:      string;
-  member_count: number;
-  reputation:   number;
-  created_at:   string;
+  id:              string;
+  name:            string;
+  tag:             string;
+  emoji:           string;
+  color:           string;
+  description?:    string;
+  founder:         string;
+  member_count:    number;
+  reputation:      number;
+  created_at:      string;
+  bastion_zone_id?: string | null;
 }
 
 export interface CrewMember {
@@ -25,19 +26,27 @@ export interface CrewMember {
 }
 
 export interface CrewZone {
-  id:               string;
-  crew_id:          string;
-  name:             string;
-  lat:              number;
-  lng:              number;
-  radius:           number;
-  claimed_at:       string;
-  expires_at:       string;
-  last_activity_at?: string;
+  id:                  string;
+  crew_id:             string;
+  name:                string;
+  lat:                 number;
+  lng:                 number;
+  radius:              number;
+  claimed_at:          string;
+  expires_at:          string;
+  last_activity_at?:   string;
+  is_bastion:          boolean;
+  bastion_passive_xp:  number;
+  bastion_passive_rep: number;
+  last_passive_at?:    string;
 }
+
+export const BASTION_MIN_DISTANCE_M = 500; // distance min entre deux bastions
+export const BASTION_RADIUS = 500;         // rayon fixe d'un bastion (en mètres)
 
 export type CrewZoneRich = CrewZone & {
   crew: Pick<Crew, "color" | "tag" | "emoji" | "name" | "member_count" | "reputation">;
+  is_bastion?: boolean;
 };
 
 // ── Zone radius dynamique ──────────────────────────────────────────────────────
@@ -153,7 +162,7 @@ export async function fetchCrewZones(): Promise<CrewZoneRich[]> {
   if (!supabase) return [];
   const { data } = await supabase
     .from("crew_zones")
-    .select("*, crew:crews(color,tag,emoji,name,member_count,reputation)")
+    .select("*, is_bastion, crew:crews(color,tag,emoji,name,member_count,reputation)")
     .gte("expires_at", new Date().toISOString());
   return (data ?? []) as CrewZoneRich[];
 }
@@ -406,6 +415,136 @@ export async function getCrewCooldown(playerName: string): Promise<Date | null> 
   if (!data?.crew_cooldown_until) return null;
   const until = new Date(data.crew_cooldown_until);
   return until > new Date() ? until : null;
+}
+
+// ── Bastions ──────────────────────────────────────────────────────────────────
+
+export async function fetchBastions(): Promise<(CrewZone & { crew: Pick<Crew, "color" | "tag" | "emoji" | "name"> })[]> {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("crew_zones")
+    .select("*, crew:crews(color,tag,emoji,name)")
+    .eq("is_bastion", true);
+  return (data ?? []) as (CrewZone & { crew: Pick<Crew, "color" | "tag" | "emoji" | "name"> })[];
+}
+
+export async function claimBastion(
+  crewId: string,
+  name: string,
+  lat: number,
+  lng: number,
+  memberCount = 1,
+  reputation = 0,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "Pas de connexion" };
+
+  // Vérifie si le crew a déjà un bastion
+  const { data: existing } = await supabase
+    .from("crew_zones")
+    .select("id")
+    .eq("crew_id", crewId)
+    .eq("is_bastion", true)
+    .maybeSingle();
+  if (existing) return { ok: false, error: "Ton crew a déjà un bastion." };
+
+  // Vérifie la distance avec les autres bastions
+  const others = await fetchBastions();
+  for (const b of others) {
+    const dist = haversineMeters(lat, lng, b.lat, b.lng);
+    if (dist < BASTION_MIN_DISTANCE_M) {
+      return {
+        ok: false,
+        error: `Trop proche du bastion [${b.crew?.tag ?? "?"}] — ${Math.round(dist)}m (min ${BASTION_MIN_DISTANCE_M}m).`,
+      };
+    }
+  }
+
+  const { data: zone, error } = await supabase
+    .from("crew_zones")
+    .insert({
+      crew_id: crewId, name, lat, lng,
+      radius: BASTION_RADIUS,
+      is_bastion: true,
+      expires_at: new Date(Date.now() + 365 * 86400000).toISOString(), // 1 an
+      bastion_passive_xp: 5 + Math.floor(reputation / 50),
+      bastion_passive_rep: 2 + Math.floor(memberCount / 5),
+    })
+    .select()
+    .single();
+
+  if (error || !zone) return { ok: false, error: "Impossible de créer le bastion." };
+
+  await supabase.from("crews").update({ bastion_zone_id: zone.id }).eq("id", crewId);
+  return { ok: true };
+}
+
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export async function collectBastionPassive(
+  zoneId: string,
+): Promise<{ xp: number; rep: number } | null> {
+  if (!supabase) return null;
+  const { data: zone } = await supabase
+    .from("crew_zones")
+    .select("is_bastion, bastion_passive_xp, bastion_passive_rep, last_passive_at")
+    .eq("id", zoneId)
+    .single();
+  if (!zone?.is_bastion) return null;
+
+  const lastCollect = zone.last_passive_at ? new Date(zone.last_passive_at) : new Date(0);
+  const hoursSince = (Date.now() - lastCollect.getTime()) / 3_600_000;
+  if (hoursSince < 1) return null; // pas encore 1h
+
+  const multiplier = Math.min(Math.floor(hoursSince), 24); // max 24h accumulées
+  const xp  = zone.bastion_passive_xp  * multiplier;
+  const rep = zone.bastion_passive_rep * multiplier;
+
+  await supabase.from("crew_zones")
+    .update({ last_passive_at: new Date().toISOString() })
+    .eq("id", zoneId);
+
+  return { xp, rep };
+}
+
+export async function declareSiege(
+  attackerCrewId: string,
+  bastionZoneId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "Pas de connexion" };
+
+  const { data: zone } = await supabase
+    .from("crew_zones")
+    .select("crew_id, is_bastion")
+    .eq("id", bastionZoneId)
+    .single();
+
+  if (!zone?.is_bastion) return { ok: false, error: "Cette zone n'est pas un bastion." };
+  if (zone.crew_id === attackerCrewId) return { ok: false, error: "C'est ton propre bastion." };
+
+  // Pas de siège actif en cours sur ce bastion
+  const { data: activeSiege } = await supabase
+    .from("crew_wars")
+    .select("id")
+    .eq("siege_target_id", bastionZoneId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (activeSiege) return { ok: false, error: "Un siège est déjà en cours sur ce bastion." };
+
+  await supabase.from("crew_wars").insert({
+    crew_a_id: attackerCrewId,
+    crew_b_id: zone.crew_id,
+    siege_target_id: bastionZoneId,
+    is_siege: true,
+  });
+
+  return { ok: true };
 }
 
 // ── Leaderboard joueurs ───────────────────────────────────────────────────────

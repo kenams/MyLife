@@ -261,13 +261,14 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
 
       // ── Zones crew — taille + glow dynamiques ────────────────────────────
       crewZones.forEach((zone) => {
+        const isBastion  = (zone as CrewZoneRich & { is_bastion?: boolean }).is_bastion ?? false;
         const col        = zone.crew?.color ?? "#FFD600";
         const members    = zone.crew?.member_count ?? 1;
         const rep        = zone.crew?.reputation ?? 0;
         const glow       = computeGlowIntensity(members);
-        const fillOp     = 0.04 + glow * 0.10;   // 0.04..0.14
-        const strokeOp   = 0.3 + glow * 0.5;     // 0.3..0.8
-        const weight     = 1 + glow * 2.5;        // 1..3.5
+        const fillOp     = isBastion ? 0.12 : 0.04 + glow * 0.10;
+        const strokeOp   = isBastion ? 1.0  : 0.3 + glow * 0.5;
+        const weight     = isBastion ? 3.0  : 1 + glow * 2.5;
 
         // Classe CSS pour l'animation selon taille
         const isMega = members >= 20;
@@ -299,15 +300,24 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
           }).addTo(map);
         }
 
+        // Anneau externe bastion
+        if (isBastion) {
+          L.circle([zone.lat, zone.lng], {
+            radius: zone.radius * 1.25,
+            color: col, fillColor: "transparent", fillOpacity: 0,
+            weight: 1.5, opacity: 0.4, dashArray: "4 6",
+          }).addTo(map);
+        }
+
         // Label flottant : emoji + tag + members
-        const labelW = 72 + (members >= 10 ? 8 : 0);
+        const labelW = isBastion ? 88 : 72 + (members >= 10 ? 8 : 0);
         const tagSvg = [
           `<svg xmlns="http://www.w3.org/2000/svg" width="${labelW}" height="28">`,
           `<rect x="0" y="0" width="${labelW}" height="28" rx="7" fill="#04040A" stroke="${col}" stroke-width="${isBig ? 1.5 : 1}" opacity="${isBig ? 0.92 : 0.78}"/>`,
           isBig
             ? `<circle cx="14" cy="14" r="4" fill="${col}" opacity="0.85"/>`
             : `<circle cx="14" cy="14" r="3" fill="${col}" opacity="0.5"/>`,
-          `<text x="${labelW / 2}" y="18" text-anchor="middle" font-size="${isBig ? 11 : 10}" fill="${col}" font-weight="900" font-family="system-ui,sans-serif">${zone.crew?.emoji ?? ""} ${zone.crew?.tag ?? ""} · ${members}</text>`,
+          `<text x="${labelW / 2}" y="18" text-anchor="middle" font-size="${isBastion ? 12 : isBig ? 11 : 10}" fill="${col}" font-weight="900" font-family="system-ui,sans-serif">${isBastion ? "🏰 " : (zone.crew?.emoji ?? "") + " "}${zone.crew?.tag ?? ""} · ${isBastion ? "BASE" : members}</text>`,
           `</svg>`,
         ].join("");
         const labelIcon = L.icon({
@@ -319,7 +329,7 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
         // Popup info au clic sur le cercle
         (circle as unknown as { bindPopup: (html: string) => void }).bindPopup(
           `<div style="font-family:system-ui;padding:4px">
-            <b style="color:${col}">${zone.crew?.emoji} ${zone.crew?.tag ?? "CREW"}</b><br/>
+            <b style="color:${col}">${isBastion ? "🏰 " : ""}${zone.crew?.emoji} ${zone.crew?.tag ?? "CREW"}</b>${isBastion ? ' <span style="font-size:10px;color:#FFD600">BASTION</span>' : ""}<br/>
             <span style="color:#9A968E;font-size:11px">${zone.name}</span><br/>
             <span style="font-size:12px">👥 ${members} membres · ⭐ ${rep} rep</span>
           </div>`
