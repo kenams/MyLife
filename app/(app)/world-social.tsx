@@ -53,7 +53,7 @@ const QUICK_ACTIVITIES = [
   { slug: "cafe",       emoji: "☕", label: "Café virtuel",    desc: "Discutez autour d'un café",       color: "#f97316" },
   { slug: "cinema",     emoji: "🎬", label: "Ciné ensemble",   desc: "Regardez un film en sync",         color: "#6366f1" },
   { slug: "restaurant", emoji: "🍕", label: "Dîner virtuel",   desc: "Partagez un repas en live",        color: "#ef4444" },
-  { slug: "park",       emoji: "🌳", label: "Balade commune",  desc: "Promenade dans Neo Paris",         color: "#22c55e" },
+  { slug: "park",       emoji: "🌳", label: "Balade commune",  desc: "Promenade dans Toulouse",          color: "#22c55e" },
   { slug: "gym",        emoji: "💪", label: "Sport ensemble",  desc: "Session fitness partagée",         color: "#f59e0b" },
   { slug: "rooftop-bar",emoji: "🍸", label: "Cocktail lounge", desc: "Soirée au Sky Lounge",             color: "#8b5cf6" },
 ];

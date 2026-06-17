@@ -54,7 +54,7 @@ const ACTION_FEED: Record<string, { emoji: string; templates: string[] }> = {
   "team-sport":   { emoji: "🏀", templates: ["{name} sur le terrain 🏀", "{name} jeu propre au five", "{name} MVP du quartier ce soir"] },
   "healthy-meal": { emoji: "🍱", templates: ["{name} mange propre 🍱", "{name} cuisine healthy — discipline totale", "{name} riz poulet brocoli, classique"] },
   "sleep":        { emoji: "🛌", templates: ["{name} est couché — recovery mode", "{name} dodo, recharge pour demain", "{name} coupe pour la nuit"] },
-  "walk":         { emoji: "🚶", templates: ["{name} marche dans Paris 🗺️", "{name} explore le quartier", "{name} en vadrouille dans la ville"] },
+  "walk":         { emoji: "🚶", templates: ["{name} marche dans Toulouse 🗺️", "{name} explore le quartier", "{name} en vadrouille dans la ville"] },
   "meditate":     { emoji: "🧘", templates: ["{name} se pose et respire 🧘", "{name} zen mode activé", "{name} déstresse, level mental up"] },
 };
 

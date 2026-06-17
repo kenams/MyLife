@@ -150,7 +150,7 @@ const QUOTES = [
   { text: "Le 93 dort jamais", name: "Jok'air ✓",    emoji: "🎤", color: C.purple },
   { text: "Café ouvert là ?",   name: "Yasmine.SD",   emoji: "🌸", color: C.teal   },
   { text: "Viens au stade 🏆",  name: "Bilal.Coach",  emoji: "⚽", color: C.green  },
-  { text: "Paris s'arrête pas", name: "Céline.Night", emoji: "🎭", color: C.blue   },
+  { text: "Toulouse s'arrête pas", name: "Céline.Night", emoji: "🎭", color: C.blue   },
   { text: "Son envoyé à 3h",    name: "Moussa.Beat",  emoji: "🎧", color: C.gold   },
 ];
 function NpcQuote() {
@@ -689,7 +689,7 @@ export default function SignInScreen() {
             </View>
             <View style={{ gap: 8 }}>
               <AccessCard idx={0} emoji="🧢" color={C.gold}
-                title="Kah — Profil test"    sub="Paris 11e · Niv.8 · équilibré"
+                title="Kah — Profil test"    sub="Toulouse · Niv.8 · équilibré"
                 onPress={() => enter("balanced")} />
               <AccessCard idx={1} emoji="🔥" color={C.red}
                 title="Mode pression"         sub="Stats critiques · survie"

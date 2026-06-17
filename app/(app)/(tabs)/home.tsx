@@ -16,6 +16,9 @@ import {
   joinFlashEvent,
   getTimeLeft,
   getUrgencyLevel,
+  createRassemblement,
+  getRassemblementStatus,
+  RASSEMBLEMENT_TARGET,
   type FlashEvent,
 } from "@/lib/flash-events";
 import {
@@ -145,7 +148,7 @@ function NpcStoryBubble({ story, onPress }: { story: NpcStory; onPress: () => vo
   );
 }
 
-// ─── Live Paris Widget ────────────────────────────────────────────────────────
+// ─── Live Toulouse Widget ─────────────────────────────────────────────────────
 function LiveParisWidget() {
   const [count,  setCount]  = useState<number | null>(null);
   const [stories, setStories] = useState<NpcStory[]>([]);
@@ -199,7 +202,7 @@ function LiveParisWidget() {
         borderBottomWidth: 1, borderBottomColor: L.border }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <LivePulse />
-          <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Paris en direct</Text>
+          <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Toulouse en direct</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <View style={{ backgroundColor: L.greenBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
@@ -430,6 +433,7 @@ export default function HomeScreen() {
   const [liveEvents,     setLiveEvents]     = useState<FeedEvent[]>([]);
   const [flashEvents,    setFlashEvents]    = useState<FlashEvent[]>([]);
   const [joinedFlash,    setJoinedFlash]    = useState<Set<string>>(new Set());
+  const [rassemblCount,  setRassemblCount]  = useState<Record<string, number>>({});
   const [inCrewZone,     setInCrewZone]     = useState(false);
   const [crewZoneName,   setCrewZoneName]   = useState<string | null>(null);
   const worldEvent       = useGameStore((s) => s.worldEvent);
@@ -578,7 +582,7 @@ export default function HomeScreen() {
     hapticImpact("medium");
     const playerName = avatar?.displayName ?? "Joueur";
     const playerEmoji = "🧢";
-    const evtPayload = buildActionFeedEvent(id, playerName, playerEmoji, "Paris", false);
+    const evtPayload = buildActionFeedEvent(id, playerName, playerEmoji, "Toulouse", false);
     if (evtPayload) publishFeedEvent(evtPayload);
     const msgs: Record<string, string> = {
       "work-shift":   "+thunes +côte 💰",
@@ -611,7 +615,23 @@ export default function HomeScreen() {
     await joinFlashEvent(evt.id, avatar?.displayName ?? "Joueur", "🧢");
     setJoinedFlash((prev) => new Set([...prev, evt.id]));
     markQuestAction("join-flash-event");
+    // Refresh count pour rassemblement
+    if (evt.kind === "rassemblement") {
+      const status = await getRassemblementStatus(evt.id);
+      setRassemblCount((prev) => ({ ...prev, [evt.id]: status.count }));
+    }
     showToast(`Tu participes — ${evt.emoji} ${evt.reward_xp} XP à gagner !`);
+  }
+
+  async function handleCreateRassemblement() {
+    if (!avatar) return;
+    const evt = await createRassemblement(
+      "Capitole — Place Wilson", 43.6043, 1.4437, avatar.displayName,
+    );
+    if (evt) {
+      setFlashEvents((prev) => [evt, ...prev]);
+      showToast("🔥 Rassemblement lancé ! Partage le lieu à tes contacts.");
+    }
   }
 
   return (
@@ -650,16 +670,36 @@ export default function HomeScreen() {
                 )}
               </View>
             </View>
-            <View style={{ backgroundColor: joined ? L.green + "20" : bannerColor + "20",
-              paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
-              borderWidth: 1, borderColor: joined ? L.green + "40" : bannerColor + "40" }}>
-              <Text style={{ color: joined ? L.green : bannerColor, fontSize: 11, fontWeight: "900" }}>
-                {joined ? "INSCRIT ✓" : "PARTICIPER"}
-              </Text>
+            <View style={{ gap: 4 }}>
+              <View style={{ backgroundColor: joined ? L.green + "20" : bannerColor + "20",
+                paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+                borderWidth: 1, borderColor: joined ? L.green + "40" : bannerColor + "40" }}>
+                <Text style={{ color: joined ? L.green : bannerColor, fontSize: 11, fontWeight: "900" }}>
+                  {joined ? "INSCRIT ✓" : "PARTICIPER"}
+                </Text>
+              </View>
+              {evt.kind === "rassemblement" && (
+                <Text style={{ color: L.gold, fontSize: 10, fontWeight: "900", textAlign: "center" }}>
+                  {rassemblCount[evt.id] ?? (evt._participants ?? 0)}/{RASSEMBLEMENT_TARGET} 🔥
+                </Text>
+              )}
             </View>
           </Pressable>
         );
       })()}
+
+      {/* ── FEATURE VIRALE 2 — Bouton Rassemblement ── */}
+      <Pressable onPress={handleCreateRassemblement}
+        style={{ marginHorizontal: 16, marginTop: 6,
+          backgroundColor: "rgba(255,59,59,0.10)",
+          borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,59,59,0.35)",
+          padding: 10, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10 }}>
+        <Text style={{ fontSize: 16 }}>🔥</Text>
+        <Text style={{ color: "#FF3B3B", fontSize: 12, fontWeight: "900" }}>
+          Lancer un rassemblement physique
+        </Text>
+        <Text style={{ color: "#FF3B3B88", fontSize: 10 }}>20 joueurs · 2h</Text>
+      </Pressable>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 110 }}
         showsVerticalScrollIndicator={false}>

@@ -6,7 +6,7 @@ import type {
   ResidentSeed
 } from "@/lib/types";
 
-export const cityName = "Neo Paris";
+export const cityName = "Toulouse";
 
 export const neighborhoods: NeighborhoodSeed[] = [
   {

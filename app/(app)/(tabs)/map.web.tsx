@@ -15,7 +15,8 @@ import type { MapPlayer, MapStatus } from "@/lib/life-map";
 import {
   fetchCrewZones, checkAndTriggerWars,
   computeGlowIntensity, bastionCheckin,
-  type CrewZoneRich,
+  subscribeToBastionTakeovers, fetchRoiDeToulouse,
+  type CrewZoneRich, type TakeoverNotif, type RoiDeToulouse,
 } from "@/lib/crews";
 import { startNpcMapEngine, stopNpcMapEngine } from "@/lib/npc-map-engine";
 import { blockUser } from "@/lib/safety";
@@ -218,7 +219,7 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
 
       // Créer la Leaflet map
       const map = L.map(mapEl, {
-        center: [48.8566, 2.3522],
+        center: [43.6047, 1.4442],
         zoom: 13,
         zoomControl: true,
         preferCanvas: true,
@@ -491,7 +492,7 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
               )}
             </View>
             <Text style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>
-              Niveau {player.level} · {player.location_name ?? "Paris"}
+              Niveau {player.level} · {player.location_name ?? "Toulouse"}
             </Text>
           </View>
           <View style={{
@@ -514,7 +515,7 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
           <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
             <Text style={{ fontSize: 15 }}>📍</Text>
             <Text style={{ color: C.soft, fontSize: 13 }}>
-              {player.location_name ?? "Paris"}
+              {player.location_name ?? "Toulouse"}
               {player.location_verified
                 ? <Text style={{ color: C.green }}> · Vérifié ✓</Text>
                 : <Text style={{ color: C.muted }}> · Non vérifié</Text>}
@@ -649,6 +650,8 @@ export default function LifeMapScreen() {
   const [showMatchmaking, setShowMatchmaking] = useState(false);
   const [bastionAlert,    setBastionAlert]    = useState<{ zone: CrewZoneRich; reward: number } | null>(null);
   const [checkinDone,     setCheckinDone]     = useState(false);
+  const [takeoverAlert,   setTakeoverAlert]   = useState<TakeoverNotif | null>(null);
+  const [roi,             setRoi]             = useState<RoiDeToulouse | null>(null);
   const flyToRef = useRef<((lat: number, lng: number, zoom?: number) => void) | null>(null);
 
   const visible = players.filter((p) =>
@@ -663,6 +666,20 @@ export default function LifeMapScreen() {
       setCrewZones(zones);
       checkAndTriggerWars(zones);
     });
+  }, []);
+
+  // Feature virale 1 — Subscribe aux takeovers de bastions
+  useEffect(() => {
+    const sub = subscribeToBastionTakeovers((notif) => {
+      setTakeoverAlert(notif);
+      setTimeout(() => setTakeoverAlert(null), 8000); // auto-dismiss 8s
+    });
+    return () => { sub?.unsubscribe(); };
+  }, []);
+
+  // Feature virale 3 — Roi de Toulouse (chargé au montage)
+  useEffect(() => {
+    fetchRoiDeToulouse().then(setRoi);
   }, []);
 
   // NPC map engine — démarre quand la map est ouverte, stoppe au démontage
@@ -721,14 +738,14 @@ export default function LifeMapScreen() {
       });
       if (myStatus === "ghost") setMyStatus("free");
     }
-    // Zoom cinématique : dézoome sur Paris entier → vole vers ma position
+    // Zoom cinématique : dézoome sur Toulouse entier → vole vers ma position
     zoomAnimTrigger(loc.lat, loc.lng);
   }
 
   function zoomAnimTrigger(lat: number, lng: number) {
     if (!flyToRef.current) return;
-    // 1. Dézoome animé sur Paris entier (1.2s) — on voit la ville s'éloigner
-    flyToRef.current(48.8566, 2.3522, 11);
+    // 1. Dézoome animé sur Toulouse entier (1.2s) — on voit la ville s'éloigner
+    flyToRef.current(43.6047, 1.4442, 11);
     // 2. Après 1.4s (fin du déZoom), fly vers ma position au zoom 17 (2.5s) — on voit la distance
     setTimeout(() => {
       flyToRef.current?.(lat, lng, 17);
@@ -789,7 +806,7 @@ export default function LifeMapScreen() {
         }}>
           <ActivityIndicator color={C.gold} size="large" />
           <Text style={{ color: C.muted, fontSize: 11, letterSpacing: 3, fontWeight: "900" }}>
-            CHARGEMENT DE PARIS...
+            CHARGEMENT DE TOULOUSE...
           </Text>
         </View>
       )}
@@ -809,7 +826,7 @@ export default function LifeMapScreen() {
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.green,
             shadowColor: C.green, shadowOpacity: 1, shadowRadius: 5 }} />
           <Text style={{ color: C.text, fontSize: 13, fontWeight: "800" }}>
-            {visible.length} en live · Paris
+            {visible.length} en live · Toulouse
           </Text>
         </View>
 
@@ -1011,6 +1028,62 @@ export default function LifeMapScreen() {
       {showPicker && (
         <StatusPicker current={myStatus} onChange={handleStatusChange}
           onClose={() => setShowPicker(false)} />
+      )}
+
+      {/* ── FEATURE VIRALE 1 — Alerte prise de bastion ──────────────────── */}
+      {takeoverAlert && (
+        <View style={{
+          position: "absolute", bottom: 160, left: 16, right: 16, zIndex: 30,
+          backgroundColor: takeoverAlert.newCrewColor + "22",
+          borderRadius: 18, padding: 16,
+          borderWidth: 2, borderColor: takeoverAlert.newCrewColor,
+          shadowColor: takeoverAlert.newCrewColor, shadowOpacity: 0.8, shadowRadius: 24,
+          flexDirection: "row", alignItems: "center", gap: 14,
+        }}>
+          <Text style={{ fontSize: 32 }}>🏴</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: takeoverAlert.newCrewColor, fontSize: 14, fontWeight: "900" }}>
+              {takeoverAlert.newCrewEmoji} [{takeoverAlert.newCrewTag}] a pris {takeoverAlert.bastionName} !
+            </Text>
+            <Text style={{ color: C.soft, fontSize: 11, marginTop: 3 }}>
+              Bastion conquis · Toulouse vient de changer d'équilibre
+            </Text>
+          </View>
+          <Pressable onPress={() => setTakeoverAlert(null)}
+            style={{ padding: 8 }}>
+            <Text style={{ color: C.muted, fontSize: 18 }}>×</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ── FEATURE VIRALE 3 — Roi de Toulouse widget ───────────────────── */}
+      {roi && (
+        <View style={{
+          position: "absolute", top: 156, right: 16, zIndex: 6,
+          backgroundColor: "rgba(8,8,15,0.92)", borderRadius: 14,
+          paddingHorizontal: 12, paddingVertical: 10,
+          borderWidth: 1.5, borderColor: C.gold + "50",
+          shadowColor: C.gold, shadowOpacity: 0.25, shadowRadius: 12,
+          maxWidth: 160,
+        }}>
+          <Text style={{ color: C.gold, fontSize: 9, fontWeight: "900", letterSpacing: 1.5, marginBottom: 4 }}>
+            👑 ROI DE TOULOUSE
+          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Text style={{ fontSize: 22 }}>{roi.avatar_emoji}</Text>
+            <View>
+              <Text style={{ color: C.text, fontSize: 12, fontWeight: "900" }} numberOfLines={1}>
+                {roi.display_name}
+              </Text>
+              {roi.crew_tag && (
+                <Text style={{ color: roi.crew_color ?? C.gold, fontSize: 10, fontWeight: "800" }}>
+                  [{roi.crew_tag}] · Niv.{roi.level}
+                </Text>
+              )}
+            </View>
+          </View>
+          <Text style={{ color: C.muted, fontSize: 9, marginTop: 6 }}>{roi.weekLabel}</Text>
+        </View>
       )}
     </View>
   );

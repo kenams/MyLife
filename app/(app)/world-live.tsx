@@ -1,5 +1,5 @@
 /**
- * Neo Paris — Carte Ville Immersive
+ * Toulouse — Carte Ville Immersive
  * Grille de quartiers live : présence NPCs, néons, interactions directes
  */
 import { Ionicons } from "@expo/vector-icons";
@@ -472,7 +472,7 @@ export default function WorldLiveScreen() {
           <Ionicons name="arrow-back" size={18} color={colors.text} />
         </Pressable>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>🏙️ Neo Paris</Text>
+          <Text style={{ color: colors.text, fontWeight: "900", fontSize: 18 }}>🏙️ Toulouse</Text>
           <Text style={{ color: colors.muted, fontSize: 10 }}>
             {onlineCount} en ligne · {goodMoodCount} de bonne humeur · {npcs.length} résidents
           </Text>

@@ -85,16 +85,16 @@ type TestAccountPreset = "balanced" | "burnout" | "romantic" | "live";
 
 const WORLD_CHAT_ROOMS: Array<Omit<Room, "createdAt">> = [
   {
-    id: "room-city-neo-paris",
-    name: "Neo Paris Live",
+    id: "room-city-toulouse",
+    name: "Toulouse Live",
     kind: "public" as RoomKind,
-    code: "PARIS",
+    code: "TLS31",
     ownerId: "system",
     ownerName: "Systeme",
     locationSlug: "cafe",
     memberCount: 18,
     maxMembers: 120,
-    description: "Chat de ville pour Neo Paris : sorties, rencontres, humeur du quartier.",
+    description: "Chat de ville pour Toulouse : sorties, rencontres, humeur du quartier.",
     isActive: true
   },
   {

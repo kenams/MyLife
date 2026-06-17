@@ -727,3 +727,158 @@ export const CREW_COLORS = [
   "#FF3B3B", "#FFD600", "#39FF14", "#BF5FFF", "#00B4FF",
   "#FF2D78", "#00FFD1", "#FF6B00", "#FFFFFF",
 ];
+
+// ── FEATURE VIRALE 1 — Bastion takeover : notification à tous les joueurs proches ──
+
+export interface TakeoverNotif {
+  bastionName:   string;
+  newCrewTag:    string;
+  newCrewColor:  string;
+  newCrewEmoji:  string;
+  lat:           number;
+  lng:           number;
+  timestamp:     string;
+}
+
+/**
+ * Résout un siège : change le propriétaire du bastion + publie une notification
+ * takeover dans la table `bastion_takeover_events` (Realtime FULL).
+ * Tous les clients abonnés reçoivent l'événement et affichent l'alerte virale.
+ */
+export async function resolveSiege(
+  warId: string,
+  winnerId: string, // crew_id du gagnant
+): Promise<{ ok: boolean; takeover?: TakeoverNotif }> {
+  if (!supabase) return { ok: false };
+
+  const { data: war } = await supabase
+    .from("crew_wars")
+    .select("siege_target_id, crew_a_id, crew_b_id")
+    .eq("id", warId)
+    .single();
+
+  if (!war?.siege_target_id) return { ok: false };
+
+  const loserId = war.crew_a_id === winnerId ? war.crew_b_id : war.crew_a_id;
+
+  // Transférer le bastion au gagnant
+  await supabase.from("crew_zones")
+    .update({ crew_id: winnerId })
+    .eq("id", war.siege_target_id);
+
+  // Mettre à jour bastion_zone_id du gagnant
+  await supabase.from("crews")
+    .update({ bastion_zone_id: war.siege_target_id }).eq("id", winnerId);
+
+  // Retirer le bastion de l'ex-propriétaire
+  await supabase.from("crews")
+    .update({ bastion_zone_id: null }).eq("id", loserId);
+
+  // Clore la guerre
+  await supabase.from("crew_wars")
+    .update({ status: "resolved", resolved_at: new Date().toISOString() })
+    .eq("id", warId);
+
+  // Récupérer infos pour la notif
+  const { data: zone } = await supabase
+    .from("crew_zones").select("name, lat, lng").eq("id", war.siege_target_id).single();
+  const { data: crew } = await supabase
+    .from("crews").select("tag, color, emoji").eq("id", winnerId).single();
+
+  if (!zone || !crew) return { ok: true };
+
+  const notif: TakeoverNotif = {
+    bastionName: zone.name, newCrewTag: crew.tag,
+    newCrewColor: crew.color, newCrewEmoji: crew.emoji,
+    lat: zone.lat, lng: zone.lng,
+    timestamp: new Date().toISOString(),
+  };
+
+  // Publier dans la table Realtime pour broadcast
+  await supabase.from("bastion_takeover_events").insert({
+    bastion_name: notif.bastionName,
+    new_crew_tag: notif.newCrewTag,
+    new_crew_color: notif.newCrewColor,
+    new_crew_emoji: notif.newCrewEmoji,
+    lat: notif.lat, lng: notif.lng,
+  });
+
+  return { ok: true, takeover: notif };
+}
+
+/** Subscribe aux prises de bastions — afficher alerte virale sur tous les clients */
+export function subscribeToBastionTakeovers(
+  cb: (notif: TakeoverNotif) => void,
+) {
+  if (!supabase) return null;
+  return supabase
+    .channel("bastion-takeovers")
+    .on("postgres_changes", {
+      event: "INSERT", schema: "public", table: "bastion_takeover_events",
+    }, (payload) => {
+      const r = payload.new as Record<string, string | number>;
+      cb({
+        bastionName: r.bastion_name as string,
+        newCrewTag: r.new_crew_tag as string,
+        newCrewColor: r.new_crew_color as string,
+        newCrewEmoji: r.new_crew_emoji as string,
+        lat: r.lat as number, lng: r.lng as number,
+        timestamp: r.created_at as string ?? new Date().toISOString(),
+      });
+    })
+    .subscribe();
+}
+
+// ── FEATURE VIRALE 3 — Roi de Toulouse : leaderboard hebdo (reset lundi 00h) ──
+
+export interface RoiDeToulouse {
+  display_name: string;
+  avatar_emoji:  string;
+  level:         number;
+  crew_tag?:     string | null;
+  crew_color?:   string | null;
+  score:         number; // XP accumulé cette semaine (simulé par level×10 + reputation)
+  weekLabel:     string; // "Semaine du 16 juin"
+}
+
+export async function fetchRoiDeToulouse(): Promise<RoiDeToulouse | null> {
+  if (!supabase) return null;
+
+  // On prend le joueur au plus haut level non-ghost (proxy du XP hebdo)
+  const { data } = await supabase
+    .from("life_map_players")
+    .select("display_name, avatar_emoji, level, crew_tag, crew_color")
+    .neq("status", "ghost")
+    .neq("is_npc", true)
+    .order("level", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) return null;
+
+  const now = new Date();
+  const monday = new Date(now);
+  monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
+  const weekLabel = `Semaine du ${monday.getDate()} ${monday.toLocaleDateString("fr-FR", { month: "long" })}`;
+
+  return {
+    display_name: data.display_name,
+    avatar_emoji:  data.avatar_emoji,
+    level:         data.level,
+    crew_tag:      data.crew_tag,
+    crew_color:    data.crew_color,
+    score:         data.level * 10,
+    weekLabel,
+  };
+}
+
+/** Subscribe aux changements de classement (update sur life_map_players) */
+export function subscribeToLeaderboard(cb: () => void) {
+  if (!supabase) return null;
+  return supabase
+    .channel("leaderboard-watch")
+    .on("postgres_changes", {
+      event: "UPDATE", schema: "public", table: "life_map_players",
+    }, cb)
+    .subscribe();
+}

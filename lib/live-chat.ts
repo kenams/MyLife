@@ -156,20 +156,20 @@ export function subscribeDm(roomId: string, onMessage: (msg: DmMessage) => void)
 
 // ── Quartiers disponibles ─────────────────────────────────────────────────────
 export const PARIS_QUARTIERS_LIST = [
-  { id: "Belleville",    emoji: "🎨", desc: "Artistes & bobos" },
-  { id: "République",    emoji: "☕", desc: "La terrasse du peuple" },
-  { id: "Oberkampf",     emoji: "🎸", desc: "Nuit & concerts" },
-  { id: "Pigalle",       emoji: "🎭", desc: "La nuit parisienne" },
-  { id: "Montmartre",    emoji: "🎤", desc: "Le son du 18e" },
-  { id: "Marais",        emoji: "🛍️", desc: "Mode & culture" },
-  { id: "Bastille",      emoji: "⚡", desc: "Énergie & mouvement" },
-  { id: "Nation",        emoji: "🔥", desc: "Le carrefour" },
-  { id: "Saint-Denis",   emoji: "👑", desc: "Le 93 — légende" },
-  { id: "Aubervilliers", emoji: "💪", desc: "Le vrai Paris" },
-  { id: "Montreuil",     emoji: "🌿", desc: "Est parisien" },
-  { id: "Pantin",        emoji: "🎵", desc: "Culture & son" },
-  { id: "La Défense",    emoji: "🏙️", desc: "Business district" },
-  { id: "Global",        emoji: "🌍", desc: "Tous les quartiers" },
+  { id: "Capitole",           emoji: "🏛️", desc: "Le coeur de Toulouse" },
+  { id: "Saint-Cyprien",      emoji: "🌉", desc: "Rive gauche & ambiance" },
+  { id: "Carmes",             emoji: "☕", desc: "Terrasses & marché" },
+  { id: "Wilson",             emoji: "⚡", desc: "Centre & mouvement" },
+  { id: "Jean Jaurès",        emoji: "🎸", desc: "Bars & concerts" },
+  { id: "Arnaud-Bernard",     emoji: "🌍", desc: "Diversité & énergie" },
+  { id: "Les Minimes",        emoji: "🔥", desc: "Le nord qui bouge" },
+  { id: "Mirail",             emoji: "👑", desc: "La dalle — légende" },
+  { id: "Rangueil",           emoji: "🎓", desc: "Facs & jeunesse" },
+  { id: "Compans-Caffarelli", emoji: "🛹", desc: "Parcs & outdoor" },
+  { id: "Côte Pavée",         emoji: "🌿", desc: "Calme & prestige" },
+  { id: "Saint-Michel",       emoji: "🍕", desc: "Restos & vie locale" },
+  { id: "Purpan",             emoji: "🏥", desc: "Ouest tranquille" },
+  { id: "Global",             emoji: "🌍", desc: "Tous les quartiers" },
 ];
 
 // ── Mock data pour démo ───────────────────────────────────────────────────────
