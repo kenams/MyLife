@@ -282,7 +282,7 @@ export async function getMyCrewId(playerName: string): Promise<string | null> {
     .from("crew_members")
     .select("crew_id")
     .eq("player_name", playerName)
-    .single();
+    .maybeSingle();
   return data?.crew_id ?? null;
 }
 
@@ -346,7 +346,7 @@ export async function leaveCrew(
     .select("role")
     .eq("crew_id", crewId)
     .eq("player_name", playerName)
-    .single();
+    .maybeSingle();
 
   if (member?.role === "founder") {
     // Vérifier si d'autres membres existent

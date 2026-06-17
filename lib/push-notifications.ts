@@ -18,15 +18,19 @@ export async function registerPushToken(userId: string): Promise<void> {
   if (Platform.OS === "web") return;
   if (!supabase) return;
 
-  const { status } = await Notifications.requestPermissionsAsync();
-  if (status !== "granted") return;
+  try {
+    const { status } = await Notifications.requestPermissionsAsync();
+    if (status !== "granted") return;
 
-  const token = (await Notifications.getExpoPushTokenAsync()).data;
+    const token = (await Notifications.getExpoPushTokenAsync()).data;
 
-  await supabase.from("push_tokens").upsert(
-    { user_id: userId, token, platform: Platform.OS },
-    { onConflict: "user_id" },
-  );
+    await supabase.from("push_tokens").upsert(
+      { user_id: userId, token, platform: Platform.OS },
+      { onConflict: "user_id" },
+    );
+  } catch {
+    // Permission refusée ou Expo Push non configuré — silencieux
+  }
 }
 
 export async function sendLocalNotification(title: string, body: string): Promise<void> {

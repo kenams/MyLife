@@ -343,9 +343,9 @@ export default function LifeMapScreen() {
           next[idx] = updated;
           return next;
         }
+        setOnlineCount((n) => n + 1);
         return [...prev, updated];
       });
-      setOnlineCount((n) => n);
     });
     return () => { sub?.unsubscribe(); };
   }, []);

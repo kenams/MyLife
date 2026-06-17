@@ -61,6 +61,11 @@ export default function DmScreen() {
   const avatar  = useGameStore((s) => s.avatar);
   const session = useGameStore((s) => s.session);
   const myId    = session?.id ?? "local_user";
+
+  useEffect(() => {
+    if (!targetId) router.back();
+  }, [targetId]);
+
   const roomId  = dmRoomId(myId, targetId ?? "unknown");
 
   const [messages, setMessages] = useState<DmMessage[]>([]);
@@ -100,11 +105,15 @@ export default function DmScreen() {
     setMessages((p) => [...p, opt]);
     setTimeout(() => listRef.current?.scrollToEnd({ animated: true }), 80);
 
-    await sendDm({
-      roomId, senderId: myId,
-      senderName: avatar?.displayName ?? "Moi",
-      senderEmoji: "🧢", body,
-    });
+    try {
+      await sendDm({
+        roomId, senderId: myId,
+        senderName: avatar?.displayName ?? "Moi",
+        senderEmoji: "🧢", body,
+      });
+    } catch {
+      setMessages((p) => p.filter((m) => m.id !== opt.id));
+    }
     setSending(false);
   }
 

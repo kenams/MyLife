@@ -14,6 +14,7 @@ import {
   depositToTreasury, setVisitorReward, resolveSiege,
 } from "@/lib/crews";
 import { supabase } from "@/lib/supabase";
+import { requestAndGetLocation } from "@/lib/life-map";
 
 const C = {
   bg:      "#080808", card:    "#111111", cardAlt: "#181818",
@@ -155,7 +156,7 @@ export default function CrewsScreen() {
     fetchCrews().then((data) => { setCrews(data); setLoading(false); });
     getMyCrewId(playerName).then(setMyCrewId);
     getCrewCooldown(playerName).then(setCooldown);
-  }, []);
+  }, [playerName]);
 
   useEffect(() => {
     fetchPlayerLeaderboard(20).then(setPlayerRanks);
@@ -236,11 +237,14 @@ export default function CrewsScreen() {
     if (!myCrewId) return;
     setPlacingBastion(true);
     const mc = crews.find((c) => c.id === myCrewId);
+    const loc = await requestAndGetLocation();
+    const lat = loc?.lat ?? 48.8566;
+    const lng = loc?.lng ?? 2.3522;
     const result = await claimBastion(
       myCrewId,
       bastionName.trim() || `Bastion ${mc?.tag ?? ""}`,
-      48.8566 + (Math.random() - 0.5) * 0.05, // TODO: remplacer par GPS réel
-      2.3522  + (Math.random() - 0.5) * 0.05,
+      lat,
+      lng,
       mc?.member_count ?? 1,
       mc?.reputation ?? 0,
     );
@@ -706,7 +710,7 @@ export default function CrewsScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 6 }}>EMOJI</Text>
                 <TextInput
-                  value={crewEmoji} onChangeText={(t) => setCrewEmoji(t.slice(-2) || t)}
+                  value={crewEmoji} onChangeText={(t) => setCrewEmoji(t ? [...t].slice(-1)[0] ?? "🔥" : "🔥")}
                   placeholder="🔥"
                   placeholderTextColor={C.muted}
                   style={{ backgroundColor: C.cardAlt, color: C.text, borderRadius: 10, padding: 12,

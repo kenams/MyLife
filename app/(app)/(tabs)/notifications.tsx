@@ -245,7 +245,7 @@ export default function NotificationsScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
 
         {/* ── HEADER ── */}
-        <View style={{ backgroundColor: "#fff", paddingTop: 54, paddingBottom: 20, paddingHorizontal: 20,
+        <View style={{ backgroundColor: L.bg, paddingTop: 54, paddingBottom: 20, paddingHorizontal: 20,
           borderBottomWidth: 1, borderBottomColor: L.border }}>
           <View style={{ flexDirection: "row", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 16 }}>
             <View>
