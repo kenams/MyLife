@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Pressable, ScrollView, Text, View } from "react-native";
 
 import type { ShiftRecord } from "@/lib/types";
+import { ShareCard } from "@/components/share-card";
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getAvatarVisual } from "@/lib/avatar-visual";
 import { getHousingTier } from "@/lib/housing";
@@ -237,6 +238,8 @@ export default function ProfileScreen() {
   const xpInLevel   = playerXp % XP_PER_LEVEL;
   const xpPct       = (xpInLevel / XP_PER_LEVEL) * 100;
 
+  const [showShareCard, setShowShareCard] = useState(false);
+
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
   useEffect(() => {
@@ -333,6 +336,13 @@ export default function ProfileScreen() {
               </View>
             ))}
           </View>
+
+          {/* Bouton Ma carte */}
+          <Pressable onPress={() => setShowShareCard(true)}
+            style={{ marginTop: 14, borderRadius: 12, paddingVertical: 11, alignItems: "center",
+              backgroundColor: L.purple + "12", borderWidth: 1, borderColor: L.purple + "35" }}>
+            <Text style={{ color: L.purple, fontSize: 13, fontWeight: "900" }}>🃏 Ma carte</Text>
+          </Pressable>
         </View>
 
         <Animated.View style={{ transform: [{ translateY: slideAnim }], padding: 16, gap: 16 }}>
@@ -573,6 +583,19 @@ export default function ProfileScreen() {
 
         </Animated.View>
       </ScrollView>
+
+      {avatar && (
+        <ShareCard
+          visible={showShareCard}
+          onClose={() => setShowShareCard(false)}
+          stats={stats}
+          avatar={avatar}
+          playerLevel={playerLevel}
+          crewTag={null}
+          crewColor={null}
+          money={stats.money}
+        />
+      )}
     </Animated.View>
   );
 }
