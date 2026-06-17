@@ -7,9 +7,17 @@ import {
   buildActionFeedEvent,
   fetchRecentFeed,
   publishFeedEvent,
+  publishNpcDrama,
   subscribeToFeed,
   type FeedEvent,
 } from "@/lib/life-feed";
+import {
+  fetchActiveFlashEvents,
+  joinFlashEvent,
+  getTimeLeft,
+  getUrgencyLevel,
+  type FlashEvent,
+} from "@/lib/flash-events";
 
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getAvatarVisual } from "@/lib/avatar-visual";
@@ -414,7 +422,9 @@ export default function HomeScreen() {
   const housingTier      = useGameStore((s) => s.housingTier);
   const checkHousingRent = useGameStore((s) => s.checkHousingRent);
   const lifeFeed         = useGameStore((s) => s.lifeFeed ?? []);
-  const [liveEvents, setLiveEvents] = useState<FeedEvent[]>([]);
+  const [liveEvents,   setLiveEvents]   = useState<FeedEvent[]>([]);
+  const [flashEvents,  setFlashEvents]  = useState<FlashEvent[]>([]);
+  const [joinedFlash,  setJoinedFlash]  = useState<Set<string>>(new Set());
   const worldEvent       = useGameStore((s) => s.worldEvent);
   const worldEventJoined = useGameStore((s) => s.worldEventJoined ?? false);
   const joinWorldEvent   = useGameStore((s) => s.joinWorldEvent);
@@ -496,6 +506,13 @@ export default function HomeScreen() {
     return () => { sub?.unsubscribe(); };
   }, []);
 
+  // ── Flash Events — refresh toutes les 60s ─────────────────────────────────
+  useEffect(() => {
+    fetchActiveFlashEvents().then(setFlashEvents);
+    const interval = setInterval(() => fetchActiveFlashEvents().then(setFlashEvents), 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
   // ── NPC drama engine — 1 event toutes les 2–4 min ─────────────────────────
   useEffect(() => {
     const NPC_CAST = [
@@ -510,7 +527,6 @@ export default function HomeScreen() {
       const delay = 120_000 + Math.random() * 120_000; // 2–4 min
       return setTimeout(async () => {
         const npc = NPC_CAST[Math.floor(Math.random() * NPC_CAST.length)];
-        const { publishNpcDrama } = await import("@/lib/life-feed");
         await publishNpcDrama(npc.name, npc.emoji, npc.star);
         timer = scheduleNext();
       }, delay);
@@ -535,7 +551,7 @@ export default function HomeScreen() {
     performAction(id);
     hapticImpact("medium");
     const playerName = avatar?.displayName ?? "Joueur";
-    const playerEmoji = avatar?.emoji ?? "🧢";
+    const playerEmoji = "🧢";
     const evtPayload = buildActionFeedEvent(id, playerName, playerEmoji, "Paris", false);
     if (evtPayload) publishFeedEvent(evtPayload);
     const msgs: Record<string, string> = {
@@ -563,8 +579,60 @@ export default function HomeScreen() {
     { emoji: "😤", label: "Mood",   value: stats.mood     },
   ].sort((a, b) => a.value - b.value);
 
+  async function handleJoinFlash(evt: FlashEvent) {
+    if (joinedFlash.has(evt.id)) return;
+    await joinFlashEvent(evt.id, avatar?.displayName ?? "Joueur", "🧢");
+    setJoinedFlash((prev) => new Set([...prev, evt.id]));
+    showToast(`Tu participes — ${evt.emoji} ${evt.reward_xp} XP à gagner !`);
+  }
+
   return (
     <Animated.View style={{ flex: 1, backgroundColor: L.bg, opacity: fadeAnim }}>
+
+      {/* ── FLASH EVENTS BANNER (hors ScrollView pour rester sticky) ── */}
+      {flashEvents.length > 0 && (() => {
+        const evt = flashEvents[0];
+        const urgency = getUrgencyLevel(evt.ends_at);
+        const timeLeft = getTimeLeft(evt.ends_at);
+        const bannerColor = urgency === "critical" ? L.red : urgency === "warning" ? L.orange : L.gold;
+        const joined = joinedFlash.has(evt.id);
+        return (
+          <Pressable onPress={() => handleJoinFlash(evt)}
+            style={{ marginHorizontal: 16, marginTop: 10,
+              backgroundColor: bannerColor + "14",
+              borderRadius: 12, borderWidth: 1, borderColor: bannerColor + "50",
+              padding: 12, flexDirection: "row", alignItems: "center", gap: 10 }}>
+            {/* Pulse d'urgence */}
+            <LivePulse color={bannerColor} size={8} />
+            <Text style={{ fontSize: 18 }}>{evt.emoji}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: bannerColor, fontSize: 12, fontWeight: "900",
+                letterSpacing: 0.5 }} numberOfLines={1}>
+                {evt.title}
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8, marginTop: 2 }}>
+                <Text style={{ color: bannerColor + "CC", fontSize: 10, fontWeight: "700" }}>
+                  ⏱ {timeLeft}
+                </Text>
+                {evt.reward_xp > 0 && (
+                  <Text style={{ color: L.green + "CC", fontSize: 10 }}>+{evt.reward_xp} XP</Text>
+                )}
+                {evt.reward_money > 0 && (
+                  <Text style={{ color: L.gold + "CC", fontSize: 10 }}>+{evt.reward_money} BL</Text>
+                )}
+              </View>
+            </View>
+            <View style={{ backgroundColor: joined ? L.green + "20" : bannerColor + "20",
+              paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,
+              borderWidth: 1, borderColor: joined ? L.green + "40" : bannerColor + "40" }}>
+              <Text style={{ color: joined ? L.green : bannerColor, fontSize: 11, fontWeight: "900" }}>
+                {joined ? "INSCRIT ✓" : "PARTICIPER"}
+              </Text>
+            </View>
+          </Pressable>
+        );
+      })()}
+
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: 110 }}
         showsVerticalScrollIndicator={false}>
         <DailyEventModal visible={eventModalOpen} onClose={() => setEventModalOpen(false)} />

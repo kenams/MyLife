@@ -110,6 +110,12 @@ export default function TabsLayout() {
         title: "Chat",
         tabBarIcon: ({ color, focused }) => <ChatIcon color={color} focused={focused} />,
       }} />
+      <Tabs.Screen name="crews" options={{
+        title: "Crews",
+        tabBarIcon: ({ color, focused }) => (
+          <Ionicons name={focused ? "shield" : "shield-outline"} color={color} size={23} />
+        ),
+      }} />
       <Tabs.Screen name="notifications" options={{
         title: "Objectifs",
         tabBarIcon: ({ color, focused }) => <QuestesIcon color={color} focused={focused} />,

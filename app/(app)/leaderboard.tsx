@@ -7,6 +7,7 @@ import { computeWealthScore, getHousingTier, HOUSING_TIERS, type HousingTierId }
 import { isSupabaseConfigured, supabase } from "@/lib/supabase";
 import { colors } from "@/lib/theme";
 import { useGameStore } from "@/stores/game-store";
+import { computeReputation, fetchLeaderboard, upsertPlayerProfile } from "@/lib/reputation";
 
 type LeaderEntry = {
   rank:        number;
@@ -232,28 +233,56 @@ export default function LeaderboardScreen() {
     Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
   }, []);
 
+  // Sync mon profil + fetch leaderboard Supabase
   useEffect(() => {
-    const me: LeaderEntry = {
-      rank:        0,
-      displayName: avatar?.displayName ?? "Toi",
-      level:       playerLevel,
-      playerXp,
-      reputation:  stats.reputation,
-      streak:      stats.streak,
-      money:       stats.money,
-      housing:     housingTier,
-      wealthScore: wealthScore || computeWealthScore(stats.money, playerXp, stats.reputation, stats.streak, housingTier, playerLevel),
-      isPremium,
-      isMe:        true,
-    };
-    let all = [...MOCK_LEADERS, me];
+    const playerId = `local-${avatar?.displayName?.replace(/\s/g, "") ?? "joueur"}`;
+    const myRep = computeReputation(playerLevel, playerXp, stats.money, stats.streak, housingTier, 0);
 
-    if (sortKey === "wealth")     all.sort((a, b) => b.wealthScore - a.wealthScore);
-    else if (sortKey === "xp")         all.sort((a, b) => b.playerXp - a.playerXp);
-    else if (sortKey === "reputation") all.sort((a, b) => b.reputation - a.reputation);
-    else                               all.sort((a, b) => b.streak - a.streak);
+    // Push mon profil en base
+    upsertPlayerProfile({
+      playerId, displayName: avatar?.displayName ?? "Joueur",
+      playerEmoji: "🧢",
+      level: playerLevel, playerXp, money: stats.money,
+      reputation: myRep, streak: stats.streak,
+      housing: housingTier, isPremium,
+    });
 
-    setLeaders(all.map((e, i) => ({ ...e, rank: i + 1 })));
+    // Fetch top 20 depuis Supabase
+    const sortField = sortKey === "wealth" ? "player_xp" : sortKey === "xp" ? "player_xp" : sortKey as "reputation";
+    fetchLeaderboard(sortField, 20).then((profiles) => {
+      const entries: Omit<LeaderEntry, "rank">[] = profiles.map((p) => ({
+        displayName: p.display_name,
+        level:       p.level,
+        playerXp:    p.player_xp,
+        reputation:  p.reputation,
+        streak:      p.streak,
+        money:       p.money,
+        housing:     p.housing,
+        wealthScore: computeWealthScore(p.money, p.player_xp, p.reputation, p.streak, p.housing, p.level),
+        isPremium:   p.is_premium,
+        isMe:        p.player_id === playerId,
+      }));
+
+      const me: Omit<LeaderEntry, "rank"> = {
+        displayName: avatar?.displayName ?? "Toi",
+        level:       playerLevel, playerXp,
+        reputation:  myRep, streak: stats.streak, money: stats.money,
+        housing:     housingTier,
+        wealthScore: wealthScore || computeWealthScore(stats.money, playerXp, myRep, stats.streak, housingTier, playerLevel),
+        isPremium, isMe: true,
+      };
+
+      // Merge (évite doublon si profil déjà dans Supabase)
+      const withMe = entries.find((e) => e.isMe) ? entries : [...entries, me];
+
+      let sorted = [...withMe];
+      if (sortKey === "wealth")          sorted.sort((a, b) => b.wealthScore - a.wealthScore);
+      else if (sortKey === "xp")         sorted.sort((a, b) => b.playerXp - a.playerXp);
+      else if (sortKey === "reputation") sorted.sort((a, b) => b.reputation - a.reputation);
+      else                               sorted.sort((a, b) => b.streak - a.streak);
+
+      setLeaders(sorted.map((e, i) => ({ ...e, rank: i + 1 })));
+    });
   }, [sortKey, playerXp, stats.reputation, stats.streak, stats.money, housingTier, wealthScore]);
 
   const myEntry = leaders.find((e) => e.isMe);

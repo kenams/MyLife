@@ -12,6 +12,8 @@ import {
   publishPosition, requestAndGetLocation, STATUS_CONFIG, subscribeToMap,
 } from "@/lib/life-map";
 import type { MapPlayer, MapStatus } from "@/lib/life-map";
+import { fetchCrewZones } from "@/lib/crews";
+import type { CrewZone } from "@/lib/crews";
 import { blockUser } from "@/lib/safety";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
@@ -127,9 +129,10 @@ interface LeafletMapProps {
   onPlayerClick: (id: string) => void;
   onReady: () => void;
   onMapReady?: (flyFn: (lat: number, lng: number, zoom?: number) => void) => void;
+  crewZones?: (CrewZone & { crew: { color: string; tag: string; emoji: string } })[];
 }
 
-function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady }: LeafletMapProps) {
+function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, crewZones = [] }: LeafletMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef       = useRef<unknown>(null);
   const markersRef   = useRef<Record<string, unknown>>({});
@@ -212,6 +215,27 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady 
           if (pane) pane.style.filter = "invert(1) hue-rotate(180deg) brightness(0.85) contrast(1.1) saturate(0.6)";
         }
       }, 3000);
+
+      // Zones crew — cercles colorés semi-transparents
+      crewZones.forEach((zone) => {
+        const col = zone.crew?.color ?? "#FFD600";
+        L.circle([zone.lat, zone.lng], {
+          radius: zone.radius,
+          color: col, fillColor: col,
+          fillOpacity: 0.07, weight: 1.5, dashArray: "6 4",
+          opacity: 0.5,
+        }).addTo(map);
+        // Label du crew au centre de la zone
+        const tagSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="24">
+          <rect x="0" y="0" width="60" height="24" rx="5" fill="${col}22" stroke="${col}" stroke-width="1" opacity="0.8"/>
+          <text x="30" y="16" text-anchor="middle" font-size="10" fill="${col}" font-weight="900" font-family="system-ui,sans-serif">${zone.crew?.emoji ?? ""} ${zone.crew?.tag ?? ""}</text>
+        </svg>`;
+        const labelIcon = L.icon({
+          iconUrl: "data:image/svg+xml," + encodeURIComponent(tagSvg),
+          iconSize: [60, 24], iconAnchor: [30, 12],
+        });
+        L.marker([zone.lat, zone.lng], { icon: labelIcon, interactive: false }).addTo(map);
+      });
 
       // Marqueurs joueurs
       players.forEach((p) => {
@@ -474,6 +498,7 @@ export default function LifeMapScreen() {
   const playerLevel = useGameStore((s) => s.playerLevel ?? 1);
 
   const [players,      setPlayers]      = useState<MapPlayer[]>(MOCK_PLAYERS);
+  const [crewZones,    setCrewZones]    = useState<(CrewZone & { crew: { color: string; tag: string; emoji: string } })[]>([]);
   const [myStatus,     setMyStatus]     = useState<MapStatus>("ghost");
   const [myLocation,   setMyLocation]   = useState<{ lat: number; lng: number } | null>(null);
   const [loading,      setLoading]      = useState(false);
@@ -490,6 +515,11 @@ export default function LifeMapScreen() {
     !blocked.includes(p.user_id) &&
     (filter === "all" || p.status === filter)
   );
+
+  // Zones crew
+  useEffect(() => {
+    fetchCrewZones().then(setCrewZones);
+  }, []);
 
   // Realtime
   useEffect(() => {
@@ -572,6 +602,7 @@ export default function LifeMapScreen() {
         }}
         onReady={() => setMapReady(true)}
         onMapReady={(fn) => { flyToRef.current = fn; }}
+        crewZones={crewZones}
       />
 
 
