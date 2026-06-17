@@ -12,8 +12,11 @@ import {
   publishPosition, requestAndGetLocation, STATUS_CONFIG, subscribeToMap,
 } from "@/lib/life-map";
 import type { MapPlayer, MapStatus } from "@/lib/life-map";
-import { fetchCrewZones } from "@/lib/crews";
-import type { CrewZone } from "@/lib/crews";
+import {
+  fetchCrewZones, checkAndTriggerWars,
+  computeGlowIntensity,
+  type CrewZoneRich,
+} from "@/lib/crews";
 import { blockUser } from "@/lib/safety";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
@@ -96,6 +99,23 @@ function injectMapStyles() {
     }
     .mylife-map-container .leaflet-popup-tip { background: #0E0E16 !important; }
     .mylife-map-container .leaflet-popup-close-button { color: #9A968E !important; }
+
+    /* Glow pulsé pour les grosses zones crew */
+    @keyframes crewGlowPulse {
+      0%   { opacity: 0.55; stroke-width: 1.5px; }
+      50%  { opacity: 1;    stroke-width: 3px; }
+      100% { opacity: 0.55; stroke-width: 1.5px; }
+    }
+    .crew-zone-glow path {
+      animation: crewGlowPulse 2.4s ease-in-out infinite;
+    }
+    .crew-zone-mega path {
+      animation: crewGlowPulse 1.6s ease-in-out infinite;
+    }
+    .crew-zone-war path {
+      animation: crewGlowPulse 0.9s ease-in-out infinite;
+      filter: drop-shadow(0 0 8px currentColor);
+    }
   `;
   document.head.appendChild(style);
 }
@@ -129,7 +149,7 @@ interface LeafletMapProps {
   onPlayerClick: (id: string) => void;
   onReady: () => void;
   onMapReady?: (flyFn: (lat: number, lng: number, zoom?: number) => void) => void;
-  crewZones?: (CrewZone & { crew: { color: string; tag: string; emoji: string } })[];
+  crewZones?: CrewZoneRich[];
 }
 
 function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, crewZones = [] }: LeafletMapProps) {
@@ -216,25 +236,71 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
         }
       }, 3000);
 
-      // Zones crew — cercles colorés semi-transparents
+      // ── Zones crew — taille + glow dynamiques ────────────────────────────
       crewZones.forEach((zone) => {
-        const col = zone.crew?.color ?? "#FFD600";
-        L.circle([zone.lat, zone.lng], {
-          radius: zone.radius,
-          color: col, fillColor: col,
-          fillOpacity: 0.07, weight: 1.5, dashArray: "6 4",
-          opacity: 0.5,
+        const col        = zone.crew?.color ?? "#FFD600";
+        const members    = zone.crew?.member_count ?? 1;
+        const rep        = zone.crew?.reputation ?? 0;
+        const glow       = computeGlowIntensity(members);
+        const fillOp     = 0.04 + glow * 0.10;   // 0.04..0.14
+        const strokeOp   = 0.3 + glow * 0.5;     // 0.3..0.8
+        const weight     = 1 + glow * 2.5;        // 1..3.5
+
+        // Classe CSS pour l'animation selon taille
+        const isMega = members >= 20;
+        const isBig  = members >= 10;
+        const cssClass = isMega ? "crew-zone-mega" : isBig ? "crew-zone-glow" : "";
+
+        // Cercle principal
+        const circle = L.circle([zone.lat, zone.lng], {
+          radius:      zone.radius,
+          color:       col,
+          fillColor:   col,
+          fillOpacity: fillOp,
+          weight,
+          opacity:     strokeOp,
+          dashArray:   members >= 10 ? undefined : "6 5",
+          className:   cssClass,
         }).addTo(map);
-        // Label du crew au centre de la zone
-        const tagSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="24">
-          <rect x="0" y="0" width="60" height="24" rx="5" fill="${col}22" stroke="${col}" stroke-width="1" opacity="0.8"/>
-          <text x="30" y="16" text-anchor="middle" font-size="10" fill="${col}" font-weight="900" font-family="system-ui,sans-serif">${zone.crew?.emoji ?? ""} ${zone.crew?.tag ?? ""}</text>
-        </svg>`;
+
+        // Halo externe pour les mega-crews (>= 20 membres)
+        if (isMega) {
+          L.circle([zone.lat, zone.lng], {
+            radius:      zone.radius * 1.15,
+            color:       col,
+            fillColor:   "transparent",
+            fillOpacity: 0,
+            weight:      0.8,
+            opacity:     0.2,
+            dashArray:   "3 8",
+          }).addTo(map);
+        }
+
+        // Label flottant : emoji + tag + members
+        const labelW = 72 + (members >= 10 ? 8 : 0);
+        const tagSvg = [
+          `<svg xmlns="http://www.w3.org/2000/svg" width="${labelW}" height="28">`,
+          `<rect x="0" y="0" width="${labelW}" height="28" rx="7" fill="#04040A" stroke="${col}" stroke-width="${isBig ? 1.5 : 1}" opacity="${isBig ? 0.92 : 0.78}"/>`,
+          isBig
+            ? `<circle cx="14" cy="14" r="4" fill="${col}" opacity="0.85"/>`
+            : `<circle cx="14" cy="14" r="3" fill="${col}" opacity="0.5"/>`,
+          `<text x="${labelW / 2}" y="18" text-anchor="middle" font-size="${isBig ? 11 : 10}" fill="${col}" font-weight="900" font-family="system-ui,sans-serif">${zone.crew?.emoji ?? ""} ${zone.crew?.tag ?? ""} · ${members}</text>`,
+          `</svg>`,
+        ].join("");
         const labelIcon = L.icon({
           iconUrl: "data:image/svg+xml," + encodeURIComponent(tagSvg),
-          iconSize: [60, 24], iconAnchor: [30, 12],
+          iconSize: [labelW, 28], iconAnchor: [labelW / 2, 14],
         });
         L.marker([zone.lat, zone.lng], { icon: labelIcon, interactive: false }).addTo(map);
+
+        // Popup info au clic sur le cercle
+        (circle as unknown as { bindPopup: (html: string) => void }).bindPopup(
+          `<div style="font-family:system-ui;padding:4px">
+            <b style="color:${col}">${zone.crew?.emoji} ${zone.crew?.tag ?? "CREW"}</b><br/>
+            <span style="color:#9A968E;font-size:11px">${zone.name}</span><br/>
+            <span style="font-size:12px">👥 ${members} membres · ⭐ ${rep} rep</span>
+          </div>`
+        );
       });
 
       // Marqueurs joueurs
@@ -498,7 +564,7 @@ export default function LifeMapScreen() {
   const playerLevel = useGameStore((s) => s.playerLevel ?? 1);
 
   const [players,      setPlayers]      = useState<MapPlayer[]>(MOCK_PLAYERS);
-  const [crewZones,    setCrewZones]    = useState<(CrewZone & { crew: { color: string; tag: string; emoji: string } })[]>([]);
+  const [crewZones,    setCrewZones]    = useState<CrewZoneRich[]>([]);
   const [myStatus,     setMyStatus]     = useState<MapStatus>("ghost");
   const [myLocation,   setMyLocation]   = useState<{ lat: number; lng: number } | null>(null);
   const [loading,      setLoading]      = useState(false);
@@ -516,9 +582,12 @@ export default function LifeMapScreen() {
     (filter === "all" || p.status === filter)
   );
 
-  // Zones crew
+  // Zones crew + détection guerres
   useEffect(() => {
-    fetchCrewZones().then(setCrewZones);
+    fetchCrewZones().then((zones) => {
+      setCrewZones(zones);
+      checkAndTriggerWars(zones);
+    });
   }, []);
 
   // Realtime

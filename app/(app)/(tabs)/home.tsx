@@ -18,6 +18,9 @@ import {
   getUrgencyLevel,
   type FlashEvent,
 } from "@/lib/flash-events";
+import {
+  getMyCrewId, getMyCrewZone, isPlayerInZone, pingZoneActivity,
+} from "@/lib/crews";
 
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getAvatarVisual } from "@/lib/avatar-visual";
@@ -422,9 +425,11 @@ export default function HomeScreen() {
   const housingTier      = useGameStore((s) => s.housingTier);
   const checkHousingRent = useGameStore((s) => s.checkHousingRent);
   const lifeFeed         = useGameStore((s) => s.lifeFeed ?? []);
-  const [liveEvents,   setLiveEvents]   = useState<FeedEvent[]>([]);
-  const [flashEvents,  setFlashEvents]  = useState<FlashEvent[]>([]);
-  const [joinedFlash,  setJoinedFlash]  = useState<Set<string>>(new Set());
+  const [liveEvents,     setLiveEvents]     = useState<FeedEvent[]>([]);
+  const [flashEvents,    setFlashEvents]    = useState<FlashEvent[]>([]);
+  const [joinedFlash,    setJoinedFlash]    = useState<Set<string>>(new Set());
+  const [inCrewZone,     setInCrewZone]     = useState(false);
+  const [crewZoneName,   setCrewZoneName]   = useState<string | null>(null);
   const worldEvent       = useGameStore((s) => s.worldEvent);
   const worldEventJoined = useGameStore((s) => s.worldEventJoined ?? false);
   const joinWorldEvent   = useGameStore((s) => s.joinWorldEvent);
@@ -513,6 +518,24 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, []);
 
+  // ── Détection zone crew (géolocalisation web) ──────────────────────────────
+  useEffect(() => {
+    const playerName = avatar?.displayName ?? "";
+    if (!playerName) return;
+    getMyCrewId(playerName).then(async (crewId) => {
+      if (!crewId) return;
+      const zone = await getMyCrewZone(crewId);
+      if (!zone) return;
+      if (!("geolocation" in navigator)) return;
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const inside = isPlayerInZone(pos.coords.latitude, pos.coords.longitude, zone);
+        setInCrewZone(inside);
+        setCrewZoneName(inside ? zone.name : null);
+        if (inside) pingZoneActivity(zone.id);
+      }, () => {/* permission refusée = pas de bonus, silencieux */});
+    });
+  }, [avatar?.displayName]);
+
   // ── NPC drama engine — 1 event toutes les 2–4 min ─────────────────────────
   useEffect(() => {
     const NPC_CAST = [
@@ -569,7 +592,8 @@ export default function HomeScreen() {
       "read-book":    "+motivation 📚",
       "shopping":     "+look 🛍️",
     };
-    showToast(msgs[id] ?? "+xp 🔥");
+    const baseMsg = msgs[id] ?? "+xp 🔥";
+    showToast(inCrewZone ? `${baseMsg} · 🏴 +15% ZONE` : baseMsg);
   }
 
   const statRows = [
@@ -644,10 +668,22 @@ export default function HomeScreen() {
           {/* Top row: greeting + money */}
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between",
             marginBottom: 16 }}>
-            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "900",
-              letterSpacing: 2.5, textTransform: "uppercase" }}>
-              {salut}
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ color: L.muted, fontSize: 10, fontWeight: "900",
+                letterSpacing: 2.5, textTransform: "uppercase" }}>
+                {salut}
+              </Text>
+              {inCrewZone && crewZoneName && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 4,
+                  backgroundColor: L.green + "15", paddingHorizontal: 7, paddingVertical: 3,
+                  borderRadius: 6, borderWidth: 1, borderColor: L.green + "40" }}>
+                  <LivePulse color={L.green} size={5} />
+                  <Text style={{ color: L.green, fontSize: 9, fontWeight: "900", letterSpacing: 1 }}>
+                    ZONE +15% XP
+                  </Text>
+                </View>
+              )}
+            </View>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 4,
               backgroundColor: L.primaryBg, borderRadius: 20,
               paddingHorizontal: 12, paddingVertical: 6,
