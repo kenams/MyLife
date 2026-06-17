@@ -2,6 +2,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Modal, Pressable, ScrollView, Text, View } from "react-native";
+import { supabase } from "@/lib/supabase";
 
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getAvatarVisual } from "@/lib/avatar-visual";
@@ -68,6 +69,167 @@ const ALL_ACTIONS: ActionDef[] = [
   { id: "shopping",      emoji: "🛍️", label: "Le Marais / SNKRS", costLabel: "35 bl",  gainLabel: "+Look +Mood",        category: "social",  minMoney: 35 },
 ];
 
+// ─── LivePulse ────────────────────────────────────────────────────────────────
+function LivePulse({ color = "#39FF14", size = 8 }: { color?: string; size?: number }) {
+  const pulse = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(Animated.sequence([
+      Animated.timing(pulse, { toValue: 1.8, duration: 900, useNativeDriver: true }),
+      Animated.timing(pulse, { toValue: 1, duration: 900, useNativeDriver: true }),
+    ])).start();
+  }, []);
+  return (
+    <View style={{ width: size + 4, height: size + 4, alignItems: "center", justifyContent: "center" }}>
+      <Animated.View style={{ position: "absolute", width: size + 4, height: size + 4, borderRadius: (size + 4) / 2,
+        backgroundColor: color, opacity: 0.3, transform: [{ scale: pulse }] }} />
+      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />
+    </View>
+  );
+}
+
+// ─── NPC Story bubble ─────────────────────────────────────────────────────────
+type NpcStory = { name: string; emoji: string; body: string; quartier: string; is_star: boolean; created_at: string };
+
+function NpcStoryBubble({ story, onPress }: { story: NpcStory; onPress: () => void }) {
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  useEffect(() => {
+    Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, tension: 120, friction: 8 }).start();
+  }, []);
+  return (
+    <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+      <Pressable onPress={onPress}
+        style={{ width: 72, alignItems: "center", gap: 6 }}>
+        <View style={{
+          width: 56, height: 56, borderRadius: 28,
+          backgroundColor: story.is_star ? L.purpleBg : L.card,
+          borderWidth: 2.5,
+          borderColor: story.is_star ? L.purple : L.primary + "60",
+          alignItems: "center", justifyContent: "center",
+          shadowColor: story.is_star ? L.purple : L.primary,
+          shadowOpacity: 0.35, shadowRadius: 8,
+        }}>
+          <Text style={{ fontSize: 26 }}>{story.emoji}</Text>
+          {story.is_star && (
+            <View style={{ position: "absolute", top: -4, right: -4,
+              backgroundColor: L.purple, borderRadius: 8, paddingHorizontal: 3, paddingVertical: 1,
+              borderWidth: 1.5, borderColor: L.bg }}>
+              <Text style={{ color: "#fff", fontSize: 7, fontWeight: "900" }}>★</Text>
+            </View>
+          )}
+        </View>
+        <Text numberOfLines={1} style={{ color: L.textSoft, fontSize: 9, fontWeight: "700", textAlign: "center" }}>
+          {story.name.split(".")[0]}
+        </Text>
+      </Pressable>
+    </Animated.View>
+  );
+}
+
+// ─── Live Paris Widget ────────────────────────────────────────────────────────
+function LiveParisWidget() {
+  const [count,  setCount]  = useState<number | null>(null);
+  const [stories, setStories] = useState<NpcStory[]>([]);
+  const countAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!supabase) return;
+
+    // Compteur joueurs actifs (non ghost)
+    supabase.from("life_map_players")
+      .select("id", { count: "exact" })
+      .neq("status", "ghost")
+      .then(({ count: n }) => {
+        const total = n ?? 0;
+        setCount(total);
+        Animated.timing(countAnim, { toValue: total, duration: 1200, useNativeDriver: false }).start();
+      });
+
+    // Stories NPCs — derniers messages
+    supabase.from("quartier_messages")
+      .select("display_name, avatar_emoji, body, quartier, is_star, created_at")
+      .eq("is_npc", true)
+      .order("created_at", { ascending: false })
+      .limit(6)
+      .then(({ data }) => {
+        if (data && data.length > 0) {
+          const seen = new Set<string>();
+          const unique = data.filter((m) => {
+            if (seen.has(m.display_name)) return false;
+            seen.add(m.display_name);
+            return true;
+          });
+          setStories(unique.map((m) => ({
+            name: m.display_name, emoji: m.avatar_emoji,
+            body: m.body, quartier: m.quartier,
+            is_star: m.is_star, created_at: m.created_at,
+          })));
+        }
+      });
+  }, []);
+
+  const displayCount = count ?? 0;
+
+  return (
+    <View style={{ marginHorizontal: 20, marginTop: 16, backgroundColor: L.card,
+      borderRadius: 18, borderWidth: 1, borderColor: L.border, overflow: "hidden" }}>
+
+      {/* Header live */}
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+        paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
+        borderBottomWidth: 1, borderBottomColor: L.border }}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <LivePulse />
+          <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Paris en direct</Text>
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <View style={{ backgroundColor: L.greenBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+            borderWidth: 1, borderColor: L.green + "30", flexDirection: "row", alignItems: "center", gap: 5 }}>
+            <Text style={{ color: L.green, fontSize: 12, fontWeight: "900" }}>{displayCount}</Text>
+            <Text style={{ color: L.green, fontSize: 10 }}>actifs</Text>
+          </View>
+          <Pressable onPress={() => router.push("/(app)/(tabs)/map" as never)}
+            style={{ backgroundColor: L.primaryBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+              borderWidth: 1, borderColor: L.primary + "30" }}>
+            <Text style={{ color: L.primary, fontSize: 10, fontWeight: "800" }}>MAP →</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Stories NPCs */}
+      {stories.length > 0 && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 12, gap: 4 }}>
+          {stories.map((story) => (
+            <NpcStoryBubble key={story.name} story={story}
+              onPress={() => router.push(`/(app)/live-chat?quartier=${story.quartier}` as never)} />
+          ))}
+          <Pressable onPress={() => router.push("/(app)/quartiers" as never)}
+            style={{ width: 72, alignItems: "center", gap: 6 }}>
+            <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: L.cardAlt,
+              borderWidth: 2, borderColor: L.border, borderStyle: "dashed",
+              alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: L.muted, fontSize: 22 }}>+</Text>
+            </View>
+            <Text style={{ color: L.muted, fontSize: 9, fontWeight: "700" }}>Quartiers</Text>
+          </Pressable>
+        </ScrollView>
+      )}
+
+      {stories.length === 0 && (
+        <View style={{ padding: 16, alignItems: "center", gap: 6 }}>
+          <Pressable onPress={() => router.push("/(app)/quartiers" as never)}
+            style={{ flexDirection: "row", alignItems: "center", gap: 8,
+              backgroundColor: L.tealBg, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+              borderWidth: 1, borderColor: L.teal + "30" }}>
+            <Text style={{ fontSize: 14 }}>📡</Text>
+            <Text style={{ color: L.teal, fontSize: 12, fontWeight: "800" }}>Rejoindre un quartier live</Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
+  );
+}
+
 // ─── Daily Event Modal ────────────────────────────────────────────────────────
 function DailyEventModal({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const dailyEvent        = useGameStore((s) => s.dailyEvent);
@@ -121,73 +283,115 @@ function StatRow({ emoji, label, value }: { emoji: string; label: string; value:
   const warn    = pct < 55;
   const color   = danger ? L.red : warn ? L.gold : L.green;
   const barAnim = useRef(new Animated.Value(0)).current;
+  const glowAnim = useRef(new Animated.Value(0.4)).current;
 
   useEffect(() => {
-    Animated.timing(barAnim, { toValue: pct, duration: 600, useNativeDriver: false }).start();
+    Animated.timing(barAnim, { toValue: pct, duration: 750, useNativeDriver: false }).start();
+    if (danger) {
+      Animated.loop(Animated.sequence([
+        Animated.timing(glowAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(glowAnim, { toValue: 0.4, duration: 600, useNativeDriver: true }),
+      ])).start();
+    }
   }, [pct]);
 
   const barW = barAnim.interpolate({ inputRange: [0, 100], outputRange: ["0%", "100%"] });
 
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 11,
-      borderBottomWidth: 1, borderBottomColor: L.border }}>
-      <Text style={{ fontSize: 15, width: 22, textAlign: "center" }}>{emoji}</Text>
-      <Text style={{ color: L.textSoft, fontSize: 13, fontWeight: "600", width: 48 }}>{label}</Text>
-      <View style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.05)" }}>
-        <Animated.View style={{ height: 3, borderRadius: 2, width: barW,
-          backgroundColor: color,
-          shadowColor: color, shadowOpacity: danger ? 0.7 : 0.4, shadowRadius: 4 }} />
+    <View style={{
+      marginBottom: 8, borderRadius: 14, overflow: "hidden",
+      borderWidth: 1,
+      borderColor: danger ? L.red + "30" : color + "15",
+      backgroundColor: danger ? L.red + "07" : "rgba(255,255,255,0.018)",
+    }}>
+      <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1.5,
+        backgroundColor: color, opacity: danger ? 0.8 : 0.4 }} />
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 10,
+        paddingHorizontal: 14, paddingVertical: 13 }}>
+        <Animated.Text style={{ fontSize: 18, width: 24, textAlign: "center",
+          opacity: danger ? glowAnim : 1 }}>{emoji}</Animated.Text>
+        <Text style={{ color: color, fontSize: 10, fontWeight: "900",
+          letterSpacing: 1, width: 54, textTransform: "uppercase" }}>{label}</Text>
+        <View style={{ flex: 1, height: 6, borderRadius: 3,
+          backgroundColor: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+          <Animated.View style={{ height: 6, borderRadius: 3, width: barW,
+            backgroundColor: color,
+            shadowColor: color, shadowOpacity: danger ? 1 : 0.7, shadowRadius: 10 }} />
+        </View>
+        <Text style={{ color: color, fontSize: 16, fontWeight: "900",
+          width: 30, textAlign: "right" }}>
+          {Math.round(pct)}
+        </Text>
       </View>
-      <Text style={{ color: danger ? L.red : L.muted, fontSize: 12, fontWeight: "800",
-        width: 26, textAlign: "right" }}>
-        {Math.round(pct)}
-      </Text>
     </View>
   );
 }
 
 // ─── ActionRow ────────────────────────────────────────────────────────────────
+const CAT_COLOR: Record<string, string> = {
+  survie:  L.orange,
+  travail: L.blue,
+  social:  L.purple,
+  santé:   L.green,
+};
+
 function ActionRow({ action, onPress, isNext, blockedReason }: {
   action: ActionDef;
   onPress: () => void;
   isNext: boolean;
   blockedReason?: string;
 }) {
-  const blocked = !!blockedReason;
+  const blocked   = !!blockedReason;
+  const catColor  = CAT_COLOR[action.category] ?? L.muted;
+  const accentColor = blocked ? L.muted + "40" : isNext ? L.primary : catColor;
+  const scale     = useRef(new Animated.Value(1)).current;
+
   return (
-    <Pressable onPress={() => { if (!blocked) { hapticImpact("light"); onPress(); } }}
-      style={{ flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14,
-        borderBottomWidth: 1, borderBottomColor: L.border,
-        opacity: blocked ? 0.4 : 1 }}>
-      <View style={{
-        width: 40, height: 40, borderRadius: 12,
-        backgroundColor: isNext ? L.primary + "15" : L.card,
-        borderWidth: isNext ? 1 : 0,
-        borderColor: L.primary + "35",
-        alignItems: "center", justifyContent: "center",
-      }}>
-        <Text style={{ fontSize: 20 }}>{blocked ? "🔒" : action.emoji}</Text>
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: isNext ? L.primary : blocked ? L.muted : L.text,
-          fontSize: 15, fontWeight: "800" }}>
-          {action.label}
-        </Text>
-        <Text style={{ color: blocked ? L.muted : L.muted, fontSize: 12, marginTop: 1 }}>
-          {blocked ? blockedReason : action.gainLabel}
-        </Text>
-      </View>
-      {isNext ? (
-        <View style={{ backgroundColor: L.primary, borderRadius: 5,
-          paddingHorizontal: 8, paddingVertical: 3 }}>
-          <Text style={{ color: "#080808", fontSize: 9, fontWeight: "900", letterSpacing: 0.5 }}>
-            MAINTENANT
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable
+        onPressIn={() => !blocked && Animated.spring(scale, { toValue: 0.985, useNativeDriver: true }).start()}
+        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
+        onPress={() => { if (!blocked) { hapticImpact("light"); onPress(); } }}
+        style={{ flexDirection: "row", alignItems: "center", gap: 12,
+          paddingVertical: 14, paddingRight: 4,
+          borderBottomWidth: 1, borderBottomColor: L.border,
+          opacity: blocked ? 0.38 : 1 }}>
+        {/* Left category neon bar */}
+        <View style={{ width: 3, height: 38, borderRadius: 2,
+          backgroundColor: accentColor,
+          shadowColor: accentColor, shadowOpacity: blocked ? 0 : 0.8, shadowRadius: 6 }} />
+        <View style={{
+          width: 42, height: 42, borderRadius: 13,
+          backgroundColor: isNext ? L.primary + "18" : catColor + "10",
+          borderWidth: 1,
+          borderColor: isNext ? L.primary + "45" : catColor + "28",
+          alignItems: "center", justifyContent: "center",
+        }}>
+          <Text style={{ fontSize: 21 }}>{blocked ? "🔒" : action.emoji}</Text>
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: isNext ? L.primary : blocked ? L.muted : L.text,
+            fontSize: 15, fontWeight: "800" }}>
+            {action.label}
+          </Text>
+          <Text style={{ color: blocked ? L.muted + "70" : catColor + "99",
+            fontSize: 11, marginTop: 2, fontWeight: "600" }}>
+            {blocked ? blockedReason : action.gainLabel}
           </Text>
         </View>
-      ) : !blocked ? (
-        <Text style={{ color: L.muted, fontSize: 11 }}>{action.costLabel}</Text>
-      ) : null}
-    </Pressable>
+        {isNext ? (
+          <View style={{ backgroundColor: L.primary, borderRadius: 6,
+            paddingHorizontal: 9, paddingVertical: 4,
+            shadowColor: L.primary, shadowOpacity: 0.55, shadowRadius: 10 }}>
+            <Text style={{ color: "#080808", fontSize: 9, fontWeight: "900", letterSpacing: 0.8 }}>
+              MAINTENANT
+            </Text>
+          </View>
+        ) : !blocked ? (
+          <Text style={{ color: L.muted, fontSize: 11 }}>{action.costLabel}</Text>
+        ) : null}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -322,52 +526,100 @@ export default function HomeScreen() {
         <DailyEventModal visible={eventModalOpen} onClose={() => setEventModalOpen(false)} />
 
         {/* ── HEADER ── */}
-        <View style={{ paddingTop: 54, paddingHorizontal: 20, paddingBottom: 18,
+        <View style={{ paddingTop: 54, paddingHorizontal: 20, paddingBottom: 20,
           borderBottomWidth: 1, borderBottomColor: L.border }}>
 
-          {/* Greeting */}
-          <Text style={{ color: L.muted, fontSize: 12, fontWeight: "700",
-            letterSpacing: 0.3, marginBottom: 10 }}>
-            {salut}, {name}
-          </Text>
-
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={{ width: 44, height: 44, borderRadius: 22,
-              backgroundColor: L.card, borderWidth: 1, borderColor: L.border,
-              alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
-              {avatar
-                ? <AvatarSprite visual={getAvatarVisual(avatar)} action={stats.energy < 20 ? "sleeping" : "idle"} size="sm" />
-                : <Text style={{ fontSize: 22 }}>🧢</Text>}
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: L.text, fontSize: 16, fontWeight: "900" }}>
-                {avatar?.displayName ?? "Mon perso"}
-              </Text>
-              <Text style={{ color: L.muted, fontSize: 12, marginTop: 1 }}>
-                Niv. {playerLevel} · {housing.emoji} {housing.name}
-              </Text>
-            </View>
-            <View style={{ alignItems: "flex-end" }}>
-              <Text style={{ color: L.primary, fontSize: 15, fontWeight: "900" }}>
-                💰 {stats.money} bl
+          {/* Top row: greeting + money */}
+          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+            marginBottom: 16 }}>
+            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "900",
+              letterSpacing: 2.5, textTransform: "uppercase" }}>
+              {salut}
+            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 4,
+              backgroundColor: L.primaryBg, borderRadius: 20,
+              paddingHorizontal: 12, paddingVertical: 6,
+              borderWidth: 1, borderColor: L.primary + "35",
+              shadowColor: L.primary, shadowOpacity: 0.2, shadowRadius: 10 }}>
+              <Text style={{ fontSize: 12 }}>💰</Text>
+              <Text style={{ color: L.primary, fontSize: 14, fontWeight: "900" }}>
+                {Math.round(stats.money)} BL
               </Text>
             </View>
           </View>
 
-          {/* Barre de vie avec label état */}
-          <View style={{ marginTop: 14, flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <View style={{ flex: 1, height: 3, borderRadius: 2, backgroundColor: L.card }}>
-              <View style={{ height: 3, borderRadius: 2,
+          {/* Avatar + Identity */}
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+            {/* Avatar with animated neon ring */}
+            <View style={{ width: 56, height: 56, alignItems: "center", justifyContent: "center" }}>
+              <Animated.View style={{
+                position: "absolute", width: 56, height: 56, borderRadius: 28,
+                borderWidth: 2, borderColor: wbColor,
+                shadowColor: wbColor, shadowOpacity: 0.7, shadowRadius: 12,
+                opacity: fadeAnim,
+              }} />
+              <View style={{ width: 50, height: 50, borderRadius: 25,
+                backgroundColor: L.card, borderWidth: 1, borderColor: wbColor + "30",
+                alignItems: "center", justifyContent: "center", overflow: "hidden" }}>
+                {avatar
+                  ? <AvatarSprite visual={getAvatarVisual(avatar)} action={stats.energy < 20 ? "sleeping" : "idle"} size="sm" />
+                  : <Text style={{ fontSize: 24 }}>🧢</Text>}
+              </View>
+            </View>
+
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: L.text, fontSize: 19, fontWeight: "900",
+                letterSpacing: -0.5 }}>
+                {name.toUpperCase()}
+              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 3 }}>
+                <View style={{ backgroundColor: L.purple + "18", borderRadius: 6,
+                  paddingHorizontal: 7, paddingVertical: 2,
+                  borderWidth: 1, borderColor: L.purple + "30" }}>
+                  <Text style={{ color: L.purple, fontSize: 10, fontWeight: "900" }}>
+                    NIV {playerLevel}
+                  </Text>
+                </View>
+                <Text style={{ color: L.muted, fontSize: 11 }}>
+                  {housing.emoji} {housing.name}
+                </Text>
+              </View>
+            </View>
+
+            {/* Wellbeing status badge */}
+            <View style={{ alignItems: "center", gap: 2 }}>
+              <View style={{ backgroundColor: wbColor + "15", borderRadius: 10,
+                paddingHorizontal: 10, paddingVertical: 6,
+                borderWidth: 1, borderColor: wbColor + "35",
+                shadowColor: wbColor, shadowOpacity: 0.3, shadowRadius: 8 }}>
+                <Text style={{ color: wbColor, fontSize: 11, fontWeight: "900" }}>{wbLabel}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* XP / Wellbeing bar */}
+          <View style={{ marginTop: 16 }}>
+            <View style={{ flexDirection: "row", justifyContent: "space-between",
+              alignItems: "center", marginBottom: 6 }}>
+              <Text style={{ color: L.muted, fontSize: 9, fontWeight: "900", letterSpacing: 2 }}>
+                ÉTAT GÉNÉRAL
+              </Text>
+              <Text style={{ color: wbColor, fontSize: 9, fontWeight: "900" }}>
+                {Math.round(wellbeing)}/100
+              </Text>
+            </View>
+            <View style={{ height: 8, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.05)",
+              overflow: "hidden" }}>
+              <View style={{ height: 8, borderRadius: 4,
                 width: `${Math.max(0, Math.min(100, wellbeing))}%` as `${number}%`,
                 backgroundColor: wbColor,
-                shadowColor: wbColor, shadowOpacity: 0.7, shadowRadius: 4 }} />
+                shadowColor: wbColor, shadowOpacity: 0.9, shadowRadius: 8 }} />
             </View>
-            <Text style={{ color: wbColor, fontSize: 11, fontWeight: "800", minWidth: 72,
-              textAlign: "right" }}>
-              {wbLabel}
-            </Text>
           </View>
         </View>
+
+        {/* ── LIVE PARIS ── */}
+        <LiveParisWidget />
 
         <View style={{ paddingHorizontal: 20 }}>
 
@@ -412,19 +664,26 @@ export default function HomeScreen() {
 
           {/* ── TON ÉTAT ── */}
           <View style={{ marginTop: 28 }}>
-            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800",
-              letterSpacing: 2, marginBottom: 2 }}>
-              TON ÉTAT
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <Text style={{ color: L.muted, fontSize: 9, fontWeight: "900", letterSpacing: 3 }}>
+                TON ÉTAT
+              </Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: wbColor + "25" }} />
+              <Text style={{ color: wbColor, fontSize: 9, fontWeight: "700", letterSpacing: 1 }}>
+                {wbLabel}
+              </Text>
+            </View>
             {statRows.map((s) => <StatRow key={s.label} {...s} />)}
           </View>
 
           {/* ── CE QUE TU FAIS ── */}
           <View style={{ marginTop: 28 }}>
-            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800",
-              letterSpacing: 2, marginBottom: 2 }}>
-              CE QUE TU FAIS
-            </Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 2 }}>
+              <Text style={{ color: L.muted, fontSize: 9, fontWeight: "900", letterSpacing: 3 }}>
+                CE QUE TU FAIS
+              </Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: L.primary + "20" }} />
+            </View>
             {listRows.map(({ action, blocked }, i) => (
               <ActionRow
                 key={action.id}

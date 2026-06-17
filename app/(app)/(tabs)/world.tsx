@@ -6,7 +6,7 @@ import {
   Pressable,
   ScrollView,
   Text,
-  View
+  View,
 } from "react-native";
 
 import { VillageMap } from "@/components/village-map";
@@ -18,37 +18,35 @@ import { buildMapEvents, eventByLocation } from "@/lib/map-events";
 import type { NpcState, RelationshipRecord } from "@/lib/types";
 import { useGameStore, worldLocations } from "@/stores/game-store";
 
-// ─── Thème ────────────────────────────────────────────────────────────────────
-
-const L = {
-  bg:         "#e8edf5",
-  card:       "#f0f4fa",
-  border:     "#ccd4e0",
-  text:       "#1e2a3a",
-  textSoft:   "#4a5568",
-  muted:      "#8fa3b8",
-  primary:    "#6366f1",
-  primaryBg:  "#eef2ff",
-  green:      "#10b981",
-  greenBg:    "#ecfdf5",
-  gold:       "#f59e0b",
-  goldBg:     "#fffbeb",
-  red:        "#ef4444",
-  redBg:      "#fef2f2",
-  blue:       "#3b82f6",
-  blueBg:     "#eff6ff",
-  orange:     "#f97316",
-  orangeBg:   "#fff7ed",
+// ── Palette ───────────────────────────────────────────────────────────────────
+const C = {
+  void:    "#04040A",
+  deep:    "#08080F",
+  glass:   "#0C0C16",
+  surface: "#101018",
+  card:    "#12121C",
+  border:  "rgba(255,255,255,0.06)",
+  text:    "#E8E4DC",
+  soft:    "#9A968E",
+  muted:   "#4A4848",
+  // Neons
+  gold:    "#FFD600",
+  goldDim: "#1A1400",
+  green:   "#39FF14",
+  purple:  "#BF5FFF",
+  blue:    "#00B4FF",
+  red:     "#FF3B3B",
+  teal:    "#00FFD1",
+  orange:  "#FF8C00",
 };
 
-// Couleurs par catégorie de lieu
-const KIND_STYLE: Record<string, { emoji: string; color: string; bg: string }> = {
-  home:     { emoji: "🏠", color: "#d97706", bg: "#fef3c7" },
-  food:     { emoji: "🍽️", color: "#f97316", bg: "#fff7ed" },
-  social:   { emoji: "💬", color: "#10b981", bg: "#ecfdf5" },
-  work:     { emoji: "💼", color: "#3b82f6", bg: "#eff6ff" },
-  wellness: { emoji: "🌿", color: "#8b5cf6", bg: "#f5f3ff" },
-  public:   { emoji: "🌳", color: "#059669", bg: "#d1fae5" },
+const KIND = {
+  home:     { emoji: "🏠", color: C.gold,   dim: "#1A1400" },
+  food:     { emoji: "🍽️", color: C.orange, dim: "#1A0C00" },
+  social:   { emoji: "💬", color: C.teal,   dim: "#001A14" },
+  work:     { emoji: "💼", color: C.blue,   dim: "#00101A" },
+  wellness: { emoji: "🌿", color: C.purple, dim: "#10081A" },
+  public:   { emoji: "🌳", color: C.green,  dim: "#081A02" },
 };
 
 const ACTION_EMOJI: Record<string, string> = {
@@ -57,226 +55,234 @@ const ACTION_EMOJI: Record<string, string> = {
   idle: "💭", waving: "👋",
 };
 
-const NEIGHBORHOODS: Array<{ label: string; slugs: string[]; color: string }> = [
-  { label: "🏡 Residences", color: "#d97706",
-    slugs: ["home", "residence-populaire", "residence-confort", "residence-luxe"] },
-  { label: "🌿 Parc & Santé", color: "#059669",
-    slugs: ["park", "gym", "spa"] },
-  { label: "🍽️ Alimentation", color: "#f97316",
-    slugs: ["market", "restaurant"] },
-  { label: "💼 Travail", color: "#3b82f6",
-    slugs: ["office", "startup", "library"] },
-  { label: "💬 Social & Sorties", color: "#8b5cf6",
-    slugs: ["cafe", "cinema", "nightclub", "rooftop-bar"] },
+const NEIGHBORHOODS = [
+  { label: "🏡 Résidences", color: C.gold,   slugs: ["home","residence-populaire","residence-confort","residence-luxe"] },
+  { label: "🌿 Bien-être",  color: C.green,  slugs: ["park","gym","spa"] },
+  { label: "🍽️ Manger",    color: C.orange, slugs: ["market","restaurant"] },
+  { label: "💼 Travail",    color: C.blue,   slugs: ["office","startup","library"] },
+  { label: "💬 Social",     color: C.purple, slugs: ["cafe","cinema","nightclub","rooftop-bar"] },
 ];
 
-// ─── Composants utilitaires ───────────────────────────────────────────────────
+const DATE_VENUES = [
+  { slug: "cafe",       label: "Café",       color: C.teal   },
+  { slug: "park",       label: "Parc",       color: C.green  },
+  { slug: "restaurant", label: "Restaurant", color: C.orange },
+  { slug: "cinema",     label: "Cinéma",     color: C.blue   },
+];
 
-function MoneyBadge({ amount }: { amount: number }) {
-  const color = amount >= 200 ? L.gold : amount >= 80 ? L.green : L.red;
-  const bg    = amount >= 200 ? L.goldBg : amount >= 80 ? L.greenBg : L.redBg;
+// ── Pulse dot ─────────────────────────────────────────────────────────────────
+function Pulse({ color = C.green, size = 7 }: { color?: string; size?: number }) {
+  const s = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.loop(Animated.sequence([
+      Animated.timing(s, { toValue: 1.8, duration: 900, useNativeDriver: true }),
+      Animated.timing(s, { toValue: 1,   duration: 900, useNativeDriver: true }),
+    ])).start();
+  }, []);
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 3,
-      backgroundColor: bg, borderRadius: 8,
-      paddingHorizontal: 7, paddingVertical: 3 }}>
-      <Text style={{ fontSize: 10 }}>💰</Text>
-      <Text style={{ color, fontSize: 10, fontWeight: "800" }}>{amount}</Text>
+    <View style={{ width: size + 4, height: size + 4, alignItems: "center", justifyContent: "center" }}>
+      <Animated.View style={{
+        position: "absolute", width: size + 4, height: size + 4, borderRadius: (size + 4) / 2,
+        backgroundColor: color, opacity: 0.25, transform: [{ scale: s }],
+      }} />
+      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />
     </View>
   );
 }
 
-function NpcPill({ name, action, money }: { name: string; action: string; money: number }) {
-  const emoji = ACTION_EMOJI[action] ?? "•";
-  const moneyColor = money >= 200 ? L.gold : money >= 80 ? L.green : L.red;
-  const moneyBg    = money >= 200 ? L.goldBg : money >= 80 ? L.greenBg : L.redBg;
-  return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 6,
-      backgroundColor: L.bg, borderRadius: 10, borderWidth: 1, borderColor: L.border,
-      paddingHorizontal: 8, paddingVertical: 6, marginBottom: 4 }}>
-      <Text style={{ fontSize: 14 }}>{emoji}</Text>
-      <Text style={{ color: L.text, fontSize: 12, fontWeight: "700", flex: 1 }}>{name}</Text>
-      <Text style={{ color: L.muted, fontSize: 10 }}>{action}</Text>
-      <View style={{ backgroundColor: moneyBg, borderRadius: 6,
-        paddingHorizontal: 5, paddingVertical: 2 }}>
-        <Text style={{ color: moneyColor, fontSize: 10, fontWeight: "800" }}>💰{money}</Text>
-      </View>
-    </View>
-  );
-}
-
-function LocationCard({
-  slug, isHere, npcCount, eventEmoji, eventSeverity, onPress
-}: {
+// ── Location Card ─────────────────────────────────────────────────────────────
+function LocationCard({ slug, isHere, npcCount, eventEmoji, eventSeverity, onPress }: {
   slug: string; isHere: boolean; npcCount: number;
   eventEmoji?: string; eventSeverity?: string; onPress: () => void;
 }) {
   const loc = worldLocations.find((l) => l.slug === slug);
   if (!loc) return null;
-  const style = KIND_STYLE[loc.kind] ?? KIND_STYLE.public;
+  const k = KIND[loc.kind as keyof typeof KIND] ?? KIND.public;
+  const scale = useRef(new Animated.Value(1)).current;
 
   return (
-    <Pressable
-      onPress={onPress}
-      style={{
-        flex: 1, minWidth: 140, margin: 5,
-        borderRadius: 16, borderWidth: isHere ? 2 : 1,
-        borderColor: isHere ? L.primary : L.border,
-        backgroundColor: isHere ? L.primaryBg : L.card,
-        padding: 12, gap: 8,
-        shadowColor: "rgba(99,102,241,0.10)",
-        shadowOpacity: 1, shadowRadius: 8,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: isHere ? 4 : 2,
-      }}>
-      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <View style={{ width: 38, height: 38, borderRadius: 12,
-          backgroundColor: style.bg, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ fontSize: 20 }}>{style.emoji}</Text>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable
+        onPressIn={() => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start()}
+        onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
+        onPress={onPress}
+        style={{
+          width: 160, borderRadius: 16,
+          backgroundColor: isHere ? k.dim : C.card,
+          borderWidth: isHere ? 1.5 : 1,
+          borderColor: isHere ? k.color : C.border,
+          padding: 12, gap: 10,
+          shadowColor: isHere ? k.color : "transparent",
+          shadowOpacity: 0.2, shadowRadius: 12,
+        }}>
+        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <View style={{
+            width: 40, height: 40, borderRadius: 12,
+            backgroundColor: k.dim, alignItems: "center", justifyContent: "center",
+            borderWidth: 1, borderColor: k.color + "30",
+          }}>
+            <Text style={{ fontSize: 20 }}>{k.emoji}</Text>
+          </View>
+          <View style={{ gap: 4, alignItems: "flex-end" }}>
+            {isHere && (
+              <View style={{ backgroundColor: k.color, borderRadius: 5, paddingHorizontal: 6, paddingVertical: 2 }}>
+                <Text style={{ color: "#080808", fontSize: 8, fontWeight: "900" }}>ICI</Text>
+              </View>
+            )}
+            {eventEmoji && (
+              <View style={{
+                backgroundColor: eventSeverity === "high" ? C.red + "20" : C.gold + "20",
+                borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2,
+                borderWidth: 1, borderColor: eventSeverity === "high" ? C.red + "40" : C.gold + "40",
+              }}>
+                <Text style={{ fontSize: 10 }}>{eventEmoji}</Text>
+              </View>
+            )}
+            {npcCount > 0 && (
+              <View style={{ backgroundColor: C.glass, borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
+                <Text style={{ color: C.muted, fontSize: 8, fontWeight: "800" }}>{npcCount} NPC</Text>
+              </View>
+            )}
+          </View>
         </View>
-        <View style={{ gap: 4, alignItems: "flex-end" }}>
-          {isHere && (
-            <View style={{ backgroundColor: L.primary, borderRadius: 7,
-              paddingHorizontal: 7, paddingVertical: 2 }}>
-              <Text style={{ color: "#fff", fontSize: 9, fontWeight: "900" }}>ICI</Text>
-            </View>
-          )}
-          {eventEmoji && (
-            <View style={{
-              backgroundColor: eventSeverity === "high" ? L.redBg : L.goldBg,
-              borderRadius: 7, paddingHorizontal: 6, paddingVertical: 2 }}>
-              <Text style={{ color: eventSeverity === "high" ? L.red : L.gold, fontSize: 10, fontWeight: "900" }}>
-                {eventEmoji}
-              </Text>
-            </View>
-          )}
-          {npcCount > 0 && (
-            <View style={{ backgroundColor: L.bg, borderRadius: 7,
-              paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: L.border }}>
-              <Text style={{ color: L.muted, fontSize: 9, fontWeight: "800" }}>
-                {npcCount} bot{npcCount > 1 ? "s" : ""}
-              </Text>
-            </View>
-          )}
+        <View>
+          <Text numberOfLines={1} style={{ color: isHere ? k.color : C.text, fontSize: 13, fontWeight: "800" }}>
+            {loc.name}
+          </Text>
+          <Text numberOfLines={1} style={{ color: k.color + "90", fontSize: 9, fontWeight: "700",
+            textTransform: "uppercase", letterSpacing: 0.8, marginTop: 2 }}>
+            {loc.costHint}
+          </Text>
         </View>
-      </View>
-      <View>
-        <Text numberOfLines={1} style={{ color: isHere ? L.primary : L.text,
-          fontSize: 13, fontWeight: "800" }}>{loc.name}</Text>
-        <Text numberOfLines={1} style={{ color: style.color, fontSize: 10,
-          fontWeight: "700", marginTop: 1, textTransform: "uppercase",
-          letterSpacing: 0.5 }}>{loc.costHint}</Text>
-      </View>
-    </Pressable>
+      </Pressable>
+    </Animated.View>
   );
 }
 
-// ─── Panel de détail lieu (bottom sheet) ──────────────────────────────────────
+// ── NPC Pill ──────────────────────────────────────────────────────────────────
+function NpcPill({ name, action, money }: { name: string; action: string; money: number }) {
+  const emoji = ACTION_EMOJI[action] ?? "•";
+  const mc = money >= 200 ? C.gold : money >= 80 ? C.green : C.red;
+  return (
+    <View style={{
+      flexDirection: "row", alignItems: "center", gap: 8,
+      backgroundColor: C.glass, borderRadius: 10,
+      borderWidth: 1, borderColor: C.border,
+      paddingHorizontal: 10, paddingVertical: 8, marginBottom: 5,
+    }}>
+      <Text style={{ fontSize: 14 }}>{emoji}</Text>
+      <Text style={{ color: C.text, fontSize: 12, fontWeight: "700", flex: 1 }}>{name}</Text>
+      <Text style={{ color: C.muted, fontSize: 10 }}>{action}</Text>
+      <View style={{ backgroundColor: mc + "18", borderRadius: 6,
+        paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: mc + "30" }}>
+        <Text style={{ color: mc, fontSize: 10, fontWeight: "900" }}>💰{money}</Text>
+      </View>
+    </View>
+  );
+}
 
-function LocationPanel({
-  slug, currentSlug, npcs, event, onTravel, onClose,
-}: {
-  slug: string; currentSlug: string;
-  npcs: NpcState[];
+// ── Location Panel (bottom sheet) ─────────────────────────────────────────────
+function LocationPanel({ slug, currentSlug, npcs, event, onTravel, onClose }: {
+  slug: string; currentSlug: string; npcs: NpcState[];
   event?: ReturnType<typeof buildMapEvents>[number];
-  onTravel: (slug: string) => void;
-  onClose: () => void;
+  onTravel: (slug: string) => void; onClose: () => void;
 }) {
   const loc = worldLocations.find((l) => l.slug === slug);
   if (!loc) return null;
-  const style = KIND_STYLE[loc.kind] ?? KIND_STYLE.public;
-  const isHere = slug === currentSlug;
+  const k = KIND[loc.kind as keyof typeof KIND] ?? KIND.public;
+  const isHere  = slug === currentSlug;
   const locNpcs = npcs.filter((n) => n.locationSlug === slug);
-  const totalMoney = locNpcs.reduce((sum, n) => sum + n.money, 0);
 
   return (
     <View style={{
-      backgroundColor: L.card,
+      backgroundColor: C.deep,
       borderTopLeftRadius: 28, borderTopRightRadius: 28,
-      borderWidth: 1, borderColor: L.border,
-      padding: 20, paddingBottom: 36, gap: 16,
-      shadowColor: "rgba(0,0,0,0.12)",
-      shadowOpacity: 1, shadowRadius: 24,
-      shadowOffset: { width: 0, height: -4 },
+      borderWidth: 1, borderColor: C.border,
+      borderBottomWidth: 0,
+      padding: 20, paddingBottom: 40, gap: 16,
     }}>
-      <View style={{ width: 40, height: 4, borderRadius: 2,
-        backgroundColor: L.border, alignSelf: "center", marginBottom: 4 }} />
+      <View style={{ width: 36, height: 3, borderRadius: 2, backgroundColor: C.muted, alignSelf: "center", marginBottom: 4 }} />
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-        <View style={{ width: 52, height: 52, borderRadius: 16,
-          backgroundColor: style.bg, alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ fontSize: 28 }}>{style.emoji}</Text>
+        <View style={{
+          width: 56, height: 56, borderRadius: 16,
+          backgroundColor: k.dim, borderWidth: 1.5, borderColor: k.color + "40",
+          alignItems: "center", justifyContent: "center",
+          shadowColor: k.color, shadowOpacity: 0.3, shadowRadius: 10,
+        }}>
+          <Text style={{ fontSize: 28 }}>{k.emoji}</Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: L.text, fontSize: 18, fontWeight: "900" }}>{loc.name}</Text>
-          <Text style={{ color: style.color, fontSize: 12, fontWeight: "700",
-            textTransform: "uppercase", letterSpacing: 0.5, marginTop: 2 }}>
+          <Text style={{ color: C.text, fontSize: 18, fontWeight: "900" }}>{loc.name}</Text>
+          <Text style={{ color: k.color, fontSize: 11, fontWeight: "700",
+            textTransform: "uppercase", letterSpacing: 0.8, marginTop: 2 }}>
             {loc.kind} · {loc.costHint}
           </Text>
         </View>
-        {locNpcs.length > 0 && <MoneyBadge amount={totalMoney} />}
+        {locNpcs.length > 0 && (
+          <View style={{ backgroundColor: C.glass, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6,
+            borderWidth: 1, borderColor: C.border }}>
+            <Text style={{ color: C.gold, fontSize: 12, fontWeight: "900" }}>{locNpcs.length} ici</Text>
+          </View>
+        )}
       </View>
 
-      <Text style={{ color: L.textSoft, fontSize: 13, lineHeight: 19 }}>{loc.summary}</Text>
+      <Text style={{ color: C.soft, fontSize: 13, lineHeight: 20 }}>{loc.summary}</Text>
 
       {event && (
         <View style={{
           borderRadius: 14, padding: 12,
-          backgroundColor: event.severity === "high" ? L.redBg : L.goldBg,
-          borderWidth: 1,
-          borderColor: event.severity === "high" ? "#fca5a5" : "#fcd34d",
-          flexDirection: "row", alignItems: "center", gap: 10 }}>
+          backgroundColor: event.severity === "high" ? C.red + "12" : C.gold + "12",
+          borderWidth: 1, borderColor: event.severity === "high" ? C.red + "30" : C.gold + "30",
+          flexDirection: "row", alignItems: "center", gap: 10,
+        }}>
           <Text style={{ fontSize: 20 }}>{event.emoji}</Text>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: event.severity === "high" ? L.red : L.gold, fontSize: 12, fontWeight: "900" }}>
+            <Text style={{ color: event.severity === "high" ? C.red : C.gold, fontSize: 12, fontWeight: "900" }}>
               {event.title}
             </Text>
-            <Text style={{ color: L.textSoft, fontSize: 11, lineHeight: 16, marginTop: 2 }}>
-              {event.body}
-            </Text>
+            <Text style={{ color: C.soft, fontSize: 11, marginTop: 2 }}>{event.body}</Text>
           </View>
         </View>
       )}
 
       {locNpcs.length > 0 ? (
         <View>
-          <Text style={{ color: L.muted, fontSize: 11, fontWeight: "800",
-            textTransform: "uppercase", letterSpacing: 0.6, marginBottom: 8 }}>
-            {locNpcs.length} habitant{locNpcs.length > 1 ? "s" : ""} ici
+          <Text style={{ color: C.muted, fontSize: 10, fontWeight: "900",
+            textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
+            {locNpcs.length} habitant{locNpcs.length > 1 ? "s" : ""}
           </Text>
-          {locNpcs.map((npc) => (
-            <NpcPill key={npc.id} name={npc.name} action={npc.action} money={npc.money} />
-          ))}
+          {locNpcs.map((n) => <NpcPill key={n.id} name={n.name} action={n.action} money={n.money} />)}
         </View>
       ) : (
-        <View style={{ backgroundColor: L.bg, borderRadius: 12, borderWidth: 1,
-          borderColor: L.border, padding: 16, alignItems: "center", gap: 6 }}>
+        <View style={{ backgroundColor: C.glass, borderRadius: 12, padding: 16,
+          alignItems: "center", gap: 6, borderWidth: 1, borderColor: C.border }}>
           <Text style={{ fontSize: 22 }}>🏙️</Text>
-          <Text style={{ color: L.muted, fontSize: 12, fontWeight: "600" }}>Aucun habitant ici pour l'instant</Text>
+          <Text style={{ color: C.muted, fontSize: 12, fontWeight: "600" }}>Aucun habitant ici</Text>
         </View>
       )}
 
       <View style={{ flexDirection: "row", gap: 10, marginTop: 4 }}>
         <Pressable onPress={onClose}
-          style={{ flex: 1, height: 48, borderRadius: 14, borderWidth: 1.5,
-            borderColor: L.border, alignItems: "center",
-            justifyContent: "center", backgroundColor: L.bg }}>
-          <Text style={{ color: L.textSoft, fontSize: 14, fontWeight: "700" }}>Fermer</Text>
+          style={{ flex: 1, height: 50, borderRadius: 14,
+            borderWidth: 1, borderColor: C.border,
+            alignItems: "center", justifyContent: "center", backgroundColor: C.glass }}>
+          <Text style={{ color: C.soft, fontSize: 14, fontWeight: "700" }}>Fermer</Text>
         </Pressable>
         {isHere ? (
           <Pressable
             onPress={() => { onClose(); router.push("/(app)/(tabs)/home"); }}
-            style={{ flex: 2, height: 48, borderRadius: 14,
-              backgroundColor: L.primary, alignItems: "center",
-              justifyContent: "center" }}>
-            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "900" }}>Agir ici →</Text>
+            style={{ flex: 2, height: 50, borderRadius: 14,
+              backgroundColor: k.color, alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: "#080808", fontSize: 14, fontWeight: "900" }}>Agir ici →</Text>
           </Pressable>
         ) : (
           <Pressable
             onPress={() => { onTravel(slug); onClose(); }}
-            style={{ flex: 2, height: 48, borderRadius: 14,
-              backgroundColor: style.color, alignItems: "center",
-              justifyContent: "center" }}>
-            <Text style={{ color: "#fff", fontSize: 14, fontWeight: "900" }}>Aller ici</Text>
+            style={{ flex: 2, height: 50, borderRadius: 14,
+              backgroundColor: k.dim, borderWidth: 1.5, borderColor: k.color,
+              alignItems: "center", justifyContent: "center" }}>
+            <Text style={{ color: k.color, fontSize: 14, fontWeight: "900" }}>→ Aller ici</Text>
           </Pressable>
         )}
       </View>
@@ -284,130 +290,104 @@ function LocationPanel({
   );
 }
 
-// ─── Écran principal ──────────────────────────────────────────────────────────
-
-const DATE_VENUES = [
-  { slug: "cafe", label: "Cafe", tint: L.green },
-  { slug: "park", label: "Parc", tint: L.green },
-  { slug: "restaurant", label: "Restaurant", tint: L.orange },
-  { slug: "cinema", label: "Cinema", tint: L.blue },
-];
-
-function PersonPanel({
-  npc,
-  relationship,
-  npcRelation,
-  onStartDate,
-  onZoomDistrict,
-  onClose,
-  onInteract,
-}: {
-  npc: NpcState;
-  relationship?: RelationshipRecord;
+// ── Person Panel ──────────────────────────────────────────────────────────────
+function PersonPanel({ npc, relationship, npcRelation, onStartDate, onZoomDistrict, onClose, onInteract }: {
+  npc: NpcState; relationship?: RelationshipRecord;
   npcRelation?: import("@/lib/types").NpcRelation;
-  onStartDate: (venueSlug: string) => void;
-  onZoomDistrict: () => void;
-  onClose: () => void;
-  onInteract?: () => void;
+  onStartDate: (v: string) => void; onZoomDistrict: () => void;
+  onClose: () => void; onInteract?: () => void;
 }) {
   const loc = worldLocations.find((item) => item.slug === npc.locationSlug);
   const score = relationship?.score ?? 0;
-  const scoreColor = score >= 65 ? L.green : score >= 35 ? L.gold : L.blue;
-  const statusLabel = npc.presenceOnline ? "En ligne" : "Recent";
+  const scoreColor = score >= 65 ? C.green : score >= 35 ? C.gold : C.blue;
   const relationLevel = npcRelation?.level ?? "inconnu";
   const relationScore = npcRelation?.score ?? 0;
-  const RELATION_COLOR: Record<string, string> = {
-    inconnu: L.muted, contact: L.blue, ami: L.green, confiant: L.gold, complice: "#ec4899",
+  const RCOLOR: Record<string, string> = {
+    inconnu: C.muted, contact: C.blue, ami: C.green, confiant: C.gold, complice: "#FF2D78",
   };
+  const rc = RCOLOR[relationLevel];
 
   return (
     <View style={{
-      backgroundColor: L.card,
+      backgroundColor: C.deep,
       borderTopLeftRadius: 28, borderTopRightRadius: 28,
-      borderWidth: 1, borderColor: L.border,
-      padding: 20, paddingBottom: 36, gap: 16,
-      shadowColor: "rgba(0,0,0,0.12)",
-      shadowOpacity: 1, shadowRadius: 24,
-      shadowOffset: { width: 0, height: -4 },
+      borderWidth: 1, borderColor: C.border, borderBottomWidth: 0,
+      padding: 20, paddingBottom: 40, gap: 14,
     }}>
-      <View style={{ width: 40, height: 4, borderRadius: 2,
-        backgroundColor: L.border, alignSelf: "center", marginBottom: 4 }} />
+      <View style={{ width: 36, height: 3, borderRadius: 2, backgroundColor: C.muted, alignSelf: "center", marginBottom: 4 }} />
 
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-        <View style={{ width: 56, height: 56, borderRadius: 18,
-          backgroundColor: scoreColor + "22", borderWidth: 2, borderColor: scoreColor,
-          alignItems: "center", justifyContent: "center" }}>
-          <Text style={{ color: scoreColor, fontSize: 18, fontWeight: "900" }}>
+        <View style={{
+          width: 58, height: 58, borderRadius: 18,
+          backgroundColor: scoreColor + "14", borderWidth: 2, borderColor: scoreColor,
+          alignItems: "center", justifyContent: "center",
+          shadowColor: scoreColor, shadowOpacity: 0.4, shadowRadius: 10,
+        }}>
+          <Text style={{ color: scoreColor, fontSize: 20, fontWeight: "900" }}>
             {npc.name.slice(0, 2).toUpperCase()}
           </Text>
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ color: L.text, fontSize: 19, fontWeight: "900" }}>{npc.name}</Text>
-          <Text style={{ color: L.textSoft, fontSize: 12, fontWeight: "700", marginTop: 2 }}>
-            {statusLabel} - {loc?.name ?? npc.locationSlug}
+          <Text style={{ color: C.text, fontSize: 19, fontWeight: "900" }}>{npc.name}</Text>
+          <Text style={{ color: C.soft, fontSize: 12, marginTop: 2 }}>
+            {npc.presenceOnline ? "● En ligne" : "Récent"} · {loc?.name ?? npc.locationSlug}
           </Text>
         </View>
-        <View style={{ backgroundColor: scoreColor + "18", borderRadius: 12,
-          paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: scoreColor + "55" }}>
-          <Text style={{ color: scoreColor, fontSize: 13, fontWeight: "900" }}>{score}</Text>
-          <Text style={{ color: L.muted, fontSize: 9, fontWeight: "800" }}>lien</Text>
+        <View style={{ backgroundColor: scoreColor + "14", borderRadius: 12,
+          paddingHorizontal: 10, paddingVertical: 7,
+          borderWidth: 1, borderColor: scoreColor + "40", alignItems: "center" }}>
+          <Text style={{ color: scoreColor, fontSize: 14, fontWeight: "900" }}>{score}</Text>
+          <Text style={{ color: C.muted, fontSize: 8, fontWeight: "800" }}>LIEN</Text>
         </View>
       </View>
 
-      {/* NPC Relation bar */}
-      <View style={{ backgroundColor: L.bg, borderRadius: 14, padding: 12,
-        borderWidth: 1, borderColor: L.border, gap: 8 }}>
+      {/* Relation bar */}
+      <View style={{ backgroundColor: C.glass, borderRadius: 14, padding: 12,
+        borderWidth: 1, borderColor: C.border, gap: 8 }}>
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1 }}>RELATION NPC</Text>
-          <View style={{ backgroundColor: RELATION_COLOR[relationLevel] + "20", borderRadius: 8,
-            paddingHorizontal: 8, paddingVertical: 3 }}>
-            <Text style={{ color: RELATION_COLOR[relationLevel], fontSize: 10, fontWeight: "800" }}>
-              {relationLevel.toUpperCase()}
-            </Text>
+          <Text style={{ color: C.muted, fontSize: 9, fontWeight: "900", letterSpacing: 1.5 }}>RELATION NPC</Text>
+          <View style={{ backgroundColor: rc + "20", borderRadius: 6,
+            paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: rc + "30" }}>
+            <Text style={{ color: rc, fontSize: 9, fontWeight: "900" }}>{relationLevel.toUpperCase()}</Text>
           </View>
         </View>
-        <View style={{ height: 6, borderRadius: 3, backgroundColor: L.border, overflow: "hidden" }}>
-          <View style={{ height: 6, borderRadius: 3,
-            width: `${relationScore}%` as `${number}%`,
-            backgroundColor: RELATION_COLOR[relationLevel] }} />
+        <View style={{ height: 5, borderRadius: 3, backgroundColor: C.muted + "30", overflow: "hidden" }}>
+          <View style={{ height: 5, borderRadius: 3, width: `${relationScore}%` as `${number}%`,
+            backgroundColor: rc,
+            shadowColor: rc, shadowOpacity: 0.6, shadowRadius: 4 }} />
         </View>
-        <Text style={{ color: L.muted, fontSize: 11 }}>
-          {npcRelation?.totalInteractions ?? 0} interaction(s) · Score {relationScore}/100
+        <Text style={{ color: C.muted, fontSize: 11 }}>
+          {npcRelation?.totalInteractions ?? 0} interaction(s) · {relationScore}/100
         </Text>
       </View>
 
+      {/* Stats row */}
       <View style={{ flexDirection: "row", gap: 8 }}>
         {[
-          { label: "Humeur", value: npc.mood, color: L.green },
-          { label: "Energie", value: npc.energy, color: L.gold },
-          { label: "Niv.", value: npc.level, color: L.primary },
+          { label: "Humeur",  value: npc.mood,   color: C.green  },
+          { label: "Energie", value: npc.energy, color: C.gold   },
+          { label: "Niveau",  value: npc.level,  color: C.purple },
         ].map((item) => (
-          <View key={item.label} style={{ flex: 1, borderRadius: 14,
-            backgroundColor: L.bg, borderWidth: 1, borderColor: L.border,
-            padding: 10 }}>
-            <Text style={{ color: L.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase" }}>{item.label}</Text>
-            <Text style={{ color: item.color, fontSize: 16, fontWeight: "900", marginTop: 2 }}>{item.value}</Text>
+          <View key={item.label} style={{ flex: 1, backgroundColor: C.glass, borderRadius: 12,
+            borderWidth: 1, borderColor: C.border, padding: 10, alignItems: "center" }}>
+            <Text style={{ color: C.muted, fontSize: 8, fontWeight: "900",
+              textTransform: "uppercase", letterSpacing: 0.8 }}>{item.label}</Text>
+            <Text style={{ color: item.color, fontSize: 18, fontWeight: "900", marginTop: 4 }}>{item.value}</Text>
           </View>
         ))}
       </View>
 
+      {/* RDV */}
       <View style={{ gap: 8 }}>
-        <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Simuler un RDV</Text>
+        <Text style={{ color: C.soft, fontSize: 11, fontWeight: "900",
+          textTransform: "uppercase", letterSpacing: 1 }}>Simuler un RDV</Text>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-          {DATE_VENUES.map((venue) => (
-            <Pressable
-              key={venue.slug}
-              onPress={() => onStartDate(venue.slug)}
-              style={{
-                flexGrow: 1,
-                minWidth: 130,
-                height: 44,
-                borderRadius: 14,
-                backgroundColor: venue.tint,
-                alignItems: "center",
-                justifyContent: "center",
-              }}>
-              <Text style={{ color: "#FFFFFF", fontSize: 13, fontWeight: "900" }}>{venue.label}</Text>
+          {DATE_VENUES.map((v) => (
+            <Pressable key={v.slug} onPress={() => onStartDate(v.slug)}
+              style={{ flexGrow: 1, minWidth: 130, height: 42, borderRadius: 12,
+                backgroundColor: v.color + "20", borderWidth: 1, borderColor: v.color + "40",
+                alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ color: v.color, fontSize: 13, fontWeight: "800" }}>{v.label}</Text>
             </Pressable>
           ))}
         </View>
@@ -416,40 +396,37 @@ function PersonPanel({
       <View style={{ flexDirection: "row", gap: 8 }}>
         {onInteract && (
           <Pressable onPress={onInteract}
-            style={{ flex: 1, height: 44, borderRadius: 14,
-              backgroundColor: RELATION_COLOR[relationLevel] + "20",
-              borderWidth: 1, borderColor: RELATION_COLOR[relationLevel] + "40",
+            style={{ flex: 1, height: 44, borderRadius: 12,
+              backgroundColor: rc + "18", borderWidth: 1, borderColor: rc + "35",
               alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ color: RELATION_COLOR[relationLevel], fontSize: 13, fontWeight: "800" }}>
-              💬 Interagir +5
-            </Text>
+            <Text style={{ color: rc, fontSize: 13, fontWeight: "800" }}>💬 Interagir +5</Text>
           </Pressable>
         )}
         <Pressable onPress={onClose}
-          style={{ flex: 1, height: 44, borderRadius: 14, borderWidth: 1.5,
-            borderColor: L.border, alignItems: "center",
-            justifyContent: "center", backgroundColor: L.bg }}>
-          <Text style={{ color: L.textSoft, fontSize: 13, fontWeight: "700" }}>Fermer</Text>
+          style={{ flex: 1, height: 44, borderRadius: 12,
+            backgroundColor: C.glass, borderWidth: 1, borderColor: C.border,
+            alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: C.soft, fontSize: 13, fontWeight: "700" }}>Fermer</Text>
         </Pressable>
       </View>
+
       <Pressable onPress={onZoomDistrict}
-        style={{ height: 48, borderRadius: 14,
-          alignItems: "center", justifyContent: "center", backgroundColor: L.primary }}>
-        <Text style={{ color: "#FFFFFF", fontSize: 14, fontWeight: "900" }}>Voir le quartier</Text>
+        style={{ height: 48, borderRadius: 14, backgroundColor: C.purple + "20",
+          borderWidth: 1, borderColor: C.purple + "40",
+          alignItems: "center", justifyContent: "center" }}>
+        <Text style={{ color: C.purple, fontSize: 14, fontWeight: "900" }}>Voir le quartier →</Text>
       </Pressable>
     </View>
   );
 }
 
+// ── Types ─────────────────────────────────────────────────────────────────────
 type SimulatedDateRoute = {
-  id: string;
-  npcName: string;
-  cityId: string;
-  fromSlug: string;
-  venueSlug: string;
-  status: "moving" | "confirmed";
+  id: string; npcName: string; cityId: string;
+  fromSlug: string; venueSlug: string; status: "moving" | "confirmed";
 };
 
+// ── Screen ────────────────────────────────────────────────────────────────────
 export default function WorldScreen() {
   const avatar              = useGameStore((s) => s.avatar);
   const stats               = useGameStore((s) => s.stats);
@@ -466,32 +443,30 @@ export default function WorldScreen() {
   const npcRelations        = useGameStore((s) => s.npcRelations ?? []);
   const updateNpcRelation   = useGameStore((s) => s.updateNpcRelation);
 
-  const [selectedSlug, setSelectedSlug] = useState<string | null>(null);
-  const [selectedNpcId, setSelectedNpcId] = useState<string | null>(null);
-  const [currentCityId, setCurrentCityId] = useState("neo-paris");
-  const [focusedCityId, setFocusedCityId] = useState<string | null>(null);
-  const [districtSlug, setDistrictSlug] = useState<string | null>(null);
-  const [districtCityId, setDistrictCityId] = useState("neo-paris");
-  const [dateRoute, setDateRoute] = useState<SimulatedDateRoute | null>(null);
-  const [travelingTo, setTravelingTo]   = useState<string | null>(null);
-  const [mapMode, setMapMode] = useState<"world" | "iso" | "district">("iso");
-  const travelAnim = useRef(new Animated.Value(0)).current;
-  const dateTimers = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const [selectedSlug,    setSelectedSlug]    = useState<string | null>(null);
+  const [selectedNpcId,   setSelectedNpcId]   = useState<string | null>(null);
+  const [currentCityId,   setCurrentCityId]   = useState("neo-paris");
+  const [focusedCityId,   setFocusedCityId]   = useState<string | null>(null);
+  const [districtSlug,    setDistrictSlug]    = useState<string | null>(null);
+  const [districtCityId,  setDistrictCityId]  = useState("neo-paris");
+  const [dateRoute,       setDateRoute]       = useState<SimulatedDateRoute | null>(null);
+  const [travelingTo,     setTravelingTo]     = useState<string | null>(null);
+  const [mapMode,         setMapMode]         = useState<"world" | "iso" | "district">("iso");
+
+  const travelAnim  = useRef(new Animated.Value(0)).current;
+  const dateTimers  = useRef<Array<ReturnType<typeof setTimeout>>>([]);
+  const headerAnim  = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    return () => {
-      dateTimers.current.forEach(clearTimeout);
-      dateTimers.current = [];
-    };
+    Animated.timing(headerAnim, { toValue: 1, duration: 700, useNativeDriver: true }).start();
+    return () => { dateTimers.current.forEach(clearTimeout); dateTimers.current = []; };
   }, []);
 
-  useFocusEffect(
-    useCallback(() => {
-      tickNpcs();
-      const id = setInterval(() => tickNpcs(), 30_000);
-      return () => clearInterval(id);
-    }, [tickNpcs])
-  );
+  useFocusEffect(useCallback(() => {
+    tickNpcs();
+    const id = setInterval(() => tickNpcs(), 30_000);
+    return () => clearInterval(id);
+  }, [tickNpcs]));
 
   const npcsByLoc = npcs.reduce<Record<string, NpcState[]>>((acc, n) => {
     if (!acc[n.locationSlug]) acc[n.locationSlug] = [];
@@ -499,22 +474,33 @@ export default function WorldScreen() {
     return acc;
   }, {});
 
-  const cityIntel = buildCityIntel({
-    stats, currentLocationSlug, npcs,
-    livePlayers: [], relationships, housingTier
-  });
-  const mapEvents = buildMapEvents(stats, 4);
-  const mapEventsByLocation = eventByLocation(mapEvents);
+  const cityIntel         = buildCityIntel({ stats, currentLocationSlug, npcs, livePlayers: [], relationships, housingTier });
+  const mapEvents         = buildMapEvents(stats, 4);
+  const mapEventsByLoc    = eventByLocation(mapEvents);
 
-  const currentLoc       = worldLocations.find((l) => l.slug === currentLocationSlug);
-  const currentLocStyle  = KIND_STYLE[currentLoc?.kind ?? "public"] ?? KIND_STYLE.public;
-  const currentNpcs      = npcsByLoc[currentLocationSlug] ?? [];
+  const currentLoc        = worldLocations.find((l) => l.slug === currentLocationSlug);
+  const currentK          = KIND[currentLoc?.kind as keyof typeof KIND] ?? KIND.public;
+  const currentNpcs       = npcsByLoc[currentLocationSlug] ?? [];
   const activeNeighborhood = NEIGHBORHOODS.find((n) => n.slugs.includes(currentLocationSlug));
-  const selectedNpc = selectedNpcId ? npcs.find((npc) => npc.id === selectedNpcId) : null;
-  const selectedNpcCity = selectedNpc ? cityForNpc(selectedNpc) : null;
+  const selectedNpc       = selectedNpcId ? npcs.find((n) => n.id === selectedNpcId) : null;
+  const selectedNpcCity   = selectedNpc ? cityForNpc(selectedNpc) : null;
   const selectedRelationship = selectedNpc
-    ? relationships.find((relationship) => relationship.residentId === selectedNpc.id)
-    : undefined;
+    ? relationships.find((r) => r.residentId === selectedNpc.id) : undefined;
+
+  const primaryEvent    = mapEvents[0];
+  const suggestedSlugs  = [
+    cityIntel.locationSlug, primaryEvent?.locationSlug, currentLocationSlug,
+    ...mapEvents.map((e) => e.locationSlug), "market","park","office","cafe","gym","home",
+  ].filter((s): s is string => Boolean(s) && worldLocations.some((l) => l.slug === s));
+  const quickSlugs = Array.from(new Set(suggestedSlugs)).slice(0, 8);
+
+  const intelColor = cityIntel.urgency === "critical" ? C.red
+    : cityIntel.urgency === "high" ? C.gold : C.blue;
+  const moneyColor = stats.money >= 200 ? C.gold : stats.money >= 80 ? C.green : C.red;
+  const travelBarW = travelAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
+  const districtLoc  = districtSlug ? worldLocations.find((l) => l.slug === districtSlug) : null;
+  const districtCity = cityById(districtCityId);
+  const travelingLoc = travelingTo ? worldLocations.find((l) => l.slug === travelingTo) : null;
 
   const handleTravel = (slug: string) => {
     if (slug === currentLocationSlug) return;
@@ -530,512 +516,475 @@ export default function WorldScreen() {
   };
 
   const handleStartDate = (npc: NpcState, venueSlug: string) => {
-    const id = `date-route-${Date.now()}-${npc.id}`;
+    const id   = `date-route-${Date.now()}-${npc.id}`;
     const city = cityForNpc(npc);
-    dateTimers.current.forEach(clearTimeout);
-    dateTimers.current = [];
-    setSelectedSlug(null);
-    setSelectedNpcId(npc.id);
-    setFocusedCityId(city.id);
-    setDateRoute({
-      id,
-      npcName: npc.name,
-      cityId: city.id,
-      fromSlug: npc.locationSlug,
-      venueSlug,
-      status: "moving",
-    });
-
-    const confirmTimer = setTimeout(() => {
-      travelTo(venueSlug, { cost: 6, energyCost: 4, modeLabel: "RDV" });
-      setCurrentCityId(city.id);
-      setDateRoute((current) =>
-        current?.id === id ? { ...current, status: "confirmed" } : current
-      );
-    }, 1550);
-
-    const clearTimer = setTimeout(() => {
-      setDateRoute((current) => (current?.id === id ? null : current));
-    }, 6500);
-
-    dateTimers.current = [confirmTimer, clearTimer];
+    dateTimers.current.forEach(clearTimeout); dateTimers.current = [];
+    setSelectedSlug(null); setSelectedNpcId(npc.id); setFocusedCityId(city.id);
+    setDateRoute({ id, npcName: npc.name, cityId: city.id, fromSlug: npc.locationSlug, venueSlug, status: "moving" });
+    dateTimers.current = [
+      setTimeout(() => {
+        travelTo(venueSlug, { cost: 6, energyCost: 4, modeLabel: "RDV" });
+        setCurrentCityId(city.id);
+        setDateRoute((cur) => cur?.id === id ? { ...cur, status: "confirmed" } : cur);
+      }, 1550),
+      setTimeout(() => setDateRoute((cur) => cur?.id === id ? null : cur), 6500),
+    ];
   };
 
-  const moneyColor = stats.money >= 200 ? L.gold : stats.money >= 80 ? L.green : L.red;
-  const moneyBg    = stats.money >= 200 ? L.goldBg : stats.money >= 80 ? L.greenBg : L.redBg;
-  const intelColor = cityIntel.urgency === "critical" ? L.red
-    : cityIntel.urgency === "high" ? L.gold : L.primary;
-
-  const primaryEvent = mapEvents[0];
-  const suggestedSlugs = [
-    cityIntel.locationSlug,
-    primaryEvent?.locationSlug,
-    currentLocationSlug,
-    ...mapEvents.map((e) => e.locationSlug),
-    "market", "park", "office", "cafe", "gym", "home",
-  ].filter((slug): slug is string =>
-    Boolean(slug) && worldLocations.some((l) => l.slug === slug)
-  );
-  const quickSlugs = Array.from(new Set(suggestedSlugs)).slice(0, 8);
-
-  const travelingLoc   = travelingTo ? worldLocations.find((l) => l.slug === travelingTo) : null;
-  const travelBarWidth = travelAnim.interpolate({ inputRange: [0, 1], outputRange: ["0%", "100%"] });
-  const districtLoc = districtSlug ? worldLocations.find((l) => l.slug === districtSlug) : null;
-  const districtCity = cityById(districtCityId);
-
   return (
-    <View style={{ flex: 1, backgroundColor: L.bg }}>
+    <View style={{ flex: 1, backgroundColor: C.void }}>
 
-      {/* ── Overlay animation voyage ─────────────────────────── */}
+      {/* ── OVERLAY VOYAGE ──────────────────────────────────────────────────── */}
       {travelingTo && travelingLoc && (
         <View style={{
           position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-          backgroundColor: "rgba(99,102,241,0.92)",
-          zIndex: 100, alignItems: "center", justifyContent: "center", gap: 20,
+          backgroundColor: "rgba(4,4,10,0.96)", zIndex: 100,
+          alignItems: "center", justifyContent: "center", gap: 28,
         }}>
-          <View style={{ width: 72, height: 72, borderRadius: 24,
-            backgroundColor: "rgba(255,255,255,0.2)",
-            alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 36 }}>{(KIND_STYLE[travelingLoc.kind] ?? KIND_STYLE.public).emoji}</Text>
+          {/* Scanline */}
+          <View style={{
+            position: "absolute", left: 0, right: 0, height: 1,
+            backgroundColor: C.gold, opacity: 0.2, top: "40%",
+          }} />
+          <Text style={{ fontSize: 10, letterSpacing: 6, color: C.muted, fontWeight: "800" }}>
+            EN ROUTE
+          </Text>
+          <View style={{
+            width: 80, height: 80, borderRadius: 24,
+            backgroundColor: (KIND[travelingLoc.kind as keyof typeof KIND] ?? KIND.public).dim,
+            borderWidth: 1.5, borderColor: (KIND[travelingLoc.kind as keyof typeof KIND] ?? KIND.public).color + "50",
+            alignItems: "center", justifyContent: "center",
+            shadowColor: (KIND[travelingLoc.kind as keyof typeof KIND] ?? KIND.public).color,
+            shadowOpacity: 0.5, shadowRadius: 20,
+          }}>
+            <Text style={{ fontSize: 38 }}>
+              {(KIND[travelingLoc.kind as keyof typeof KIND] ?? KIND.public).emoji}
+            </Text>
           </View>
-          <View style={{ alignItems: "center", gap: 6 }}>
-            <Text style={{ color: "rgba(255,255,255,0.7)", fontSize: 11, fontWeight: "800", letterSpacing: 1.5 }}>EN ROUTE</Text>
-            <Text style={{ color: "#ffffff", fontSize: 20, fontWeight: "900" }}>{travelingLoc.name}</Text>
-          </View>
-          <View style={{ width: 200, height: 5, borderRadius: 3,
-            backgroundColor: "rgba(255,255,255,0.25)", overflow: "hidden" }}>
-            <Animated.View style={{ height: 5, borderRadius: 3,
-              width: travelBarWidth, backgroundColor: "#ffffff" }} />
+          <Text style={{ color: C.text, fontSize: 22, fontWeight: "900" }}>{travelingLoc.name}</Text>
+          <View style={{ width: 220, height: 3, borderRadius: 2,
+            backgroundColor: C.muted + "30", overflow: "hidden" }}>
+            <Animated.View style={{ height: 3, borderRadius: 2,
+              width: travelBarW, backgroundColor: C.gold,
+              shadowColor: C.gold, shadowOpacity: 0.8, shadowRadius: 8 }} />
           </View>
         </View>
       )}
 
-      <ScrollView
-        contentContainerStyle={{ paddingTop: 12, paddingBottom: 120, alignItems: "center" }}
-        showsVerticalScrollIndicator={false}>
+      <ScrollView showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ paddingTop: 54, paddingBottom: 120 }}>
 
-        <View style={{ height: 0 }} />
+        {/* ── HEADER JOUEUR ──────────────────────────────────────────────────── */}
+        <Animated.View style={{ opacity: headerAnim, paddingHorizontal: 16, marginBottom: 16 }}>
+          <View style={{
+            backgroundColor: C.glass,
+            borderRadius: 20, borderWidth: 1, borderColor: currentK.color + "25",
+            padding: 14, gap: 12,
+            shadowColor: currentK.color, shadowOpacity: 0.12, shadowRadius: 20,
+          }}>
+            {/* Top row */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+              {/* Location icon with neon ring */}
+              <View style={{ width: 52, height: 52, alignItems: "center", justifyContent: "center" }}>
+                <View style={{ position: "absolute", width: 52, height: 52, borderRadius: 15,
+                  borderWidth: 1.5, borderColor: currentK.color,
+                  shadowColor: currentK.color, shadowOpacity: 0.6, shadowRadius: 12 }} />
+                <View style={{ width: 46, height: 46, borderRadius: 13,
+                  backgroundColor: currentK.dim, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 26 }}>{currentK.emoji}</Text>
+                </View>
+              </View>
 
-        {/* ── Toggle vues + Carte ───────────────────────────── */}
-        <View style={{ width: "100%", maxWidth: 1180, paddingHorizontal: 12, gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: C.muted, fontSize: 8, fontWeight: "900",
+                  textTransform: "uppercase", letterSpacing: 2.5, marginBottom: 3 }}>
+                  📍 {activeNeighborhood?.label ?? "Paris"}
+                </Text>
+                <Text style={{ color: currentK.color, fontSize: 16, fontWeight: "900" }}>
+                  {currentLoc?.name ?? currentLocationSlug}
+                </Text>
+              </View>
 
-          {/* Sélecteur de vue */}
-          <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+              {/* Badges */}
+              <View style={{ gap: 5 }}>
+                <View style={{ backgroundColor: moneyColor + "18", borderRadius: 8,
+                  paddingHorizontal: 8, paddingVertical: 5,
+                  borderWidth: 1, borderColor: moneyColor + "35",
+                  alignItems: "center" }}>
+                  <Text style={{ color: moneyColor, fontSize: 12, fontWeight: "900" }}>
+                    💰 {Math.round(stats.money)}
+                  </Text>
+                </View>
+                <View style={{ backgroundColor: C.purple + "18", borderRadius: 8,
+                  paddingHorizontal: 8, paddingVertical: 5,
+                  borderWidth: 1, borderColor: C.purple + "35",
+                  alignItems: "center" }}>
+                  <Text style={{ color: C.purple, fontSize: 11, fontWeight: "800" }}>⭐ NIV {playerLevel}</Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Mini energy bar */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={{ color: C.muted, fontSize: 8, fontWeight: "900", letterSpacing: 1.5 }}>PÊCHE</Text>
+              <View style={{ flex: 1, height: 4, borderRadius: 2,
+                backgroundColor: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+                <View style={{ height: 4, borderRadius: 2,
+                  width: `${Math.max(0, Math.min(100, stats.energy))}%` as `${number}%`,
+                  backgroundColor: stats.energy < 30 ? C.red : stats.energy < 55 ? C.gold : C.green,
+                  shadowColor: C.green, shadowOpacity: 0.6, shadowRadius: 6 }} />
+              </View>
+              <Text style={{ color: C.muted, fontSize: 8, fontWeight: "900", letterSpacing: 1.5 }}>THUNES</Text>
+              <View style={{ flex: 1, height: 4, borderRadius: 2,
+                backgroundColor: "rgba(255,255,255,0.05)", overflow: "hidden" }}>
+                <View style={{ height: 4, borderRadius: 2,
+                  width: `${Math.max(0, Math.min(100, (stats.money / 500) * 100))}%` as `${number}%`,
+                  backgroundColor: moneyColor,
+                  shadowColor: moneyColor, shadowOpacity: 0.6, shadowRadius: 6 }} />
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* ── TOGGLE VUE ─────────────────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+          <View style={{
+            flexDirection: "row", backgroundColor: C.glass,
+            borderRadius: 14, borderWidth: 1, borderColor: C.border,
+            padding: 4, gap: 2,
+          }}>
             {[
-              { id: "iso",      label: "🏙️ Isométrique", desc: "Vue 2.5D" },
-              { id: "world",    label: "🌍 Monde",        desc: "Carte globe" },
-              { id: "district", label: "🗺️ Quartier",     desc: "Vue détail" },
+              { id: "iso",      label: "🏙️ ISO" },
+              { id: "world",    label: "🌍 Monde" },
+              { id: "district", label: "🗺️ Quartier" },
             ].map((mode) => {
               const active = mapMode === mode.id || (mode.id === "district" && districtSlug !== null);
               return (
-                <Pressable
-                  key={mode.id}
-                  onPress={() => {
-                    if (mode.id === "iso") {
-                      setMapMode("iso");
-                      setDistrictSlug(null);
-                    } else if (mode.id === "world") {
-                      setMapMode("world");
-                      setDistrictSlug(null);
-                    } else {
-                      setMapMode("district");
-                      if (!districtSlug) setDistrictSlug(currentLocationSlug);
-                    }
-                  }}
-                  style={{
-                    flex: 1, borderRadius: 14, paddingVertical: 10,
-                    alignItems: "center",
-                    backgroundColor: active ? L.primary : L.card,
-                    borderWidth: 1, borderColor: active ? L.primary : L.border,
-                  }}>
-                  <Text style={{ color: active ? "#fff" : L.textSoft, fontSize: 11, fontWeight: "900" }}>
+                <Pressable key={mode.id} onPress={() => {
+                  if (mode.id === "iso") { setMapMode("iso"); setDistrictSlug(null); }
+                  else if (mode.id === "world") { setMapMode("world"); setDistrictSlug(null); }
+                  else { setMapMode("district"); if (!districtSlug) setDistrictSlug(currentLocationSlug); }
+                }}
+                  style={{ flex: 1, borderRadius: 10, paddingVertical: 10, alignItems: "center",
+                    backgroundColor: active ? C.gold : "transparent",
+                    shadowColor: active ? C.gold : "transparent",
+                    shadowOpacity: active ? 0.4 : 0, shadowRadius: 12 }}>
+                  <Text style={{ color: active ? "#080808" : C.soft, fontSize: 11,
+                    fontWeight: "900", letterSpacing: 0.3 }}>
                     {mode.label}
-                  </Text>
-                  <Text style={{ color: active ? "rgba(255,255,255,0.6)" : L.muted, fontSize: 9, marginTop: 1 }}>
-                    {mode.desc}
                   </Text>
                 </Pressable>
               );
             })}
           </View>
+        </View>
 
-          {/* ── Vue ISO ─────────────────────────────────────── */}
-          {(mapMode === "iso" && !districtSlug) && (
-            <View style={{ borderRadius: 20, overflow: "hidden",
-              shadowColor: "#6366f1", shadowOpacity: 0.18, shadowRadius: 24,
-              shadowOffset: { width: 0, height: 4 } }}>
-              <IsoCityMap
+        {/* ── CARTE ──────────────────────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+          <View style={{
+            borderRadius: 20, overflow: "hidden",
+            borderWidth: 1, borderColor: C.border,
+            shadowColor: C.gold, shadowOpacity: 0.06, shadowRadius: 20,
+          }}>
+            {(mapMode === "iso" && !districtSlug) && (
+              <IsoCityMap currentSlug={currentLocationSlug} npcs={npcs}
+                onTravel={handleTravel}
+                onDistrictPress={(slug) => setSelectedSlug(slug)} />
+            )}
+
+            {(mapMode === "world" && !districtSlug) && (
+              <WorldLiveMap
                 currentSlug={currentLocationSlug}
-                npcs={npcs}
-                onTravel={(slug) => handleTravel(slug)}
-                onDistrictPress={(slug) => {
-                  setSelectedSlug(slug);
+                avatarName={avatar?.displayName ?? "Vous"}
+                avatarVisual={avatar ? getAvatarVisual(avatar) : null}
+                npcs={npcs} relationships={relationships} events={mapEvents}
+                currentCityId={currentCityId} focusedCityId={focusedCityId}
+                selectedNpcId={selectedNpcId} dateRoute={dateRoute}
+                onCityPress={(cityId) => { setSelectedNpcId(null); setSelectedSlug(null); setFocusedCityId(cityId); }}
+                onBackToWorld={() => { setFocusedCityId(null); setSelectedNpcId(null); }}
+                onLocationPress={(slug) => { setSelectedNpcId(null); setSelectedSlug(slug); }}
+                onPersonPress={(npcId) => {
+                  setSelectedSlug(null); setSelectedNpcId(npcId);
+                  const npc = npcs.find((n) => n.id === npcId);
+                  if (npc) setFocusedCityId(cityForNpc(npc).id);
+                }}
+                onZoomToDistrict={(cityId, slug) => {
+                  setSelectedSlug(null); setFocusedCityId(cityId);
+                  setDistrictCityId(cityId); setDistrictSlug(slug); setMapMode("district");
                 }}
               />
-            </View>
-          )}
+            )}
 
-          {/* ── Vue Monde ────────────────────────────────────── */}
-          {(mapMode === "world" && !districtSlug) && (
-            <WorldLiveMap
-              currentSlug={currentLocationSlug}
-              avatarName={avatar?.displayName ?? "Vous"}
-              avatarVisual={avatar ? getAvatarVisual(avatar) : null}
-              npcs={npcs}
-              relationships={relationships}
-              events={mapEvents}
-              currentCityId={currentCityId}
-              focusedCityId={focusedCityId}
-              selectedNpcId={selectedNpcId}
-              dateRoute={dateRoute}
-              onCityPress={(cityId) => {
-                setSelectedNpcId(null);
-                setSelectedSlug(null);
-                setFocusedCityId(cityId);
-              }}
-              onBackToWorld={() => {
-                setFocusedCityId(null);
-                setSelectedNpcId(null);
-              }}
-              onLocationPress={(slug) => {
-                setSelectedNpcId(null);
-                setSelectedSlug(slug);
-              }}
-              onPersonPress={(npcId) => {
-                setSelectedSlug(null);
-                setSelectedNpcId(npcId);
-                const npc = npcs.find((item) => item.id === npcId);
-                if (npc) setFocusedCityId(cityForNpc(npc).id);
-              }}
-              onZoomToDistrict={(cityId, slug) => {
-                setSelectedSlug(null);
-                setFocusedCityId(cityId);
-                setDistrictCityId(cityId);
-                setDistrictSlug(slug);
-                setMapMode("district");
-              }}
-            />
-          )}
-
-          {/* ── Vue Quartier ──────────────────────────────────── */}
-          {(mapMode === "district" || districtSlug) && (
-            <View style={{ gap: 10 }}>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
-                <Pressable
-                  onPress={() => {
-                    setDistrictSlug(null);
-                    setMapMode("iso");
-                  }}
-                  style={{ height: 38, borderRadius: 12, paddingHorizontal: 14,
-                    alignItems: "center", justifyContent: "center",
-                    backgroundColor: L.primary }}>
-                  <Text style={{ color: "#fff", fontSize: 12, fontWeight: "900" }}>← Iso</Text>
-                </Pressable>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: L.muted, fontSize: 9, fontWeight: "900", textTransform: "uppercase" }}>QUARTIER</Text>
-                  <Text numberOfLines={1} style={{ color: L.text, fontSize: 14, fontWeight: "900" }}>
-                    {districtCity.name} — {districtLoc?.name ?? districtSlug ?? currentLocationSlug}
-                  </Text>
+            {(mapMode === "district" || districtSlug) && (
+              <View>
+                <View style={{
+                  flexDirection: "row", alignItems: "center", gap: 10,
+                  padding: 12, backgroundColor: C.glass, borderBottomWidth: 1, borderBottomColor: C.border,
+                }}>
+                  <Pressable onPress={() => { setDistrictSlug(null); setMapMode("iso"); }}
+                    style={{ height: 34, borderRadius: 10, paddingHorizontal: 12,
+                      alignItems: "center", justifyContent: "center",
+                      backgroundColor: C.goldDim, borderWidth: 1, borderColor: C.gold + "40" }}>
+                    <Text style={{ color: C.gold, fontSize: 11, fontWeight: "900" }}>← Iso</Text>
+                  </Pressable>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: C.muted, fontSize: 8, fontWeight: "900",
+                      textTransform: "uppercase", letterSpacing: 1.5 }}>QUARTIER</Text>
+                    <Text numberOfLines={1} style={{ color: C.text, fontSize: 13, fontWeight: "900" }}>
+                      {districtCity.name} — {districtLoc?.name ?? districtSlug ?? currentLocationSlug}
+                    </Text>
+                  </View>
                 </View>
+                <VillageMap
+                  currentSlug={districtSlug ?? currentLocationSlug}
+                  cityName={districtCity.name} events={mapEvents}
+                  onLocationPress={(slug) => { setDistrictSlug(slug); setSelectedSlug(slug); }}
+                />
               </View>
-              <VillageMap
-                currentSlug={districtSlug ?? currentLocationSlug}
-                cityName={districtCity.name}
-                events={mapEvents}
-                onLocationPress={(slug) => {
-                  setDistrictSlug(slug);
-                  setSelectedSlug(slug);
-                }}
-              />
-            </View>
-          )}
-        </View>
-
-        {/* ── Barre info joueur ──────────────────────────────── */}
-        <View style={{ width: "100%", maxWidth: 1180, flexDirection: "row", alignItems: "center", gap: 10,
-          marginTop: 10, paddingHorizontal: 12,
-          backgroundColor: L.card, borderRadius: 16,
-          borderWidth: 1, borderColor: L.border, padding: 12,
-          shadowColor: "rgba(99,102,241,0.08)", shadowOpacity: 1, shadowRadius: 12,
-          shadowOffset: { width: 0, height: 2 }, elevation: 2 }}>
-          <View style={{ width: 44, height: 44, borderRadius: 12,
-            backgroundColor: currentLocStyle.bg,
-            alignItems: "center", justifyContent: "center" }}>
-            <Text style={{ fontSize: 24 }}>{currentLocStyle.emoji}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800",
-              textTransform: "uppercase", letterSpacing: 0.6 }}>
-              {activeNeighborhood?.label ?? "Ville"}
-            </Text>
-            <Text style={{ color: L.primary, fontSize: 15, fontWeight: "900", marginTop: 1 }}>
-              {currentLoc?.name ?? currentLocationSlug}
-            </Text>
-          </View>
-          <View style={{ flexDirection: "row", gap: 6 }}>
-            <View style={{ alignItems: "center", backgroundColor: moneyBg,
-              borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 }}>
-              <Text style={{ color: moneyColor, fontSize: 14, fontWeight: "900" }}>💰 {Math.round(stats.money)}</Text>
-            </View>
-            <View style={{ alignItems: "center", backgroundColor: L.primaryBg,
-              borderRadius: 10, paddingHorizontal: 8, paddingVertical: 5 }}>
-              <Text style={{ color: L.primary, fontSize: 13, fontWeight: "800" }}>⭐ {playerLevel}</Text>
-            </View>
+            )}
           </View>
         </View>
 
-        {/* ── City Intel ────────────────────────────────────── */}
+        {/* ── CITY INTEL ─────────────────────────────────────────────────────── */}
         {cityIntel && cityIntel.locationSlug !== currentLocationSlug && (
-          <Pressable
-            onPress={() => setSelectedSlug(cityIntel.locationSlug)}
-            style={{ width: "100%", maxWidth: 1180, marginTop: 10, marginBottom: 4,
-              borderRadius: 14, padding: 12,
-              backgroundColor: intelColor === L.red ? L.redBg : intelColor === L.gold ? L.goldBg : L.primaryBg,
-              borderWidth: 1, borderColor: intelColor + "55",
+          <Pressable onPress={() => setSelectedSlug(cityIntel.locationSlug)}
+            style={{ marginHorizontal: 16, marginBottom: 10, borderRadius: 14, padding: 12,
+              backgroundColor: intelColor + "10",
+              borderWidth: 1, borderColor: intelColor + "30",
               flexDirection: "row", alignItems: "center", gap: 10 }}>
-            <Text style={{ fontSize: 22 }}>💡</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ color: intelColor, fontSize: 11, fontWeight: "900",
-                textTransform: "uppercase", letterSpacing: 0.5 }}>{cityIntel.title}</Text>
-              <Text numberOfLines={1} style={{ color: L.textSoft, fontSize: 12,
-                marginTop: 2, lineHeight: 17 }}>{cityIntel.body}</Text>
+            <View style={{ width: 36, height: 36, borderRadius: 10,
+              backgroundColor: intelColor + "15", alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 16 }}>💡</Text>
             </View>
-            <Text style={{ color: intelColor, fontSize: 18 }}>→</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: intelColor, fontSize: 10, fontWeight: "900",
+                textTransform: "uppercase", letterSpacing: 1 }}>{cityIntel.title}</Text>
+              <Text numberOfLines={1} style={{ color: C.soft, fontSize: 12, marginTop: 1 }}>
+                {cityIntel.body}
+              </Text>
+            </View>
+            <Text style={{ color: intelColor, fontSize: 16 }}>→</Text>
           </Pressable>
         )}
 
-        {/* ── Événements ───────────────────────────────────── */}
-        {mapEvents.length > 0 && (
-          <View style={{ width: "100%", maxWidth: 1180, marginTop: 10, gap: 8 }}>
-            <Text style={{ color: L.muted, fontSize: 10, fontWeight: "900",
-              textTransform: "uppercase", letterSpacing: 0.8 }}>
-              Signaux de vie
-            </Text>
-            {mapEvents.slice(0, 1).map((event) => {
-              const loc = worldLocations.find((l) => l.slug === event.locationSlug);
-              const color   = event.severity === "high" ? L.red : event.severity === "medium" ? L.gold : L.blue;
-              const bgColor = event.severity === "high" ? L.redBg : event.severity === "medium" ? L.goldBg : L.blueBg;
-              return (
-                <Pressable
-                  key={event.id}
-                  onPress={() => setSelectedSlug(event.locationSlug)}
-                  style={{ borderRadius: 14, padding: 12,
-                    backgroundColor: bgColor,
-                    borderWidth: 1, borderColor: color + "55",
-                    flexDirection: "row", alignItems: "center", gap: 10 }}>
-                  <View style={{ width: 34, height: 34, borderRadius: 11,
-                    backgroundColor: color + "22", alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontSize: 18 }}>{event.emoji}</Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color, fontSize: 12, fontWeight: "900" }}>{event.title}</Text>
-                    <Text numberOfLines={1} style={{ color: L.textSoft, fontSize: 11, marginTop: 2 }}>
-                      {loc?.name ?? event.locationSlug} · {event.body}
-                    </Text>
-                  </View>
-                  <Text style={{ color, fontSize: 16 }}>→</Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        )}
-
-        {/* ── Événement Mondial ────────────────────────────── */}
+        {/* ── ÉVÉNEMENT MONDIAL ──────────────────────────────────────────────── */}
         {worldEvent && (
-          <Pressable
-            onPress={() => !worldEventJoined && joinWorldEvent()}
-            style={{ width: "100%", maxWidth: 1180, marginTop: 12,
-              backgroundColor: worldEventJoined ? L.card : "#ecfdf5",
+          <Pressable onPress={() => !worldEventJoined && joinWorldEvent()}
+            style={{ marginHorizontal: 16, marginBottom: 12,
+              backgroundColor: worldEventJoined ? C.glass : C.green + "08",
               borderRadius: 18, padding: 14,
-              borderWidth: 1, borderColor: worldEventJoined ? L.border : "#10b981" + "40",
+              borderWidth: 1, borderColor: worldEventJoined ? C.border : C.green + "30",
               flexDirection: "row", alignItems: "center", gap: 12 }}>
-            <View style={{ width: 46, height: 46, borderRadius: 15,
-              backgroundColor: "#10b981" + "20", alignItems: "center", justifyContent: "center" }}>
-              <Text style={{ fontSize: 22 }}>{worldEvent.emoji}</Text>
+            <View style={{
+              width: 48, height: 48, borderRadius: 15,
+              backgroundColor: C.green + "14",
+              borderWidth: 1, borderColor: C.green + "30",
+              alignItems: "center", justifyContent: "center",
+            }}>
+              <Text style={{ fontSize: 24 }}>{worldEvent.emoji}</Text>
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={{ color: worldEventJoined ? L.muted : "#10b981", fontSize: 10, fontWeight: "800", letterSpacing: 1 }}>
+              <Text style={{ color: worldEventJoined ? C.muted : C.green,
+                fontSize: 9, fontWeight: "900", letterSpacing: 2, marginBottom: 2 }}>
                 🌍 {worldEvent.city.name.toUpperCase()} · ÉVÉNEMENT MONDIAL
               </Text>
-              <Text numberOfLines={1} style={{ color: L.text, fontSize: 13, fontWeight: "800", marginTop: 1 }}>
+              <Text numberOfLines={1} style={{ color: C.text, fontSize: 14, fontWeight: "800" }}>
                 {worldEvent.title}
               </Text>
-              <Text style={{ color: L.gold, fontSize: 11, fontWeight: "700", marginTop: 2 }}>
+              <Text style={{ color: C.gold, fontSize: 11, fontWeight: "700", marginTop: 2 }}>
                 +{worldEvent.xpReward} XP · +{worldEvent.moneyReward} cr · +{worldEvent.moodBonus} humeur
               </Text>
             </View>
             {worldEventJoined ? (
-              <View style={{ backgroundColor: L.greenBg, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-                <Text style={{ color: L.green, fontWeight: "800", fontSize: 11 }}>✓ Rejoint</Text>
+              <View style={{ backgroundColor: C.green + "18", borderRadius: 10,
+                paddingHorizontal: 10, paddingVertical: 6,
+                borderWidth: 1, borderColor: C.green + "30" }}>
+                <Text style={{ color: C.green, fontWeight: "800", fontSize: 11 }}>✓ Rejoint</Text>
               </View>
             ) : (
-              <View style={{ backgroundColor: L.green, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 }}>
-                <Text style={{ color: "#fff", fontWeight: "800", fontSize: 11 }}>Rejoindre</Text>
+              <View style={{ backgroundColor: C.green, borderRadius: 10,
+                paddingHorizontal: 10, paddingVertical: 6 }}>
+                <Text style={{ color: "#040408", fontWeight: "900", fontSize: 11 }}>Rejoindre</Text>
               </View>
             )}
           </Pressable>
         )}
 
-        {/* ── Lieux utiles ─────────────────────────────────── */}
-        <View style={{ width: "100%", maxWidth: 1180, marginTop: 14, gap: 12 }}>
+        {/* ── ÉVÉNEMENTS ─────────────────────────────────────────────────────── */}
+        {mapEvents.length > 0 && mapEvents[0] && (
+          <Pressable onPress={() => setSelectedSlug(mapEvents[0].locationSlug)}
+            style={{ marginHorizontal: 16, marginBottom: 12,
+              borderRadius: 14, padding: 12,
+              backgroundColor: mapEvents[0].severity === "high" ? C.red + "10" : C.gold + "10",
+              borderWidth: 1, borderColor: (mapEvents[0].severity === "high" ? C.red : C.gold) + "30",
+              flexDirection: "row", alignItems: "center", gap: 10 }}>
+            <View style={{ width: 36, height: 36, borderRadius: 10,
+              backgroundColor: (mapEvents[0].severity === "high" ? C.red : C.gold) + "18",
+              alignItems: "center", justifyContent: "center" }}>
+              <Text style={{ fontSize: 18 }}>{mapEvents[0].emoji}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ color: mapEvents[0].severity === "high" ? C.red : C.gold,
+                fontSize: 11, fontWeight: "900" }}>{mapEvents[0].title}</Text>
+              <Text numberOfLines={1} style={{ color: C.soft, fontSize: 11, marginTop: 2 }}>
+                {worldLocations.find((l) => l.slug === mapEvents[0].locationSlug)?.name} · {mapEvents[0].body}
+              </Text>
+            </View>
+            <Text style={{ color: mapEvents[0].severity === "high" ? C.red : C.gold, fontSize: 16 }}>→</Text>
+          </Pressable>
+        )}
+
+        {/* ── LIEUX RAPIDES ──────────────────────────────────────────────────── */}
+        <View style={{ paddingHorizontal: 16, gap: 12 }}>
           <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-            <Text style={{ color: L.text, fontSize: 14, fontWeight: "900" }}>Lieux utiles</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+              <Text style={{ color: C.text, fontSize: 14, fontWeight: "900", letterSpacing: -0.3 }}>
+                Lieux utiles
+              </Text>
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: C.green,
+                shadowColor: C.green, shadowOpacity: 0.8, shadowRadius: 6 }} />
+            </View>
             <View style={{ flexDirection: "row", gap: 6 }}>
               <Pressable onPress={() => router.push("/(app)/world-social" as never)}
                 style={{ flexDirection: "row", alignItems: "center", gap: 4,
-                  backgroundColor: "#020b18", borderRadius: 10,
+                  backgroundColor: C.blue + "10", borderRadius: 10,
                   paddingHorizontal: 10, paddingVertical: 6,
-                  borderWidth: 1, borderColor: "rgba(59,130,246,0.4)" }}>
+                  borderWidth: 1, borderColor: C.blue + "30" }}>
                 <Text style={{ fontSize: 11 }}>🌍</Text>
-                <Text style={{ color: "#60a5fa", fontSize: 11, fontWeight: "800" }}>Carte</Text>
+                <Text style={{ color: C.blue, fontSize: 11, fontWeight: "800" }}>Carte</Text>
               </Pressable>
               <Pressable onPress={() => router.push("/(app)/world-live" as never)}
                 style={{ flexDirection: "row", alignItems: "center", gap: 4,
-                  backgroundColor: "#120020", borderRadius: 10,
+                  backgroundColor: C.purple + "10", borderRadius: 10,
                   paddingHorizontal: 10, paddingVertical: 6,
-                  borderWidth: 1, borderColor: "#c084fc55" }}>
+                  borderWidth: 1, borderColor: C.purple + "30" }}>
                 <Text style={{ fontSize: 11 }}>🏙️</Text>
-                <Text style={{ color: "#c084fc", fontSize: 11, fontWeight: "800" }}>Néon</Text>
+                <Text style={{ color: C.purple, fontSize: 11, fontWeight: "800" }}>Néon</Text>
               </Pressable>
             </View>
           </View>
 
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 12 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 10, paddingRight: 4 }}>
             {quickSlugs.map((slug) => (
-              <View key={slug} style={{ width: 190 }}>
-                <LocationCard
-                  slug={slug}
-                  isHere={slug === currentLocationSlug}
-                  npcCount={npcsByLoc[slug]?.length ?? 0}
-                  eventEmoji={mapEventsByLocation[slug]?.emoji}
-                  eventSeverity={mapEventsByLocation[slug]?.severity}
-                  onPress={() => setSelectedSlug(slug)}
-                />
-              </View>
+              <LocationCard key={slug} slug={slug}
+                isHere={slug === currentLocationSlug}
+                npcCount={npcsByLoc[slug]?.length ?? 0}
+                eventEmoji={mapEventsByLoc[slug]?.emoji}
+                eventSeverity={mapEventsByLoc[slug]?.severity}
+                onPress={() => setSelectedSlug(slug)} />
             ))}
           </ScrollView>
 
-          {/* ── Quartiers ────────────────────────────────────── */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingRight: 12 }}>
-            {NEIGHBORHOODS.map((neighborhood) => {
-              const firstSlug = neighborhood.slugs.find((slug) => worldLocations.some((l) => l.slug === slug));
-              if (!firstSlug) return null;
-              const active = neighborhood.slugs.includes(currentLocationSlug);
-              const totalNpcsHere = neighborhood.slugs.reduce(
-                (sum, slug) => sum + (npcsByLoc[slug]?.length ?? 0), 0
-              );
+          {/* Quartiers filter */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingRight: 4 }}>
+            {NEIGHBORHOODS.map((n) => {
+              const first  = n.slugs.find((s) => worldLocations.some((l) => l.slug === s));
+              if (!first) return null;
+              const active = n.slugs.includes(currentLocationSlug);
+              const total  = n.slugs.reduce((sum, s) => sum + (npcsByLoc[s]?.length ?? 0), 0);
               return (
-                <Pressable
-                  key={neighborhood.label}
-                  onPress={() => setSelectedSlug(firstSlug)}
-                  style={{
-                    minWidth: 140, borderRadius: 999,
-                    paddingHorizontal: 12, paddingVertical: 10,
-                    borderWidth: active ? 2 : 1,
-                    borderColor: active ? neighborhood.color : L.border,
-                    backgroundColor: active ? neighborhood.color + "18" : L.card,
-                    flexDirection: "row", alignItems: "center",
-                    justifyContent: "space-between", gap: 8,
-                  }}>
-                  <Text numberOfLines={1} style={{ color: active ? neighborhood.color : L.textSoft, fontSize: 12, fontWeight: "900" }}>
-                    {neighborhood.label}
+                <Pressable key={n.label} onPress={() => setSelectedSlug(first)}
+                  style={{ borderRadius: 999, paddingHorizontal: 14, paddingVertical: 9,
+                    borderWidth: active ? 1.5 : 1,
+                    borderColor: active ? n.color : C.border,
+                    backgroundColor: active ? n.color + "18" : C.glass,
+                    flexDirection: "row", alignItems: "center", gap: 6,
+                    shadowColor: active ? n.color : "transparent",
+                    shadowOpacity: active ? 0.35 : 0, shadowRadius: 10 }}>
+                  <Text numberOfLines={1} style={{
+                    color: active ? n.color : C.soft, fontSize: 12, fontWeight: "800" }}>
+                    {n.label}
                   </Text>
-                  {totalNpcsHere > 0 && (
-                    <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800" }}>
-                      {totalNpcsHere}
-                    </Text>
+                  {total > 0 && (
+                    <View style={{ backgroundColor: n.color + "25", borderRadius: 8,
+                      paddingHorizontal: 6, paddingVertical: 2 }}>
+                      <Text style={{ color: n.color, fontSize: 9, fontWeight: "900" }}>{total}</Text>
+                    </View>
                   )}
                 </Pressable>
               );
             })}
           </ScrollView>
-        </View>
 
-        {/* ── Vie en ville ─────────────────────────────────── */}
-        <View style={{ width: "100%", maxWidth: 1180, marginTop: 12,
-          borderRadius: 16, backgroundColor: L.card,
-          borderWidth: 1, borderColor: L.border, padding: 12,
-          flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12,
-          shadowColor: "rgba(99,102,241,0.06)", shadowOpacity: 1, shadowRadius: 8,
-          shadowOffset: { width: 0, height: 2 }, elevation: 1 }}>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Vie en ville</Text>
-            <Text numberOfLines={1} style={{ color: L.muted, fontSize: 11, marginTop: 2 }}>
-              {currentNpcs.length > 0
-                ? `${currentNpcs.length} habitant${currentNpcs.length > 1 ? "s" : ""} ici`
-                : `${npcs.length} habitants bougent en arrière-plan`}
-            </Text>
+          {/* Vie en ville */}
+          <View style={{
+            backgroundColor: C.glass, borderRadius: 16,
+            borderWidth: 1, borderColor: C.green + "20", padding: 14,
+            overflow: "hidden",
+            shadowColor: C.green, shadowOpacity: 0.06, shadowRadius: 16,
+          }}>
+            {/* Top accent line */}
+            <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1.5,
+              backgroundColor: C.green, opacity: 0.35 }} />
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 10 }}>
+              <Pulse color={C.green} size={9} />
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: C.text, fontSize: 13, fontWeight: "900" }}>Vie en ville</Text>
+                <Text style={{ color: C.muted, fontSize: 11, marginTop: 2 }}>
+                  {currentNpcs.length > 0
+                    ? `${currentNpcs.length} habitant${currentNpcs.length > 1 ? "s" : ""} ici avec toi`
+                    : `${npcs.length} habitants en mouvement`}
+                </Text>
+              </View>
+              <View style={{ backgroundColor: C.green + "15", borderRadius: 8,
+                paddingHorizontal: 8, paddingVertical: 4,
+                borderWidth: 1, borderColor: C.green + "30" }}>
+                <Text style={{ color: C.green, fontSize: 10, fontWeight: "900" }}>LIVE</Text>
+              </View>
+            </View>
+            {currentNpcs.length > 0 && (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                {currentNpcs.slice(0, 3).map((n) => (
+                  <Pressable key={n.id} onPress={() => setSelectedSlug(n.locationSlug)}
+                    style={{ borderRadius: 20, paddingHorizontal: 10, paddingVertical: 6,
+                      backgroundColor: C.blue + "14", borderWidth: 1, borderColor: C.blue + "30",
+                      flexDirection: "row", alignItems: "center", gap: 4 }}>
+                    <Text style={{ fontSize: 11 }}>{ACTION_EMOJI[n.action] ?? "•"}</Text>
+                    <Text numberOfLines={1} style={{ color: C.blue, fontSize: 11, fontWeight: "800" }}>
+                      {n.name}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            )}
           </View>
-          {currentNpcs.slice(0, 2).map((npc) => (
-            <Pressable
-              key={npc.id}
-              onPress={() => setSelectedSlug(npc.locationSlug)}
-              style={{ borderRadius: 999, paddingHorizontal: 10, paddingVertical: 7,
-                backgroundColor: L.primaryBg, borderWidth: 1, borderColor: L.border }}>
-              <Text numberOfLines={1} style={{ color: L.primary, fontSize: 11, fontWeight: "800" }}>
-                {ACTION_EMOJI[npc.action] ?? "•"} {npc.name}
-              </Text>
-            </Pressable>
-          ))}
         </View>
 
       </ScrollView>
 
-      {/* ── Panel détail (Modal) ──────────────────────────── */}
-      <Modal
-        visible={selectedSlug !== null}
-        transparent
-        animationType="slide"
+      {/* ── MODALS ──────────────────────────────────────────────────────────── */}
+      <Modal visible={selectedSlug !== null} transparent animationType="slide"
         onRequestClose={() => setSelectedSlug(null)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(4,4,10,0.7)", justifyContent: "flex-end" }}
           onPress={() => setSelectedSlug(null)}>
           <Pressable onPress={(e) => e.stopPropagation()}>
             {selectedSlug && (
-              <LocationPanel
-                slug={selectedSlug}
-                currentSlug={currentLocationSlug}
-                npcs={npcs}
-                event={mapEventsByLocation[selectedSlug]}
-                onTravel={handleTravel}
-                onClose={() => setSelectedSlug(null)}
-              />
+              <LocationPanel slug={selectedSlug} currentSlug={currentLocationSlug}
+                npcs={npcs} event={mapEventsByLoc[selectedSlug]}
+                onTravel={handleTravel} onClose={() => setSelectedSlug(null)} />
             )}
           </Pressable>
         </Pressable>
       </Modal>
 
-      <Modal
-        visible={selectedNpc !== null}
-        transparent
-        animationType="slide"
+      <Modal visible={selectedNpc !== null} transparent animationType="slide"
         onRequestClose={() => setSelectedNpcId(null)}>
-        <Pressable
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-end" }}
+        <Pressable style={{ flex: 1, backgroundColor: "rgba(4,4,10,0.7)", justifyContent: "flex-end" }}
           onPress={() => setSelectedNpcId(null)}>
           <Pressable onPress={(e) => e.stopPropagation()}>
             {selectedNpc && (
-              <PersonPanel
-                npc={selectedNpc}
-                relationship={selectedRelationship}
+              <PersonPanel npc={selectedNpc} relationship={selectedRelationship}
                 npcRelation={npcRelations.find((r) => r.npcId === selectedNpc.id)}
-                onStartDate={(venueSlug) => {
-                  handleStartDate(selectedNpc, venueSlug);
-                  setSelectedNpcId(null);
-                }}
+                onStartDate={(v) => { handleStartDate(selectedNpc, v); setSelectedNpcId(null); }}
                 onZoomDistrict={() => {
                   const city = selectedNpcCity ?? cityForNpc(selectedNpc);
-                  setFocusedCityId(city.id);
-                  setDistrictCityId(city.id);
-                  setDistrictSlug(selectedNpc.locationSlug);
-                  setSelectedNpcId(null);
+                  setFocusedCityId(city.id); setDistrictCityId(city.id);
+                  setDistrictSlug(selectedNpc.locationSlug); setSelectedNpcId(null);
                 }}
-                onInteract={() => {
-                  updateNpcRelation(selectedNpc.id, 5, selectedNpc.name);
-                  setSelectedNpcId(null);
-                }}
-                onClose={() => setSelectedNpcId(null)}
-              />
+                onInteract={() => { updateNpcRelation(selectedNpc.id, 5, selectedNpc.name); setSelectedNpcId(null); }}
+                onClose={() => setSelectedNpcId(null)} />
             )}
           </Pressable>
         </Pressable>
