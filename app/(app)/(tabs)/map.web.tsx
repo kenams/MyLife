@@ -183,7 +183,7 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady 
       // Expose flyTo pour le parent
       if (onMapReady) {
         onMapReady((lat: number, lng: number, zoom = 16) => {
-          map.flyTo([lat, lng], zoom, { animate: true, duration: 2.0 } as object);
+          map.flyTo([lat, lng], zoom, { animate: true, duration: zoom < 14 ? 1.2 : 2.5 } as object);
         });
       }
 
@@ -484,7 +484,6 @@ export default function LifeMapScreen() {
   const [blocked,      setBlocked]      = useState<string[]>([]);
   const [mapReady,     setMapReady]     = useState(false);
   const flyToRef = useRef<((lat: number, lng: number, zoom?: number) => void) | null>(null);
-  const zoomAnim = useRef(new Animated.Value(0)).current;
 
   const visible = players.filter((p) =>
     p.status !== "ghost" &&
@@ -526,18 +525,12 @@ export default function LifeMapScreen() {
 
   function zoomAnimTrigger(lat: number, lng: number) {
     if (!flyToRef.current) return;
-    // 1. Dézoome instantanément sur Paris entier
+    // 1. Dézoome animé sur Paris entier (1.2s) — on voit la ville s'éloigner
     flyToRef.current(48.8566, 2.3522, 11);
-    // 2. Après 800ms, flyTo sur ma position en zoom 17 (niveau rue)
+    // 2. Après 1.4s (fin du déZoom), fly vers ma position au zoom 17 (2.5s) — on voit la distance
     setTimeout(() => {
       flyToRef.current?.(lat, lng, 17);
-    }, 800);
-    // Flash animation
-    Animated.sequence([
-      Animated.timing(zoomAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.delay(800),
-      Animated.timing(zoomAnim, { toValue: 0, duration: 400, useNativeDriver: true }),
-    ]).start();
+    }, 1400);
   }
 
   async function handleStatusChange(s: MapStatus) {
@@ -581,11 +574,6 @@ export default function LifeMapScreen() {
         onMapReady={(fn) => { flyToRef.current = fn; }}
       />
 
-      {/* Flash overlay zoom */}
-      <Animated.View pointerEvents="none" style={{
-        position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-        backgroundColor: C.gold, opacity: zoomAnim, zIndex: 6,
-      }} />
 
       {/* Loading overlay */}
       {!mapReady && (
