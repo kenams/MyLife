@@ -12,7 +12,7 @@ const C = {
 
 const STEPS = [
   {
-    emoji: "🗺️", title: "La Map de Toulouse",
+    emoji: "🗺️", title: "La Map de Paris",
     body: "Retrouve des joueurs réels dans ta ville. Active ta localisation pour apparaître sur la map live.",
     accent: C.blue,
   },
@@ -23,12 +23,12 @@ const STEPS = [
   },
   {
     emoji: "👥", title: "Crews & Territoires",
-    body: "Rejoins ou fonde un crew. Revendiquez des zones de Toulouse et défendez-les contre les autres crews.",
+    body: "Rejoins ou fonde un crew. Revendiquez des zones de Paris et défendez-les contre les autres crews.",
     accent: C.purple,
   },
   {
     emoji: "🏆", title: "Flash Events",
-    body: "Des événements surgissent en temps réel dans Toulouse. Sois le premier à participer pour des récompenses rares.",
+    body: "Des événements surgissent en temps réel dans Paris. Sois le premier à participer pour des récompenses rares.",
     accent: C.gold,
   },
 ];

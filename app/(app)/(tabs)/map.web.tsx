@@ -219,7 +219,7 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
 
       // Créer la Leaflet map
       const map = L.map(mapEl, {
-        center: [43.6047, 1.4442],
+        center: [48.8566, 2.3522],
         zoom: 13,
         zoomControl: true,
         preferCanvas: true,
@@ -492,7 +492,7 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
               )}
             </View>
             <Text style={{ color: C.muted, fontSize: 12, marginTop: 3 }}>
-              Niveau {player.level} · {player.location_name ?? "Toulouse"}
+              Niveau {player.level} · {player.location_name ?? "Paris"}
             </Text>
           </View>
           <View style={{
@@ -515,7 +515,7 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
           <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
             <Text style={{ fontSize: 15 }}>📍</Text>
             <Text style={{ color: C.soft, fontSize: 13 }}>
-              {player.location_name ?? "Toulouse"}
+              {player.location_name ?? "Paris"}
               {player.location_verified
                 ? <Text style={{ color: C.green }}> · Vérifié ✓</Text>
                 : <Text style={{ color: C.muted }}> · Non vérifié</Text>}
@@ -738,14 +738,14 @@ export default function LifeMapScreen() {
       });
       if (myStatus === "ghost") setMyStatus("free");
     }
-    // Zoom cinématique : dézoome sur Toulouse entier → vole vers ma position
+    // Zoom cinématique : dézoome sur Paris entier → vole vers ma position
     zoomAnimTrigger(loc.lat, loc.lng);
   }
 
   function zoomAnimTrigger(lat: number, lng: number) {
     if (!flyToRef.current) return;
-    // 1. Dézoome animé sur Toulouse entier (1.2s) — on voit la ville s'éloigner
-    flyToRef.current(43.6047, 1.4442, 11);
+    // 1. Dézoome animé sur Paris entier (1.2s) — on voit la ville s'éloigner
+    flyToRef.current(48.8566, 2.3522, 11);
     // 2. Après 1.4s (fin du déZoom), fly vers ma position au zoom 17 (2.5s) — on voit la distance
     setTimeout(() => {
       flyToRef.current?.(lat, lng, 17);
@@ -806,7 +806,7 @@ export default function LifeMapScreen() {
         }}>
           <ActivityIndicator color={C.gold} size="large" />
           <Text style={{ color: C.muted, fontSize: 11, letterSpacing: 3, fontWeight: "900" }}>
-            CHARGEMENT DE TOULOUSE...
+            CHARGEMENT DE PARIS...
           </Text>
         </View>
       )}
@@ -826,7 +826,7 @@ export default function LifeMapScreen() {
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.green,
             shadowColor: C.green, shadowOpacity: 1, shadowRadius: 5 }} />
           <Text style={{ color: C.text, fontSize: 13, fontWeight: "800" }}>
-            {visible.length} en live · Toulouse
+            {visible.length} en live · Paris
           </Text>
         </View>
 
@@ -1067,7 +1067,7 @@ export default function LifeMapScreen() {
           maxWidth: 160,
         }}>
           <Text style={{ color: C.gold, fontSize: 9, fontWeight: "900", letterSpacing: 1.5, marginBottom: 4 }}>
-            👑 ROI DE TOULOUSE
+            👑 ROI DE PARIS
           </Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
             <Text style={{ fontSize: 22 }}>{roi.avatar_emoji}</Text>

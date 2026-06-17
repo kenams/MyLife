@@ -202,7 +202,7 @@ function LiveParisWidget() {
         borderBottomWidth: 1, borderBottomColor: L.border }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <LivePulse />
-          <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Toulouse en direct</Text>
+          <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Paris en direct</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <View style={{ backgroundColor: L.greenBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
@@ -582,7 +582,7 @@ export default function HomeScreen() {
     hapticImpact("medium");
     const playerName = avatar?.displayName ?? "Joueur";
     const playerEmoji = "🧢";
-    const evtPayload = buildActionFeedEvent(id, playerName, playerEmoji, "Toulouse", false);
+    const evtPayload = buildActionFeedEvent(id, playerName, playerEmoji, "Paris", false);
     if (evtPayload) publishFeedEvent(evtPayload);
     const msgs: Record<string, string> = {
       "work-shift":   "+thunes +côte 💰",
@@ -626,7 +626,7 @@ export default function HomeScreen() {
   async function handleCreateRassemblement() {
     if (!avatar) return;
     const evt = await createRassemblement(
-      "Capitole — Place Wilson", 43.6043, 1.4437, avatar.displayName,
+      "République — Paris", 48.8676, 2.3634, avatar.displayName,
     );
     if (evt) {
       setFlashEvents((prev) => [evt, ...prev]);

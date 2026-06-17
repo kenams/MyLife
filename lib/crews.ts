@@ -859,7 +859,7 @@ export async function fetchRoiDeToulouse(): Promise<RoiDeToulouse | null> {
   const now = new Date();
   const monday = new Date(now);
   monday.setDate(now.getDate() - ((now.getDay() + 6) % 7));
-  const weekLabel = `Semaine du ${monday.getDate()} ${monday.toLocaleDateString("fr-FR", { month: "long" })}`;
+  const weekLabel = `Sem. du ${monday.getDate()} ${monday.toLocaleDateString("fr-FR", { month: "long" })}`;
 
   return {
     display_name: data.display_name,

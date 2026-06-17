@@ -139,7 +139,7 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
               )}
             </View>
             <Text style={{ color: L.muted, fontSize: 12, marginTop: 3 }}>
-              Niveau {player.level} · {player.location_name ?? "Toulouse"}
+              Niveau {player.level} · {player.location_name ?? "Paris"}
             </Text>
           </View>
           {/* Statut */}
@@ -437,7 +437,7 @@ export default function LifeMapScreen() {
             backgroundColor: L.green,
             shadowColor: L.green, shadowOpacity: 1, shadowRadius: 4 }} />
           <Text style={{ color: L.text, fontSize: 13, fontWeight: "800" }}>
-            {onlineCount} en live · Toulouse
+            {onlineCount} en live · Paris
           </Text>
         </View>
 
