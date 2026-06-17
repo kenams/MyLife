@@ -4,11 +4,14 @@ import { useState } from "react";
 import { Pressable, Text, TextInput, View, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { useGameStore } from "@/stores/game-store";
 
-// ── Dev bypass — à retirer avant prod publique ────────────────────────────────
-async function devBypass(loadTestAccount: (p: "balanced") => void) {
+async function devBypass(
+  loadTestAccount: (p: "balanced") => void,
+  completeTutorial: () => void,
+) {
   await AsyncStorage.setItem("@mylife_age_verified", "true");
   await AsyncStorage.setItem("@mylife_consent_v1", "true");
   loadTestAccount("balanced");
+  completeTutorial();
   router.replace("/(app)/(tabs)/home");
 }
 
@@ -35,7 +38,8 @@ export default function AgeCheckScreen() {
   const [month, setMonth] = useState("");
   const [year,  setYear]  = useState("");
   const [error, setError] = useState("");
-  const loadTestAccount = useGameStore(s => s.loadTestAccount);
+  const loadTestAccount  = useGameStore(s => s.loadTestAccount);
+  const completeTutorial = useGameStore(s => s.completeTutorial);
 
   function validate() {
     setError("");
@@ -177,9 +181,9 @@ export default function AgeCheckScreen() {
             Ta date de naissance n'est pas stockée sur nos serveurs.
           </Text>
 
-          {/* ── CONNEXION RAPIDE (dev) ── */}
-          <Pressable
-            onPress={() => void devBypass(loadTestAccount)}
+          {/* ── CONNEXION RAPIDE (dev uniquement) ── */}
+          {__DEV__ && <Pressable
+            onPress={() => void devBypass(loadTestAccount, completeTutorial)}
             style={{
               marginTop: 24, backgroundColor: "#FFD600" + "18",
               borderRadius: 14, paddingVertical: 14,
@@ -193,7 +197,7 @@ export default function AgeCheckScreen() {
             <Text style={{ color: "#A8A49A", fontSize: 11, marginTop: 3 }}>
               Compte test · accès direct
             </Text>
-          </Pressable>
+          </Pressable>}
         </View>
       </ScrollView>
     </KeyboardAvoidingView>

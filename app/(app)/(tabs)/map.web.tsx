@@ -21,6 +21,7 @@ import { startNpcMapEngine, stopNpcMapEngine } from "@/lib/npc-map-engine";
 import { blockUser } from "@/lib/safety";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
+import { supabase } from "@/lib/supabase";
 
 // ── Matchmaking helpers ───────────────────────────────────────────────────────
 function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
@@ -620,8 +621,9 @@ function FilterPills({ active, onChange }: {
 
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function LifeMapScreen() {
-  const avatar      = useGameStore((s) => s.avatar);
-  const playerLevel = useGameStore((s) => s.playerLevel ?? 1);
+  const avatar           = useGameStore((s) => s.avatar);
+  const playerLevel      = useGameStore((s) => s.playerLevel ?? 1);
+  const markQuestAction  = useGameStore((s) => s.markQuestAction);
 
   const [players,      setPlayers]      = useState<MapPlayer[]>([]);
   const [crewZones,    setCrewZones]    = useState<CrewZoneRich[]>([]);
@@ -680,9 +682,12 @@ export default function LifeMapScreen() {
     setLoading(false);
     if (!loc) return;
     setMyLocation({ lat: loc.lat, lng: loc.lng });
+    markQuestAction("appear-on-map");
     if (avatar) {
+      const { data: authData } = await supabase?.auth.getUser() ?? { data: null };
+      const resolvedUserId = authData?.user?.id ?? avatar.displayName;
       await publishPosition({
-        userId: "local_user", displayName: avatar.displayName,
+        userId: resolvedUserId, displayName: avatar.displayName,
         avatarEmoji: "🧢", status: myStatus === "ghost" ? "free" : myStatus,
         level: playerLevel, lastAction: null,
         lat: loc.lat, lng: loc.lng,
@@ -706,10 +711,12 @@ export default function LifeMapScreen() {
 
   async function handleStatusChange(s: MapStatus) {
     setMyStatus(s);
-    if (s === "ghost") { await goGhost("local_user"); return; }
+    const { data: authData } = await supabase?.auth.getUser() ?? { data: null };
+    const resolvedUserId = authData?.user?.id ?? (avatar?.displayName ?? "local_user");
+    if (s === "ghost") { await goGhost(resolvedUserId); return; }
     if (myLocation) {
       await publishPosition({
-        userId: "local_user", displayName: avatar?.displayName ?? "Moi",
+        userId: resolvedUserId, displayName: avatar?.displayName ?? "Moi",
         avatarEmoji: "🧢", status: s, level: playerLevel, lastAction: null,
         lat: myLocation.lat, lng: myLocation.lng, locationName: null, locationVerified: true,
       });
@@ -894,7 +901,7 @@ export default function LifeMapScreen() {
                     const dist = Math.round(haversineMeters(myLocation, { lat: p.lat, lng: p.lng }));
                     const cfg = STATUS_CONFIG[p.status as MapStatus];
                     return (
-                      <Pressable key={p.id} onPress={() => { setSelected(p); setShowMatchmaking(false); }}
+                      <Pressable key={p.id} onPress={() => { setSelected(p); setShowMatchmaking(false); markQuestAction("map-encounter"); }}
                         style={{ flexDirection: "row", alignItems: "center", gap: 10,
                           paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border }}>
                         <Text style={{ fontSize: 20 }}>{p.avatar_emoji}</Text>

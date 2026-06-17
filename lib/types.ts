@@ -258,7 +258,7 @@ export type NotificationItem = {
   id: string;
   kind: NotificationKind;
   title: string;
-  body: string;
+  body?: string;
   createdAt: string;
   read: boolean;
 };

@@ -16,10 +16,12 @@ export interface Crew {
 export interface CrewMember {
   id:           string;
   crew_id:      string;
+  user_id?:     string;
   player_name:  string;
   player_emoji: string;
   role:         "founder" | "officer" | "member";
   joined_at:    string;
+  last_seen_at?: string;
 }
 
 export interface CrewZone {
@@ -211,14 +213,17 @@ export async function transferLeader(
 
   if (!target) return { ok: false, error: `${newLeader} n'est pas dans le crew.` };
 
-  // Promouvoir le nouveau leader
-  await supabase.from("crew_members").update({ role: "leader" }).eq("id", target.id);
+  // Promouvoir le nouveau founder (rôle unifié)
+  await supabase.from("crew_members").update({ role: "founder" }).eq("id", target.id);
 
-  // Rétrograder l'ancien leader en membre
+  // Rétrograder l'ancien founder en officier
   await supabase.from("crew_members")
-    .update({ role: "member" })
+    .update({ role: "officer" })
     .eq("crew_id", crewId)
     .eq("player_name", currentLeader);
+
+  // Mettre à jour le founder dans la table crews
+  await supabase.from("crews").update({ founder: newLeader }).eq("id", crewId);
 
   return { ok: true };
 }
@@ -332,13 +337,28 @@ export async function leaveCrew(
     .eq("player_name", playerName)
     .single();
 
-  if (member?.role === "leader" || member?.role === "founder") {
-    return {
-      ok: false,
-      blocked: true,
-      penalties,
-      error: "Tu es leader — transfère le rôle avant de quitter.",
-    };
+  if (member?.role === "founder") {
+    // Vérifier si d'autres membres existent
+    const { data: others } = await supabase
+      .from("crew_members")
+      .select("id")
+      .eq("crew_id", crewId)
+      .neq("player_name", playerName);
+
+    if (others && others.length > 0) {
+      return {
+        ok: false,
+        blocked: true,
+        penalties,
+        error: "Tu es fondateur — transfère le rôle avant de quitter.",
+      };
+    }
+    // Seul membre = dissolution du crew
+    await supabase.from("crews").delete().eq("id", crewId);
+    await supabase.from("life_map_players")
+      .update({ crew_color: null, crew_tag: null })
+      .eq("display_name", playerName);
+    return { ok: true, penalties: { xpLost: 0, reputationLost: 0, cooldownDays: 0, moneyLost: 0 } };
   }
 
   // Retirer le membre
@@ -364,13 +384,12 @@ export async function leaveCrew(
     await supabase.from("crew_zones").update({ radius: newRadius }).eq("crew_id", crewId);
   }
 
-  // Stocker le cooldown dans life_map_players (champ last_action = flag)
   await supabase
     .from("life_map_players")
     .update({
       crew_color: null,
       crew_tag: null,
-      last_action: `CREW_COOLDOWN_UNTIL:${new Date(Date.now() + penalties.cooldownDays * 86400000).toISOString()}`,
+      crew_cooldown_until: new Date(Date.now() + penalties.cooldownDays * 86400000).toISOString(),
     })
     .eq("display_name", playerName);
 
@@ -381,12 +400,94 @@ export async function getCrewCooldown(playerName: string): Promise<Date | null> 
   if (!supabase) return null;
   const { data } = await supabase
     .from("life_map_players")
-    .select("last_action")
+    .select("crew_cooldown_until")
     .eq("display_name", playerName)
     .single();
-  if (!data?.last_action?.startsWith("CREW_COOLDOWN_UNTIL:")) return null;
-  const until = new Date(data.last_action.replace("CREW_COOLDOWN_UNTIL:", ""));
+  if (!data?.crew_cooldown_until) return null;
+  const until = new Date(data.crew_cooldown_until);
   return until > new Date() ? until : null;
+}
+
+// ── Leaderboard joueurs ───────────────────────────────────────────────────────
+export interface PlayerRank {
+  display_name: string;
+  avatar_emoji:  string;
+  level:         number;
+  crew_tag?:     string | null;
+  crew_color?:   string | null;
+  status:        string;
+}
+
+export async function fetchPlayerLeaderboard(limit = 20): Promise<PlayerRank[]> {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("life_map_players")
+    .select("display_name, avatar_emoji, level, crew_tag, crew_color, status")
+    .neq("status", "ghost")
+    .order("level", { ascending: false })
+    .limit(limit);
+  return (data ?? []) as PlayerRank[];
+}
+
+// ── Alliances ─────────────────────────────────────────────────────────────────
+export interface CrewAlliance {
+  id:          string;
+  crew_a_id:   string;
+  crew_b_id:   string;
+  status:      "pending" | "active" | "broken";
+  proposed_by: string;
+  created_at:  string;
+  accepted_at?: string;
+  crew_a?: Pick<Crew, "name" | "tag" | "color" | "emoji">;
+  crew_b?: Pick<Crew, "name" | "tag" | "color" | "emoji">;
+}
+
+export async function proposeAlliance(
+  fromCrewId: string,
+  toCrewId: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "Pas de connexion" };
+  const { error } = await supabase.from("crew_alliances").insert({
+    crew_a_id: fromCrewId,
+    crew_b_id: toCrewId,
+    proposed_by: fromCrewId,
+  });
+  if (error) return { ok: false, error: "Alliance déjà proposée ou existante." };
+  return { ok: true };
+}
+
+export async function acceptAlliance(allianceId: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.from("crew_alliances")
+    .update({ status: "active", accepted_at: new Date().toISOString() })
+    .eq("id", allianceId);
+  return !error;
+}
+
+export async function fetchAlliances(crewId: string): Promise<CrewAlliance[]> {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("crew_alliances")
+    .select("*, crew_a:crew_a_id(name,tag,color,emoji), crew_b:crew_b_id(name,tag,color,emoji)")
+    .or(`crew_a_id.eq.${crewId},crew_b_id.eq.${crewId}`)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as CrewAlliance[];
+}
+
+// ── Auto-transfer si leader inactif > 30j ────────────────────────────────────
+export async function checkLeaderInactivity(crewId: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { data: leader } = await supabase
+    .from("crew_members")
+    .select("player_name, joined_at, last_seen_at")
+    .eq("crew_id", crewId)
+    .eq("role", "founder")
+    .single();
+  if (!leader) return null;
+  const lastActive = leader.last_seen_at ?? leader.joined_at;
+  const daysSince = (Date.now() - new Date(lastActive).getTime()) / 86400000;
+  if (daysSince < 30) return null;
+  return leader.player_name;
 }
 
 export const CREW_COLORS = [

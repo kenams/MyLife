@@ -4,10 +4,14 @@ import { Animated, Modal, Pressable, ScrollView, Text, TextInput, View } from "r
 
 import { useGameStore } from "@/stores/game-store";
 import {
-  type Crew, type CrewMember, type LeaveCrewResult, type CrewWarRecord, CREW_COLORS,
+  type Crew, type CrewMember, type LeaveCrewResult, type CrewWarRecord,
+  type CrewAlliance, type PlayerRank, CREW_COLORS,
   createCrew, fetchCrews, joinCrew, getMyCrewId, leaveCrew, getCrewCooldown,
   transferLeader, fetchCrewWars, fetchCrewMembers,
+  fetchPlayerLeaderboard, fetchAlliances, proposeAlliance, acceptAlliance,
+  checkLeaderInactivity,
 } from "@/lib/crews";
+import { supabase } from "@/lib/supabase";
 
 const C = {
   bg:      "#080808", card:    "#111111", cardAlt: "#181818",
@@ -120,6 +124,11 @@ export default function CrewsScreen() {
   const [transferring,   setTransferring]   = useState(false);
   const [wars,           setWars]           = useState<CrewWarRecord[]>([]);
   const [showWars,       setShowWars]       = useState(false);
+  const [tab,            setTab]            = useState<"crews" | "players">("crews");
+  const [playerRanks,    setPlayerRanks]    = useState<PlayerRank[]>([]);
+  const [alliances,      setAlliances]      = useState<CrewAlliance[]>([]);
+  const [showAlliances,  setShowAlliances]  = useState(false);
+  const [inactiveLeader, setInactiveLeader] = useState<string | null>(null);
   const toastAnim = useRef(new Animated.Value(0)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
 
@@ -138,9 +147,33 @@ export default function CrewsScreen() {
   }, []);
 
   useEffect(() => {
-    if (!myCrewId) { setMembers([]); setWars([]); return; }
+    fetchPlayerLeaderboard(20).then(setPlayerRanks);
+  }, []);
+
+  useEffect(() => {
+    if (!myCrewId) { setMembers([]); setWars([]); setAlliances([]); return; }
     fetchCrewMembers(myCrewId).then(setMembers);
     fetchCrewWars(myCrewId).then(setWars);
+    fetchAlliances(myCrewId).then(setAlliances);
+    checkLeaderInactivity(myCrewId).then(setInactiveLeader);
+
+    // Realtime — notif quand un nouveau membre rejoint
+    if (!supabase) return;
+    const sub = supabase
+      .channel(`crew-members-${myCrewId}`)
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "crew_members",
+        filter: `crew_id=eq.${myCrewId}`,
+      }, (payload) => {
+        const name = (payload.new as CrewMember).player_name;
+        if (name !== playerName) showToast(`👋 ${name} a rejoint le crew !`);
+        fetchCrewMembers(myCrewId).then(setMembers);
+        setCrews((prev) => prev.map((x) =>
+          x.id === myCrewId ? { ...x, member_count: x.member_count + 1 } : x
+        ));
+      })
+      .subscribe();
+    return () => { void sub.unsubscribe(); };
   }, [myCrewId]);
 
   async function handleTransfer() {
@@ -366,14 +399,131 @@ export default function CrewsScreen() {
           </Pressable>
         )}
 
+        {/* Tabs toggle */}
+        <View style={{ flexDirection: "row", backgroundColor: C.card, borderRadius: 12,
+          padding: 4, marginBottom: 16, borderWidth: 1, borderColor: C.border }}>
+          {(["crews", "players"] as const).map((t) => (
+            <Pressable key={t} onPress={() => setTab(t)} style={{ flex: 1, paddingVertical: 9,
+              alignItems: "center", borderRadius: 9,
+              backgroundColor: tab === t ? C.border : "transparent" }}>
+              <Text style={{ color: tab === t ? C.text : C.muted, fontSize: 12, fontWeight: "800" }}>
+                {t === "crews" ? "🛡 Crews" : "🏆 Joueurs"}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+
         {/* Section title */}
+        {tab === "crews" && (
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
           <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2 }}>CLASSEMENT CREWS</Text>
           <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
         </View>
+        )}
+
+        {/* Alerte leader inactif */}
+        {inactiveLeader && tab === "crews" && myCrewId && (
+          <View style={{ backgroundColor: "#1A1000", borderRadius: 12, padding: 14,
+            borderWidth: 1, borderColor: C.gold + "40", marginBottom: 16, gap: 6 }}>
+            <Text style={{ color: C.gold, fontSize: 13, fontWeight: "900" }}>
+              ⚠️ Leader inactif depuis +30j
+            </Text>
+            <Text style={{ color: C.textSoft, fontSize: 12 }}>
+              {inactiveLeader} n'a pas été actif. Vote pour un nouveau leader.
+            </Text>
+            <Pressable onPress={() => { void fetchCrewMembers(myCrewId).then(setMembers); setTransferModal(true); }}
+              style={{ backgroundColor: C.gold + "15", borderRadius: 8, paddingVertical: 8,
+                alignItems: "center", borderWidth: 1, borderColor: C.gold + "40" }}>
+              <Text style={{ color: C.gold, fontSize: 12, fontWeight: "800" }}>Proposer un successeur</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {/* Alliances section */}
+        {myCrewId && tab === "crews" && (
+          <View style={{ marginBottom: 16 }}>
+            <Pressable onPress={() => setShowAlliances((p) => !p)}
+              style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: showAlliances ? 10 : 0 }}>
+              <Text style={{ color: C.blue, fontSize: 10, fontWeight: "800", letterSpacing: 2 }}>
+                🤝 ALLIANCES ({alliances.filter((a) => a.status === "active").length})
+              </Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+              <Text style={{ color: C.muted, fontSize: 12 }}>{showAlliances ? "▲" : "▼"}</Text>
+            </Pressable>
+            {showAlliances && (
+              alliances.length === 0
+                ? <Text style={{ color: C.muted, fontSize: 12, paddingVertical: 8 }}>Aucune alliance. Tape sur un crew pour en proposer une.</Text>
+                : alliances.map((a) => {
+                    const isA = a.crew_a_id === myCrewId;
+                    const ally = isA ? a.crew_b : a.crew_a;
+                    const statusColor = a.status === "active" ? C.green : a.status === "pending" ? C.gold : C.muted;
+                    const isPending = a.status === "pending" && !isA;
+                    return (
+                      <View key={a.id} style={{ flexDirection: "row", alignItems: "center", gap: 10,
+                        backgroundColor: C.card, borderRadius: 10, padding: 10, marginBottom: 6,
+                        borderWidth: 1, borderColor: statusColor + "30" }}>
+                        <Text style={{ fontSize: 18 }}>{ally?.emoji ?? "🤝"}</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: C.text, fontSize: 12, fontWeight: "700" }}>
+                            [{ally?.tag ?? "?"}] {ally?.name ?? "Inconnu"}
+                          </Text>
+                          <Text style={{ color: statusColor, fontSize: 10 }}>
+                            {a.status === "active" ? "Alliance active" : a.status === "pending" ? "En attente" : "Rompue"}
+                          </Text>
+                        </View>
+                        {isPending && (
+                          <Pressable onPress={() => void acceptAlliance(a.id).then(() => fetchAlliances(myCrewId).then(setAlliances))}
+                            style={{ backgroundColor: C.green + "15", paddingHorizontal: 10, paddingVertical: 6,
+                              borderRadius: 8, borderWidth: 1, borderColor: C.green + "40" }}>
+                            <Text style={{ color: C.green, fontSize: 11, fontWeight: "800" }}>Accepter</Text>
+                          </Pressable>
+                        )}
+                      </View>
+                    );
+                  })
+            )}
+          </View>
+        )}
 
         {/* Liste */}
-        {loading ? (
+        {tab === "players" ? (
+          <View>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+              <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2 }}>TOP JOUEURS</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
+            </View>
+            {playerRanks.length === 0 ? (
+              <Text style={{ color: C.muted, fontSize: 12, textAlign: "center", paddingVertical: 20 }}>
+                Aucun joueur actif pour l'instant.
+              </Text>
+            ) : playerRanks.map((p, i) => (
+              <View key={p.display_name} style={{ flexDirection: "row", alignItems: "center", gap: 12,
+                backgroundColor: i < 3 ? C.gold + "08" : "transparent",
+                borderRadius: 10, padding: 10, marginBottom: 6,
+                borderWidth: i < 3 ? 1 : 0, borderColor: C.gold + "20" }}>
+                <Text style={{ color: i === 0 ? C.gold : i === 1 ? "#C0C0C0" : i === 2 ? "#CD7F32" : C.muted,
+                  fontSize: i < 3 ? 16 : 13, fontWeight: "900", width: 24, textAlign: "center" }}>
+                  {i === 0 ? "👑" : i === 1 ? "🥈" : i === 2 ? "🥉" : `${i + 1}`}
+                </Text>
+                <Text style={{ fontSize: 20 }}>{p.avatar_emoji ?? "🧢"}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: C.text, fontSize: 13, fontWeight: i < 3 ? "900" : "700" }}>
+                    {p.display_name}
+                  </Text>
+                  {p.crew_tag && (
+                    <Text style={{ color: p.crew_color ?? C.muted, fontSize: 10 }}>
+                      [{p.crew_tag}]
+                    </Text>
+                  )}
+                </View>
+                <View style={{ backgroundColor: C.purple + "18", borderRadius: 6,
+                  paddingHorizontal: 8, paddingVertical: 3, borderWidth: 1, borderColor: C.purple + "30" }}>
+                  <Text style={{ color: C.purple, fontSize: 11, fontWeight: "900" }}>NIV {p.level}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        ) : loading ? (
           <View style={{ alignItems: "center", paddingTop: 40 }}>
             <Text style={{ color: C.muted, fontSize: 13 }}>Chargement...</Text>
           </View>

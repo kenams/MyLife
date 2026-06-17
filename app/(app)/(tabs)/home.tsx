@@ -435,6 +435,7 @@ export default function HomeScreen() {
   const worldEvent       = useGameStore((s) => s.worldEvent);
   const worldEventJoined = useGameStore((s) => s.worldEventJoined ?? false);
   const joinWorldEvent   = useGameStore((s) => s.joinWorldEvent);
+  const markQuestAction  = useGameStore((s) => s.markQuestAction);
   const [eventModalOpen, setEventModalOpen] = useState(false);
 
   useFocusEffect(useCallback(() => { bootstrap(); checkHousingRent(); }, [bootstrap, checkHousingRent]));
@@ -609,6 +610,7 @@ export default function HomeScreen() {
     if (joinedFlash.has(evt.id)) return;
     await joinFlashEvent(evt.id, avatar?.displayName ?? "Joueur", "🧢");
     setJoinedFlash((prev) => new Set([...prev, evt.id]));
+    markQuestAction("join-flash-event");
     showToast(`Tu participes — ${evt.emoji} ${evt.reward_xp} XP à gagner !`);
   }
 

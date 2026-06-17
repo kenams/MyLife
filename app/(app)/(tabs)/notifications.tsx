@@ -467,7 +467,7 @@ export default function NotificationsScreen() {
                   <NotifCard
                     key={n.id}
                     title={n.title}
-                    body={n.body}
+                    body={n.body ?? ""}
                     priority={n.priority}
                     action={n.actionLabel}
                     route={n.route}
