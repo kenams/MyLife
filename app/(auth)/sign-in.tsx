@@ -5,6 +5,7 @@ import {
   ScrollView, Text, TextInput, View,
 } from "react-native";
 import { useGameStore } from "@/stores/game-store";
+import { ACTIVE_CITY } from "@/lib/city-config";
 
 // ── Palette ────────────────────────────────────────────────────────────────────
 const C = {
@@ -147,10 +148,10 @@ function TitleLetter({ char, color, delay }: { char: string; color: string; dela
 
 // ── Quote NPC ─────────────────────────────────────────────────────────────────
 const QUOTES = [
-  { text: "Le 93 dort jamais", name: "Jok'air ✓",    emoji: "🎤", color: C.purple },
+  { text: "Capitole ce soir ?", name: "Jok'air ✓",    emoji: "🎤", color: C.purple },
   { text: "Café ouvert là ?",   name: "Yasmine.SD",   emoji: "🌸", color: C.teal   },
   { text: "Viens au stade 🏆",  name: "Bilal.Coach",  emoji: "⚽", color: C.green  },
-  { text: "Paris s'arrête pas", name: "Céline.Night", emoji: "🎭", color: C.blue   },
+  { text: "La ville dort jamais", name: "Céline.Night", emoji: "🎭", color: C.blue   },
   { text: "Son envoyé à 3h",    name: "Moussa.Beat",  emoji: "🎧", color: C.gold   },
 ];
 function NpcQuote() {
@@ -184,6 +185,22 @@ function NpcQuote() {
         <Text style={{ color: C.dim, fontSize: 12 }}>"{q.text}"</Text>
       </View>
     </Animated.View>
+  );
+}
+
+// ── Live counter (léger flicker organique) ───────────────────────────────────
+function LiveCount({ base }: { base: number }) {
+  const [n, setN] = useState(base);
+  useEffect(() => {
+    const t = setInterval(() => {
+      setN(v => Math.max(base - 4, Math.min(base + 6, v + (Math.random() > 0.5 ? 1 : -1))));
+    }, 2600);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <Text style={{ color: C.ghost, fontSize: 8, fontWeight: "700" }}>
+      {n} ACTIFS
+    </Text>
   );
 }
 
@@ -463,7 +480,7 @@ export default function SignInScreen() {
 
       {/* ── Décor fond ── */}
       <View style={{ position: "absolute", inset: 0, overflow: "hidden" }} pointerEvents="none">
-        {/* Ghost text PARIS */}
+        {/* Ghost text — initiale de la ville active */}
         <Text style={{
           position: "absolute", bottom: -20, right: -40,
           fontSize: 180, fontWeight: "900",
@@ -474,7 +491,7 @@ export default function SignInScreen() {
             WebkitTextStroke: "1px rgba(255,214,0,0.04)",
           } as object : { color: "rgba(255,214,0,0.03)" }),
         }} selectable={false}>
-          93
+          {ACTIVE_CITY.name.slice(0, 2).toUpperCase()}
         </Text>
         {/* Grid lines */}
         {[0, 1, 2, 3, 4].map(i => (
@@ -503,33 +520,8 @@ export default function SignInScreen() {
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingTop: 44, paddingBottom: 80 }}
       >
-        {/* ── QUICK TEST BUTTON ── */}
-        <Animated.View style={{ opacity: mainOp, paddingHorizontal: 24, marginBottom: 16 }}>
-          <Pressable
-            onPress={() => void quickTest()}
-            disabled={loading}
-            style={({ pressed }) => ({
-              backgroundColor: pressed ? "#1A1A00" : C.goldDim,
-              borderRadius: 14, paddingVertical: 14,
-              borderWidth: 1.5, borderColor: C.gold,
-              flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
-              opacity: loading ? 0.6 : 1,
-            })}
-          >
-            <Text style={{ fontSize: 16 }}>⚡</Text>
-            <View>
-              <Text style={{ color: C.gold, fontWeight: "900", fontSize: 14, letterSpacing: 1 }}>
-                CONNEXION RAPIDE
-              </Text>
-              <Text style={{ color: C.gold + "80", fontSize: 10, textAlign: "center" }}>
-                test@mylife.app · test1234
-              </Text>
-            </View>
-          </Pressable>
-        </Animated.View>
-
         {/* ── HEADER BADGE ── */}
-        <Animated.View style={{ opacity: mainOp, paddingHorizontal: 24, marginBottom: 8 }}>
+        <Animated.View style={{ opacity: mainOp, paddingHorizontal: 24, marginBottom: 8, marginTop: 8 }}>
           <View style={{
             flexDirection: "row", alignItems: "center", gap: 8,
             alignSelf: "flex-start",
@@ -543,12 +535,10 @@ export default function SignInScreen() {
               <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: C.green,
                 shadowColor: C.green, shadowOpacity: 1, shadowRadius: 4 }} />
               <Text style={{ color: C.gold, fontSize: 8, fontWeight: "900", letterSpacing: 2 }}>
-                ILE-DE-FRANCE · 93
+                {ACTIVE_CITY.displayName.toUpperCase()}
               </Text>
             </View>
-            <Text style={{ color: C.ghost, fontSize: 8, fontWeight: "700" }}>
-              21 ACTIFS
-            </Text>
+            <LiveCount base={21} />
           </View>
         </Animated.View>
 
@@ -559,7 +549,7 @@ export default function SignInScreen() {
           </View>
           <Animated.View style={{ opacity: mainOp, marginTop: 4, flexDirection: "row", alignItems: "center", gap: 10 }}>
             <Text style={{ color: C.dim, fontSize: 11, letterSpacing: 4, fontWeight: "700" }}>
-              PARIS · VRAI · VIVANT
+              {ACTIVE_CITY.name.toUpperCase()} · VRAI · VIVANT
             </Text>
           </Animated.View>
         </View>
@@ -688,22 +678,31 @@ export default function SignInScreen() {
               <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
             </View>
             <View style={{ gap: 8 }}>
-              <AccessCard idx={0} emoji="🧢" color={C.gold}
-                title="Kah — Profil test"    sub="Paris 11e · Niv.8 · équilibré"
-                onPress={() => enter("balanced")} />
-              <AccessCard idx={1} emoji="🔥" color={C.red}
-                title="Mode pression"         sub="Stats critiques · survie"
-                onPress={() => enter("burnout")} />
-              <AccessCard idx={2} emoji="💕" color={C.purple}
-                title="Mode social"           sub="Relations · dates · réseau"
-                onPress={() => enter("romantic")} />
-              <AccessCard idx={3} emoji="🌆" color={C.teal}
-                title="Test live Supabase"    sub="Tous modules · données réelles"
-                onPress={() => enter("live")} />
-              <AccessCard idx={4} emoji="⚡" color={C.green}
+              <AccessCard idx={0} emoji="⚡" color={C.green}
                 title="Démo instantanée"      sub="Sans email · direct en jeu"
                 onPress={() => void demo()} />
             </View>
+
+            {/* Raccourcis QA — jamais visibles en build de production */}
+            {__DEV__ && (
+              <View style={{ gap: 8, marginTop: 8 }}>
+                <AccessCard idx={1} emoji="🧢" color={C.gold}
+                  title="[DEV] Profil test"    sub="Équilibré · Niv.8"
+                  onPress={() => enter("balanced")} />
+                <AccessCard idx={2} emoji="🔥" color={C.red}
+                  title="[DEV] Mode pression"  sub="Stats critiques · survie"
+                  onPress={() => enter("burnout")} />
+                <AccessCard idx={3} emoji="💕" color={C.purple}
+                  title="[DEV] Mode social"    sub="Relations · dates · réseau"
+                  onPress={() => enter("romantic")} />
+                <AccessCard idx={4} emoji="🌆" color={C.teal}
+                  title="[DEV] Test live Supabase" sub="Tous modules · données réelles"
+                  onPress={() => enter("live")} />
+                <AccessCard idx={5} emoji="⚡" color={C.gold}
+                  title="[DEV] Connexion rapide" sub="test@mylife.app"
+                  onPress={() => void quickTest()} />
+              </View>
+            )}
           </Animated.View>
         )}
 
@@ -715,7 +714,7 @@ export default function SignInScreen() {
             ))}
           </View>
           <Text style={{ color: C.ghost, fontSize: 9, letterSpacing: 3, fontWeight: "700" }}>
-            MYLIFE · PARIS · 2026
+            MYLIFE · {ACTIVE_CITY.name.toUpperCase()} · 2026
           </Text>
         </View>
       </ScrollView>
