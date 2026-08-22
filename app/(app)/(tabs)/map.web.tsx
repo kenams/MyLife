@@ -87,7 +87,20 @@ function injectMapStyles() {
   const style = document.createElement("style");
   style.textContent = `
     .mylife-map-container .leaflet-container { background: #04040A !important; }
-    .mylife-map-container .leaflet-tile-pane { filter: brightness(.9) contrast(1.08) saturate(1.1); }
+    .mylife-map-container .leaflet-tile-pane {
+      filter: invert(1) hue-rotate(255deg) brightness(1.35) contrast(0.95) saturate(2.2);
+    }
+    .mylife-map-container .mylife-map-vignette {
+      position: absolute; inset: 0; pointer-events: none; z-index: 400;
+      background: radial-gradient(120% 85% at 50% 45%, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
+    }
+    .mylife-map-container .mylife-map-scanlines {
+      position: absolute; inset: 0; pointer-events: none; z-index: 401; opacity: .05;
+      background: repeating-linear-gradient(0deg, #fff 0px, #fff 1px, transparent 1px, transparent 3px);
+    }
+    .mylife-map-container .leaflet-overlay-pane path {
+      filter: drop-shadow(0 0 4px rgba(255,255,255,0.35)) drop-shadow(0 0 12px rgba(255,255,255,0.2));
+    }
     .mylife-map-container .leaflet-control-zoom {
       border: 1px solid rgba(255,255,255,.08) !important;
       background: rgba(8,8,15,.92) !important;
@@ -236,8 +249,10 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
         });
       }
 
-      // Tiles CartoDB Dark Matter (premier choix) avec fallback OSM
-      const tileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_matter/{z}/{x}/{y}{r}.png", {
+      // Tiles CartoDB Dark Matter sans labels (premier choix) avec fallback OSM
+      // — pas de labels/POI Google-style : la ville devient un canevas neutre,
+      // l'identité visuelle vient du grading couleur + des éléments du jeu (zones, NPCs)
+      const tileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
         attribution: '&copy; <a href="https://carto.com">CARTO</a> &copy; <a href="https://openstreetmap.org">OSM</a>',
         subdomains: "abcd",
         maxZoom: 19,
@@ -245,6 +260,15 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
         errorTileUrl: "",
       });
       tileLayer.addTo(map);
+
+      // Overlays d'ambiance : vignette, scanlines (le grading couleur vient du filter sur .leaflet-tile-pane)
+      const vignetteEl = document.createElement("div");
+      vignetteEl.className = "mylife-map-vignette";
+      mapEl.appendChild(vignetteEl);
+      const scanlinesEl = document.createElement("div");
+      scanlinesEl.className = "mylife-map-scanlines";
+      mapEl.appendChild(scanlinesEl);
+
       // Fallback : si CartoDB ne répond pas après 3s → OSM + filtre dark
       setTimeout(() => {
         const container = mapEl?.querySelector?.(".leaflet-tile-pane") as HTMLElement | null;

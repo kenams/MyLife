@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "PowerShell(Get-ChildItem \"C:\\\\Users\\\\kenam\\\\Desktop\\\\\" | Where-Object { $_.Name -match \"agent|kah|IA|cmd\" -or $_.Extension -eq \".cmd\" })",
-      "PowerShell(npm install -g @anthropic-ai/claude-code 2>&1)"
+      "PowerShell(npm install -g @anthropic-ai/claude-code 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\kenam\\\\AppData\\\\Roaming\\\\npm\\\\node_modules\\\\@anthropic-ai\\\\claude-code\\\\bin\\\\claude.exe\" --version)"
     ]
   }
 }
