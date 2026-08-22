@@ -714,6 +714,8 @@ export default function LifeMapScreen() {
     !blocked.includes(p.user_id) &&
     (filter === "all" || p.status === filter)
   );
+  const visibleRealCount = visible.filter((p) => !p.is_npc).length;
+  const visibleNpcCount = visible.length - visibleRealCount;
 
   // Zones crew + détection guerres
   useEffect(() => {
@@ -888,8 +890,13 @@ export default function LifeMapScreen() {
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.green,
             shadowColor: C.green, shadowOpacity: 1, shadowRadius: 5 }} />
           <Text style={{ color: C.text, fontSize: 13, fontWeight: "800" }}>
-            {visible.length} en live · Toulouse
+            {visibleRealCount} en live · Toulouse
           </Text>
+          {visibleNpcCount > 0 && (
+            <Text style={{ color: C.gold, fontSize: 10, fontWeight: "800" }}>
+              +{visibleNpcCount} DÉMO
+            </Text>
+          )}
         </View>
 
         <Pressable onPress={() => setShowPicker(true)}

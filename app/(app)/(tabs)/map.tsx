@@ -512,6 +512,9 @@ export default function LifeMapScreen() {
           <Text style={{ color: L.text, fontSize: 13, fontWeight: "800" }}>
             {onlineCount} en live · Toulouse
           </Text>
+          <Text style={{ color: L.primary, fontSize: 10, fontWeight: "800" }}>
+            DÉMO
+          </Text>
         </View>
 
         {/* Mon statut */}
