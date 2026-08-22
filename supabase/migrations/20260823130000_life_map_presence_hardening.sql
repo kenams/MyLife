@@ -25,20 +25,30 @@ create index if not exists life_map_players_status_updated_idx
 
 drop policy if exists "Visible si pas ghost" on public.life_map_players;
 
+-- NB (correctif appliqué en base le 23/08 après une régression réelle
+-- constatée par test) : le `user_id = auth.uid()` doit être une branche OR
+-- de tête, jamais imbriqué seulement dans le cas "taken". Postgres exige
+-- qu'une ligne modifiée par UPDATE reste visible à sa propre policy SELECT
+-- même sans RETURNING/WITH CHECK explicite — sans cette branche, un joueur
+-- ne peut plus jamais passer sa propre ligne en statut 'ghost' (l'UPDATE
+-- échoue en 42501 car la ligne résultante ne satisferait plus la policy
+-- SELECT). Ça a cassé le bouton Ghost pour tout le monde jusqu'au fix.
 create policy "Visible si actif, frais et autorisé"
   on public.life_map_players for select
   using (
-    status != 'ghost'
-    and updated_at > now() - interval '5 minutes'
-    and (
-      status != 'taken'
-      or user_id = auth.uid()
-      or exists (
-        select 1
-        from public.crew_members me
-        join public.crew_members them on them.crew_id = me.crew_id
-        where me.user_id = auth.uid()
-          and them.user_id = life_map_players.user_id
+    user_id = auth.uid()
+    or (
+      status != 'ghost'
+      and updated_at > now() - interval '5 minutes'
+      and (
+        status != 'taken'
+        or exists (
+          select 1
+          from public.crew_members me
+          join public.crew_members them on them.crew_id = me.crew_id
+          where me.user_id = auth.uid()
+            and them.user_id = life_map_players.user_id
+        )
       )
     )
   );

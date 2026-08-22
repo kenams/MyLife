@@ -79,6 +79,8 @@ end $$;
 create or replace function public.qa_account_force_npc()
 returns trigger
 language plpgsql
+security definer
+set search_path = public
 as $$
 begin
   if exists (select 1 from public.qa_test_accounts where user_id = new.user_id) then
