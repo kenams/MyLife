@@ -686,7 +686,7 @@ export default function SignInScreen() {
             </View>
             <View style={{ gap: 8 }}>
               <AccessCard idx={0} emoji="⚡" color={C.green}
-                title="Démo instantanée"      sub="Sans email · direct en jeu"
+                title="Démo instantanée"      sub="DÉMO locale · pas de compte, pas de présence réelle"
                 onPress={() => void demo()} />
             </View>
 
@@ -694,7 +694,7 @@ export default function SignInScreen() {
             {__DEV__ && (
               <View style={{ gap: 8, marginTop: 8 }}>
                 <AccessCard idx={1} emoji="🧢" color={C.gold}
-                  title="[DEV] Profil test"    sub="Équilibré · Niv.8"
+                  title="[DEV] Profil test — local, pas Supabase"    sub="Équilibré · Niv.8"
                   onPress={() => enter("balanced")} />
                 <AccessCard idx={2} emoji="🔥" color={C.red}
                   title="[DEV] Mode pression"  sub="Stats critiques · survie"
