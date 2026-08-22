@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, ScrollView, Text, View } from "react-native";
-import { PARIS_QUARTIERS_LIST } from "@/lib/live-chat";
+import { TOULOUSE_QUARTIERS_LIST } from "@/lib/live-chat";
 import { supabase } from "@/lib/supabase";
 
 const L = {
@@ -72,7 +72,7 @@ export default function QuartiersScreen() {
         </Pressable>
         <View style={{ flexDirection: "row", alignItems: "flex-end", justifyContent: "space-between" }}>
           <View>
-            <Text style={{ color: L.text, fontSize: 22, fontWeight: "900" }}>Quartiers Paris</Text>
+            <Text style={{ color: L.text, fontSize: 22, fontWeight: "900" }}>Quartiers Toulouse</Text>
             <Text style={{ color: L.muted, fontSize: 12, marginTop: 2 }}>Chats live · effacés dans 24h</Text>
           </View>
           {total > 0 && (
@@ -88,7 +88,7 @@ export default function QuartiersScreen() {
 
       <ScrollView contentContainerStyle={{ padding: 14, gap: 8 }}
         showsVerticalScrollIndicator={false}>
-        {PARIS_QUARTIERS_LIST.map((q) => {
+        {TOULOUSE_QUARTIERS_LIST.map((q) => {
           const msgCount = counts[q.id] ?? 0;
           const live     = msgCount > 0 || activeIds.has(q.id);
           const npcHere  = hasNpc[q.id] ?? false;
@@ -127,7 +127,7 @@ export default function QuartiersScreen() {
                   {npcHere && (
                     <View style={{ backgroundColor: L.purpleBg, borderRadius: 5,
                       paddingHorizontal: 5, paddingVertical: 1, borderWidth: 1, borderColor: L.purple + "30" }}>
-                      <Text style={{ color: L.purple, fontSize: 8, fontWeight: "900" }}>NPC</Text>
+                      <Text style={{ color: L.purple, fontSize: 8, fontWeight: "900" }}>PNJ</Text>
                     </View>
                   )}
                 </View>

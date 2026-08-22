@@ -249,7 +249,7 @@ export default function ProfileScreen() {
     ]).start();
   }, []);
 
-  const stateLabel = stats.energy < 25 ? "À plat 🪫" : stats.hunger < 25 ? "Dalle 🍱" : stats.hygiene < 25 ? "Carton 👟" : stats.mood < 30 ? "Mood 0 😤" : "En forme 🔥";
+  const stateLabel = stats.energy < 25 ? "À plat 🪫" : stats.hunger < 25 ? "Faim 🍱" : stats.hygiene < 25 ? "Style bas 👟" : stats.mood < 30 ? "Mood bas 😤" : "En forme 🔥";
   const stateColor = (stats.energy < 25 || stats.hunger < 25 || stats.hygiene < 25 || stats.mood < 30) ? L.red : L.green;
 
   const activeRels  = relationships.filter((r) => r.score > 30);
@@ -353,12 +353,12 @@ export default function ProfileScreen() {
             <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2, marginBottom: 12 }}>
               TON ÉTAT
             </Text>
-            <StatBar label="Pêche"        value={stats.energy}          icon="⚡"  color={L.blue}    />
+            <StatBar label="Énergie"      value={stats.energy}          icon="⚡"  color={L.blue}    />
             <StatBar label="Faim"         value={stats.hunger}          icon="🍽️" color={L.gold}    />
             <StatBar label="Forme"        value={stats.health}          icon="❤️"  color={L.red}     />
             <StatBar label="Look"         value={stats.hygiene}         icon="👟"  color={L.teal}    />
             <StatBar label="Mood"         value={stats.mood}            icon="😤"  color={L.purple}  />
-            <StatBar label="Attractivité" value={stats.attractiveness}  icon="✨"  color={L.pink}    />
+            <StatBar label="Influence"    value={stats.attractiveness}  icon="✨"  color={L.pink}    />
             <StatBar label="Fitness"      value={stats.fitness}         icon="💪"  color={L.green}   />
             <StatBar label="Discipline"   value={stats.discipline}      icon="🎯"  color={L.primary} />
           </View>

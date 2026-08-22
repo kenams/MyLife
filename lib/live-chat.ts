@@ -155,21 +155,18 @@ export function subscribeDm(roomId: string, onMessage: (msg: DmMessage) => void)
 }
 
 // ── Quartiers disponibles ─────────────────────────────────────────────────────
-export const PARIS_QUARTIERS_LIST = [
-  { id: "Belleville",    emoji: "🎨", desc: "Artistes & bobos" },
-  { id: "République",    emoji: "☕", desc: "La terrasse du peuple" },
-  { id: "Oberkampf",     emoji: "🎸", desc: "Nuit & concerts" },
-  { id: "Pigalle",       emoji: "🎭", desc: "La nuit parisienne" },
-  { id: "Montmartre",    emoji: "🎤", desc: "Le son du 18e" },
-  { id: "Marais",        emoji: "🛍️", desc: "Mode & culture" },
-  { id: "Bastille",      emoji: "⚡", desc: "Énergie & mouvement" },
-  { id: "Nation",        emoji: "🔥", desc: "Le carrefour" },
-  { id: "Saint-Denis",   emoji: "👑", desc: "Le 93 — légende" },
-  { id: "Aubervilliers", emoji: "💪", desc: "Le vrai Paris" },
-  { id: "Montreuil",     emoji: "🌿", desc: "Est parisien" },
-  { id: "Pantin",        emoji: "🎵", desc: "Culture & son" },
-  { id: "La Défense",    emoji: "🏙️", desc: "Business district" },
-  { id: "Global",        emoji: "🌍", desc: "Tous les quartiers" },
+export const TOULOUSE_QUARTIERS_LIST = [
+  { id: "Capitole",       emoji: "📍", desc: "Centre et missions officielles" },
+  { id: "Saint-Cyprien",  emoji: "☕", desc: "Cafés, sorties et Garonne" },
+  { id: "Carmes",         emoji: "🎨", desc: "Artistes, style et food" },
+  { id: "Compans",        emoji: "🌳", desc: "Étudiants, parc et business" },
+  { id: "Les Minimes",    emoji: "⚽", desc: "Sport et crews de quartier" },
+  { id: "Rangueil",       emoji: "🎓", desc: "Campus, sport et tech" },
+  { id: "Mirail",         emoji: "🎤", desc: "Création et missions collectives" },
+  { id: "Empalot",        emoji: "🔥", desc: "Zones chaudes et rassemblements" },
+  { id: "Bagatelle",      emoji: "💪", desc: "Terrain, sport et entraide" },
+  { id: "Bonnefoy",       emoji: "🎵", desc: "Culture et sorties locales" },
+  { id: "Global",         emoji: "🌍", desc: "Tout Toulouse" },
 ];
 
 // ── Mock data pour démo ───────────────────────────────────────────────────────
@@ -177,24 +174,24 @@ const now = new Date();
 const t = (minAgo: number) => new Date(now.getTime() - minAgo * 60000).toISOString();
 
 export const MOCK_MESSAGES: Record<string, QuartierMessage[]> = {
-  "Saint-Denis": [
-    { id: "1", quartier: "Saint-Denis", user_id: "u1", display_name: "Jok'air ✓",
-      avatar_emoji: "🎤", body: "Wesh le quartier 👑 on est là", is_star: true, created_at: t(8) },
-    { id: "2", quartier: "Saint-Denis", user_id: "u2", display_name: "Djo.SDenis",
-      avatar_emoji: "⚽", body: "Frère tu es où là ? Terrain ouvert", is_star: false, created_at: t(5) },
-    { id: "3", quartier: "Saint-Denis", user_id: "u3", display_name: "Karim_93",
-      avatar_emoji: "🧢", body: "On est au bando si vous voulez rejoindre", is_star: false, created_at: t(2) },
+  "Capitole": [
+    { id: "1", quartier: "Capitole", user_id: "u1", display_name: "MyLife Toulouse",
+      avatar_emoji: "📍", body: "Mission simple disponible près du Capitole.", is_star: true, created_at: t(8) },
+    { id: "2", quartier: "Capitole", user_id: "u2", display_name: "Djo.Croix",
+      avatar_emoji: "⚽", body: "Terrain ouvert ce soir, qui veut rejoindre ?", is_star: false, created_at: t(5) },
+    { id: "3", quartier: "Capitole", user_id: "u3", display_name: "Karim.TLS",
+      avatar_emoji: "🧢", body: "Crew sportif cherche deux motivés.", is_star: false, created_at: t(2) },
   ],
-  "République": [
-    { id: "4", quartier: "République", user_id: "u4", display_name: "Lina.Paris",
-      avatar_emoji: "👑", body: "Terrasse ouverte à la Rotonde 🌞", is_star: false, created_at: t(12) },
-    { id: "5", quartier: "République", user_id: "u5", display_name: "Seb_Bell",
-      avatar_emoji: "🎨", body: "Quelqu'un cherche une coloc dans le 11e ?", is_star: false, created_at: t(3) },
+  "Saint-Cyprien": [
+    { id: "4", quartier: "Saint-Cyprien", user_id: "u4", display_name: "Lina.TLS",
+      avatar_emoji: "👑", body: "Terrasse ouverte côté Garonne.", is_star: false, created_at: t(12) },
+    { id: "5", quartier: "Saint-Cyprien", user_id: "u5", display_name: "Seb.Minimes",
+      avatar_emoji: "🎨", body: "Qui vient à l'expo photo ce soir ?", is_star: false, created_at: t(3) },
   ],
-  "Belleville": [
-    { id: "6", quartier: "Belleville", user_id: "u6", display_name: "Seb_Belleville",
-      avatar_emoji: "🎨", body: "Expo photo ce soir rue Denoyez — entrée libre", is_star: false, created_at: t(20) },
-    { id: "7", quartier: "Belleville", user_id: "u7", display_name: "Maya.Art",
-      avatar_emoji: "🖌️", body: "Passé devant c'est 🔥 bien joué", is_star: false, created_at: t(7) },
+  "Carmes": [
+    { id: "6", quartier: "Carmes", user_id: "u6", display_name: "Nora.Carmes",
+      avatar_emoji: "🎨", body: "Expo photo ce soir, entrée libre.", is_star: false, created_at: t(20) },
+    { id: "7", quartier: "Carmes", user_id: "u7", display_name: "Maya.Art",
+      avatar_emoji: "🖌️", body: "Passée devant, très bonne vibe.", is_star: false, created_at: t(7) },
   ],
 };

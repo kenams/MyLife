@@ -26,7 +26,8 @@ import {
   silhouettes,
   skinTones,
   sociabilityLevels,
-  traitPreferences
+  traitPreferences,
+  toulouseDistrictOptions
 } from "@/lib/game-data";
 import { colors } from "@/lib/theme";
 import type { AvatarProfile } from "@/lib/types";
@@ -240,6 +241,7 @@ export function AvatarForm({
   onSubmit: (avatar: AvatarProfile) => void;
 }) {
   const [displayName, setDisplayName] = useState(initialAvatar?.displayName ?? "");
+  const [homeDistrict, setHomeDistrict] = useState(initialAvatar?.homeDistrict ?? toulouseDistrictOptions[0]);
   const [bio, setBio] = useState(initialAvatar?.bio ?? "");
   const [ageRange, setAgeRange] = useState(initialAvatar?.ageRange ?? ageRanges[2]);
   const [gender, setGender] = useState(initialAvatar?.gender ?? genderOptions[0]);
@@ -267,16 +269,16 @@ export function AvatarForm({
   const [romanceIntent, setRomanceIntent] = useState(initialAvatar?.romanceIntent ?? "rencontres calmes");
   const [preferredVibe, setPreferredVibe] = useState(initialAvatar?.preferredVibe ?? preferredVibes[0]);
   const [starterJob, setStarterJob] = useState(initialAvatar?.starterJob ?? jobs[0].slug);
-  const [interests, setInterests] = useState<string[]>(initialAvatar?.interests ?? ["wellness", "coffee"]);
-  const [leisureStyles, setLeisureStyles] = useState<string[]>(initialAvatar?.leisureStyles ?? ["fitness", "cinema"]);
-  const [lookingFor, setLookingFor] = useState<string[]>(initialAvatar?.lookingFor ?? ["amis", "motivation"]);
-  const [favoriteActivities, setFavoriteActivities] = useState<string[]>(initialAvatar?.favoriteActivities ?? ["fitness", "coffee"]);
-  const [favoriteOutingsState, setFavoriteOutingsState] = useState<string[]>(initialAvatar?.favoriteOutings ?? ["coffee", "cinema"]);
+  const [interests, setInterests] = useState<string[]>(initialAvatar?.interests ?? ["sport", "sorties"]);
+  const [leisureStyles, setLeisureStyles] = useState<string[]>(initialAvatar?.leisureStyles ?? ["sport", "food"]);
+  const [lookingFor, setLookingFor] = useState<string[]>(initialAvatar?.lookingFor ?? ["amis", "crew"]);
+  const [favoriteActivities, setFavoriteActivities] = useState<string[]>(initialAvatar?.favoriteActivities ?? ["sport", "sorties"]);
+  const [favoriteOutingsState, setFavoriteOutingsState] = useState<string[]>(initialAvatar?.favoriteOutings ?? ["cafe", "park"]);
   const [appreciatedTraits, setAppreciatedTraits] = useState<string[]>(initialAvatar?.appreciatedTraits ?? ["fiable", "douceur"]);
 
   const summary = useMemo(
-    () => `${personalityTrait} · ${ambition} · ${sociabilityStyle} · ${starterJob}`,
-    [ambition, personalityTrait, sociabilityStyle, starterJob]
+    () => `${homeDistrict} · ${personalGoal} · ${interests.slice(0, 2).join(" / ")}`,
+    [homeDistrict, interests, personalGoal]
   );
 
   function submit() {
@@ -286,6 +288,7 @@ export function AvatarForm({
 
     onSubmit({
       displayName: displayName.trim(),
+      homeDistrict,
       ageRange,
       gender,
       photoStyle,
@@ -325,100 +328,52 @@ export function AvatarForm({
   return (
     <View style={{ gap: 16 }}>
       <Card accent>
-        <Pill>Identité</Pill>
-        <SectionTitle>{displayName.trim() || "Avatar premium"}</SectionTitle>
+        <Pill>Profil joueur</Pill>
+        <SectionTitle>{displayName.trim() || "Ton pseudo MyLife"}</SectionTitle>
         <Muted>{summary}</Muted>
       </Card>
 
       <Card>
         <Input value={displayName} onChangeText={setDisplayName} placeholder="Prénom ou pseudo" />
-        <Input value={bio} onChangeText={setBio} placeholder="Bio courte" multiline />
-        <ChoiceGroup label="Tranche d'âge" options={ageRanges} selected={ageRange} onSelect={setAgeRange} />
-        <ChoiceGroup label="Genre" options={genderOptions} selected={gender} onSelect={setGender} />
-        <ChoiceGroup label="Style photo" options={photoStyles} selected={photoStyle} onSelect={setPhotoStyle} />
-        <ChoiceGroup label="Origine / style" options={originStyles} selected={originStyle} onSelect={setOriginStyle} />
-      </Card>
-
-      <Card>
-        <SectionTitle>Physique et présence</SectionTitle>
-        <View style={{ flexDirection: "row", gap: 12 }}>
-          <View style={{ flex: 1 }}>
-            <Input value={heightCm} onChangeText={setHeightCm} placeholder="Taille (cm)" keyboardType="numeric" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Input value={weightKg} onChangeText={setWeightKg} placeholder="Poids (kg)" keyboardType="numeric" />
-          </View>
-        </View>
-        <ChoiceGroup label="Corpulence" options={bodyFrames} selected={bodyFrame} onSelect={setBodyFrame} />
-        <ChoiceGroup label="Silhouette" options={silhouettes} selected={silhouette} onSelect={setSilhouette} />
-        <ChoiceGroup label="Peau" options={skinTones} selected={skinTone} onSelect={setSkinTone} />
-        <ChoiceGroup label="Cheveux" options={hairTypes} selected={hairType} onSelect={setHairType} />
-        <ChoiceGroup label="Couleur cheveux" options={hairColors} selected={hairColor} onSelect={setHairColor} />
-        <ChoiceGroup label="Longueur cheveux" options={hairLengths} selected={hairLength} onSelect={setHairLength} />
-        <ChoiceGroup label="Yeux" options={eyeColors} selected={eyeColor} onSelect={setEyeColor} />
-        <ChoiceGroup label="Style vestimentaire" options={outfitStyles} selected={outfitStyle} onSelect={setOutfitStyle} />
-        <ChoiceGroup label="Barbe / moustache" options={facialHairOptions} selected={facialHair} onSelect={setFacialHair} />
-      </Card>
-
-      <Card>
-        <SectionTitle>Profil comportemental</SectionTitle>
-        <ChoiceGroup label="Trait principal" options={personalityTraits} selected={personalityTrait} onSelect={setPersonalityTrait} />
-        <ChoiceGroup label="Sociabilité" options={sociabilityLevels} selected={sociabilityStyle} onSelect={setSociabilityStyle} />
-        <ChoiceGroup label="Ambition" options={ambitionLevels} selected={ambition} onSelect={setAmbition} />
-        <ChoiceGroup label="Rythme de vie" options={lifeRhythms} selected={lifeRhythm} onSelect={setLifeRhythm} />
-        <ChoiceGroup label="Style relationnel" options={relationshipStyles} selected={relationshipStyle} onSelect={setRelationshipStyle} />
-        <ChoiceGroup label="Objectif personnel" options={personalGoals} selected={personalGoal} onSelect={setPersonalGoal} />
-        <ChoiceGroup label="Habitude dominante" options={lifeHabits} selected={lifeHabit} onSelect={setLifeHabit} />
-        <ChoiceGroup label="Métier de départ" options={jobs.map((job) => job.slug)} selected={starterJob} onSelect={setStarterJob} />
-      </Card>
-
-      <Card>
-        <SectionTitle>Vie sociale et préférences</SectionTitle>
-        <Input value={friendshipIntent} onChangeText={setFriendshipIntent} placeholder="Ce que tu cherches en amitié" />
-        <Input value={romanceIntent} onChangeText={setRomanceIntent} placeholder="Vision des rencontres" />
-        <ChoiceGroup label="Ambiance préférée" options={preferredVibes} selected={preferredVibe} onSelect={setPreferredVibe} />
+        <ChoiceGroup
+          label="Quartier approximatif"
+          options={toulouseDistrictOptions}
+          selected={homeDistrict}
+          onSelect={setHomeDistrict}
+        />
         <MultiChoiceGroup
           label="Centres d'intérêt"
           options={interestOptions}
           selected={interests}
-          onToggle={(value) => setInterests((current) => toggleInArray(current, value, 4))}
+          onToggle={(value) => {
+            setInterests((current) => toggleInArray(current, value, 4));
+            setLeisureStyles((current) => toggleInArray(current, value, 4));
+            setFavoriteActivities((current) => toggleInArray(current, value, 4));
+          }}
           limit={4}
         />
+        <ChoiceGroup label="Objectif principal" options={personalGoals} selected={personalGoal} onSelect={setPersonalGoal} />
+      </Card>
+
+      <Card>
+        <SectionTitle>Avatar</SectionTitle>
+        <ChoiceGroup label="Style avatar" options={photoStyles} selected={photoStyle} onSelect={setPhotoStyle} />
+        <ChoiceGroup label="Style vestimentaire" options={outfitStyles} selected={outfitStyle} onSelect={setOutfitStyle} />
+        <ChoiceGroup label="Ambiance" options={preferredVibes} selected={preferredVibe} onSelect={setPreferredVibe} />
+        <Input value={bio} onChangeText={setBio} placeholder="Bio courte optionnelle" multiline />
+      </Card>
+
+      <Card>
+        <SectionTitle>Intention sociale</SectionTitle>
         <MultiChoiceGroup
-          label="Loisirs"
-          options={interestOptions}
-          selected={leisureStyles}
-          onToggle={(value) => setLeisureStyles((current) => toggleInArray(current, value, 3))}
-          limit={3}
-        />
-        <MultiChoiceGroup
-          label="Ce que tu recherches"
+          label="Je cherche"
           options={lookingForOptions}
           selected={lookingFor}
           onToggle={(value) => setLookingFor((current) => toggleInArray(current, value, 4))}
           limit={4}
         />
-        <MultiChoiceGroup
-          label="Activités préférées"
-          options={interestOptions}
-          selected={favoriteActivities}
-          onToggle={(value) => setFavoriteActivities((current) => toggleInArray(current, value, 3))}
-          limit={3}
-        />
-        <MultiChoiceGroup
-          label="Sorties préférées"
-          options={["coffee", "cinema", "restaurant", "park", "gym"]}
-          selected={favoriteOutingsState}
-          onToggle={(value) => setFavoriteOutingsState((current) => toggleInArray(current, value, 3))}
-          limit={3}
-        />
-        <MultiChoiceGroup
-          label="Traits appréciés"
-          options={traitPreferences}
-          selected={appreciatedTraits}
-          onToggle={(value) => setAppreciatedTraits((current) => toggleInArray(current, value, 3))}
-          limit={3}
-        />
+        <Input value={friendshipIntent} onChangeText={setFriendshipIntent} placeholder="Ce que tu veux construire ici" />
+        <Input value={romanceIntent} onChangeText={setRomanceIntent} placeholder="Rencontres: ton cadre et tes limites" />
       </Card>
 
       <FormButton label={submitLabel} onPress={submit} />

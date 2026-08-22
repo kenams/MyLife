@@ -19,14 +19,14 @@ export default function AvatarScreen() {
             shadowOffset: { width: 0, height: 4 }, elevation: 4 }}>
             <Text style={{ fontSize: 34 }}>🧬</Text>
           </View>
-          <Text style={{ color: "#1e2a3a", fontWeight: "900", fontSize: 24 }}>Crée ton identité</Text>
+          <Text style={{ color: "#1e2a3a", fontWeight: "900", fontSize: 24 }}>Crée ton profil joueur</Text>
           <Text style={{ color: "#8fa3b8", fontSize: 13, textAlign: "center", lineHeight: 18 }}>
-            Ton avatar définit ton rythme, ton image et ta façon d'entrer dans le monde.
+            Pseudo, quartier approximatif, intérêts et objectif. Tu restes en Ghost jusqu'à activation volontaire.
           </Text>
         </View>
 
         <AvatarForm
-          submitLabel="Entrer dans le quartier"
+          submitLabel="Entrer sur la Life Map"
           onSubmit={(avatar) => {
             completeAvatar(avatar);
             router.replace("/(app)/(tabs)/home");

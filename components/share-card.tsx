@@ -165,7 +165,7 @@ export function ShareCard({
         {/* Tagline */}
         <View style={{ alignItems: "center", paddingVertical: 16 }}>
           <Text style={{ color: C.muted, fontSize: 11 }}>
-            MyLife · Paris · {todayLabel()}
+            MyLife · Toulouse · {todayLabel()}
           </Text>
         </View>
 

@@ -122,6 +122,7 @@ export type LifeActionId =
 
 export type AvatarProfile = {
   displayName: string;
+  homeDistrict?: string;
   ageRange: string;
   gender: string;
   originStyle: string;

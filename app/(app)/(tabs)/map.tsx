@@ -8,7 +8,7 @@ import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 
 import { hapticImpact } from "@/lib/safe-haptics";
 import {
-  fetchAllPlayers, goGhost, MOCK_PLAYERS, PARIS_REGION,
+  fetchAllPlayers, goGhost, MOCK_PLAYERS, TOULOUSE_REGION,
   publishPosition, requestAndGetLocation, STATUS_CONFIG, subscribeToMap,
 } from "@/lib/life-map";
 import type { MapPlayer, MapStatus } from "@/lib/life-map";
@@ -43,6 +43,12 @@ const L = {
   red:      "#FF3B3B",
   green:    "#39FF14",
 };
+
+function playerKind(player: MapPlayer): { label: string; color: string } {
+  if (!player.is_npc) return { label: "JOUEUR RÉEL", color: L.green };
+  if (player.is_star) return { label: "OFFICIEL", color: L.primary };
+  return { label: "PNJ DÉMO", color: "#BF5FFF" };
+}
 
 // ── Marqueur joueur sur la map ────────────────────────────────────────────────
 function PlayerMarker({ player, onPress }: { player: MapPlayer; onPress: () => void }) {
@@ -111,6 +117,7 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
 }) {
   if (!player) return null;
   const cfg = STATUS_CONFIG[player.status];
+  const kind = playerKind(player);
   const minutesAgo = Math.round(
     (Date.now() - new Date(player.updated_at).getTime()) / 60000
   );
@@ -147,15 +154,13 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
               <Text style={{ color: L.text, fontSize: 18, fontWeight: "900" }}>
                 {player.display_name}
               </Text>
-              {player.is_star && (
-                <View style={{ backgroundColor: cfg.color, borderRadius: 4,
-                  paddingHorizontal: 6, paddingVertical: 2 }}>
-                  <Text style={{ color: "#080808", fontSize: 9, fontWeight: "900" }}>STAR</Text>
-                </View>
-              )}
+              <View style={{ backgroundColor: kind.color + "22", borderRadius: 4,
+                paddingHorizontal: 6, paddingVertical: 2, borderWidth: 1, borderColor: kind.color + "55" }}>
+                <Text style={{ color: kind.color, fontSize: 9, fontWeight: "900" }}>{kind.label}</Text>
+              </View>
             </View>
             <Text style={{ color: L.muted, fontSize: 12, marginTop: 3 }}>
-              Niveau {player.level} · {player.location_name ?? "Paris"}
+              Niveau {player.level} · {player.location_name ?? "Toulouse"}
             </Text>
           </View>
           {/* Statut */}
@@ -178,10 +183,10 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
             <Text style={{ fontSize: 16 }}>📍</Text>
             <Text style={{ color: L.textSoft, fontSize: 13 }}>
-              {player.location_name ?? "Paris"}
+              {player.location_name ?? "Toulouse"}
               {player.location_verified
-                ? <Text style={{ color: L.green }}> · Vérifié ✓</Text>
-                : <Text style={{ color: L.muted }}> · Non vérifié</Text>}
+                ? <Text style={{ color: L.green }}> · Zone vérifiée</Text>
+                : <Text style={{ color: L.muted }}> · Zone déclarée</Text>}
             </Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -192,17 +197,39 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
 
         {/* CTA */}
         {player.status !== "ghost" && (
-          <Pressable
-            onPress={() => { hapticImpact("medium"); onInvite(player); onClose(); }}
-            style={{
-              backgroundColor: cfg.color, borderRadius: 16,
-              paddingVertical: 17, alignItems: "center",
-              shadowColor: cfg.color, shadowOpacity: 0.35, shadowRadius: 12,
-            }}>
-            <Text style={{ color: "#080808", fontSize: 16, fontWeight: "900" }}>
-              {player.is_star ? `🎤 Dire wesh à ${player.display_name}` : "💬 Dire wesh"}
-            </Text>
-          </Pressable>
+          <View style={{ gap: 10 }}>
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Pressable
+                onPress={() => { hapticImpact("light"); onInvite(player); onClose(); }}
+                style={{
+                  flex: 1, backgroundColor: L.cardAlt, borderRadius: 14,
+                  paddingVertical: 14, alignItems: "center",
+                  borderWidth: 1, borderColor: L.border,
+                }}>
+                <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>👋 Saluer</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => { hapticImpact("medium"); onInvite(player); onClose(); }}
+                style={{
+                  flex: 1, backgroundColor: cfg.color, borderRadius: 14,
+                  paddingVertical: 14, alignItems: "center",
+                  shadowColor: cfg.color, shadowOpacity: 0.35, shadowRadius: 12,
+                }}>
+                <Text style={{ color: "#080808", fontSize: 13, fontWeight: "900" }}>💫 Feeling</Text>
+              </Pressable>
+            </View>
+            <Pressable
+              onPress={() => { hapticImpact("medium"); onInvite(player); onClose(); }}
+              style={{
+                backgroundColor: cfg.color + "18", borderRadius: 14,
+                paddingVertical: 13, alignItems: "center",
+                borderWidth: 1, borderColor: cfg.color + "45",
+              }}>
+              <Text style={{ color: cfg.color, fontSize: 13, fontWeight: "900" }}>
+                Proposer une activité publique
+              </Text>
+            </Pressable>
+          </View>
         )}
         {/* Actions modération */}
         <View style={{ flexDirection: "row", gap: 10 }}>
@@ -282,9 +309,9 @@ function FilterPills({ active, onChange }: {
   const filters: { key: MapStatus | "all"; label: string; color: string }[] = [
     { key: "all",   label: "Tous",   color: L.primary },
     { key: "free",  label: "🟡 Libre",  color: STATUS_CONFIG.free.color },
-    { key: "vibe",  label: "💜 Soirée", color: STATUS_CONFIG.vibe.color },
-    { key: "charo", label: "🔴 Charo",  color: STATUS_CONFIG.charo.color },
-    { key: "taken", label: "💍 Pris",   color: STATUS_CONFIG.taken.color },
+    { key: "vibe",  label: "💜 Sortie", color: STATUS_CONFIG.vibe.color },
+    { key: "charo", label: "💫 Feeling", color: STATUS_CONFIG.charo.color },
+    { key: "taken", label: "🤝 Crew",   color: STATUS_CONFIG.taken.color },
   ];
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}
@@ -452,7 +479,7 @@ export default function LifeMapScreen() {
         ref={mapRef}
         provider={PROVIDER_DEFAULT}
         style={{ flex: 1 }}
-        initialRegion={PARIS_REGION}
+        initialRegion={TOULOUSE_REGION}
         mapType={Platform.OS === "ios" ? "mutedStandard" : "standard"}
         showsUserLocation={!!myLocation}
         showsMyLocationButton={false}
@@ -483,7 +510,7 @@ export default function LifeMapScreen() {
             backgroundColor: L.green,
             shadowColor: L.green, shadowOpacity: 1, shadowRadius: 4 }} />
           <Text style={{ color: L.text, fontSize: 13, fontWeight: "800" }}>
-            {onlineCount} en live · Paris
+            {onlineCount} en live · Toulouse
           </Text>
         </View>
 
@@ -525,7 +552,7 @@ export default function LifeMapScreen() {
             }
           </Pressable>
           <Text style={{ color: L.muted, fontSize: 11, textAlign: "center", marginTop: 8 }}>
-            Ta position est réelle · Vérifiée · Tu peux passer en Ghost à tout moment
+            Position partagée en zone approximative · Ghost à tout moment
           </Text>
         </View>
       )}
@@ -625,7 +652,7 @@ export default function LifeMapScreen() {
           <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: L.border,
             alignSelf: "center", marginBottom: 16 }} />
           <Text style={{ color: L.text, fontSize: 16, fontWeight: "900", marginBottom: 12 }}>
-            👥 Joueurs dans un rayon de 500m
+            👥 Joueurs dans une zone proche
           </Text>
           {nearbyPlayers.length === 0 ? (
             <Text style={{ color: L.muted, fontSize: 13, textAlign: "center", paddingVertical: 20 }}>
@@ -677,7 +704,7 @@ export default function LifeMapScreen() {
   );
 }
 
-// ── Style map dark Paris ──────────────────────────────────────────────────────
+// ── Style map dark Toulouse ───────────────────────────────────────────────────
 const DARK_MAP_STYLE = [
   { elementType: "geometry",                  stylers: [{ color: "#0a0a0a" }] },
   { elementType: "labels.text.fill",          stylers: [{ color: "#4A4844" }] },

@@ -40,14 +40,7 @@ export type WorldEvent = {
 };
 
 export const WORLD_CITIES: WorldEventCity[] = [
-  { slug: "neo-paris",   name: "Neo Paris",   emoji: "🗼", posX: 49, posY: 34 },
-  { slug: "neo-newyork", name: "Neo NewYork",  emoji: "🗽", posX: 22, posY: 32 },
-  { slug: "neo-tokyo",   name: "Neo Tokyo",    emoji: "🏯", posX: 76, posY: 33 },
-  { slug: "neo-london",  name: "Neo London",   emoji: "🎡", posX: 47, posY: 29 },
-  { slug: "neo-bamako",  name: "Neo Bamako",   emoji: "🌍", posX: 48, posY: 52 },
-  { slug: "neo-sydney",  name: "Neo Sydney",   emoji: "🦘", posX: 78, posY: 68 },
-  { slug: "neo-sao",     name: "Neo São Paulo", emoji: "🌴", posX: 30, posY: 62 },
-  { slug: "neo-dubai",   name: "Neo Dubai",    emoji: "🕌", posX: 57, posY: 40 },
+  { slug: "neo-toulouse", name: "Neo Toulouse", emoji: "🏉", posX: 49, posY: 34 },
 ];
 
 type EventTemplate = {

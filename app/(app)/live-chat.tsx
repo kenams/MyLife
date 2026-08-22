@@ -7,7 +7,7 @@ import {
 import { hapticImpact } from "@/lib/safe-haptics";
 import {
   fetchQuartierMessages, sendQuartierMessage, subscribeQuartier,
-  PARIS_QUARTIERS_LIST, MOCK_MESSAGES,
+  TOULOUSE_QUARTIERS_LIST, MOCK_MESSAGES,
 } from "@/lib/live-chat";
 import type { QuartierMessage } from "@/lib/live-chat";
 import { useGameStore } from "@/stores/game-store";
@@ -55,7 +55,7 @@ function Bubble({ msg, isMe }: { msg: QuartierMessage; isMe: boolean }) {
         {msg.is_star && (
           <View style={{ backgroundColor: L.purple, borderRadius: 3,
             paddingHorizontal: 4, paddingVertical: 1 }}>
-            <Text style={{ color: "#fff", fontSize: 8, fontWeight: "900" }}>STAR</Text>
+            <Text style={{ color: "#fff", fontSize: 8, fontWeight: "900" }}>OFFICIEL</Text>
           </View>
         )}
         <Text style={{ color: L.muted, fontSize: 10, marginLeft: "auto" }}>{time}</Text>
@@ -71,7 +71,7 @@ function Bubble({ msg, isMe }: { msg: QuartierMessage; isMe: boolean }) {
 }
 
 export default function LiveChatScreen() {
-  const { quartier = "Saint-Denis" } = useLocalSearchParams<{ quartier?: string }>();
+  const { quartier = "Capitole" } = useLocalSearchParams<{ quartier?: string }>();
   const avatar  = useGameStore((s) => s.avatar);
   const session = useGameStore((s) => s.session);
   const myId    = session?.id ?? "local_user";
@@ -80,7 +80,7 @@ export default function LiveChatScreen() {
   const [input,    setInput]    = useState("");
   const [sending,  setSending]  = useState(false);
   const listRef = useRef<FlatList>(null);
-  const q = PARIS_QUARTIERS_LIST.find((q) => q.id === quartier);
+  const q = TOULOUSE_QUARTIERS_LIST.find((q) => q.id === quartier);
 
   useEffect(() => {
     fetchQuartierMessages(quartier).then((msgs) => {

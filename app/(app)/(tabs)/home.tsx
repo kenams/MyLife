@@ -79,18 +79,18 @@ type ActionDef = {
 };
 
 const ALL_ACTIONS: ActionDef[] = [
-  { id: "healthy-meal",  emoji: "🍱", label: "Manger propre",     costLabel: "14 bl",  gainLabel: "+Dalle +Forme",      category: "survie" },
-  { id: "home-cooking",  emoji: "🍳", label: "Faire la popote",   costLabel: "8 bl",   gainLabel: "+Dalle économe",     category: "survie" },
-  { id: "sleep",         emoji: "🛌", label: "Roupiller",         costLabel: "temps",  gainLabel: "+Pêche max",         category: "survie" },
-  { id: "nap",           emoji: "💤", label: "Piquer un som",     costLabel: "temps",  gainLabel: "+Pêche rapide",      category: "survie" },
+  { id: "healthy-meal",  emoji: "🍱", label: "Manger propre",     costLabel: "14 BL",  gainLabel: "+Faim +Forme",       category: "survie" },
+  { id: "home-cooking",  emoji: "🍳", label: "Faire la popote",   costLabel: "8 BL",   gainLabel: "+Faim économe",      category: "survie" },
+  { id: "sleep",         emoji: "🛌", label: "Roupiller",         costLabel: "temps",  gainLabel: "+Énergie max",       category: "survie" },
+  { id: "nap",           emoji: "💤", label: "Piquer un som",     costLabel: "temps",  gainLabel: "+Énergie rapide",    category: "survie" },
   { id: "shower",        emoji: "🚿", label: "Se laver",          costLabel: "3 bl",   gainLabel: "+Look +Mood",        category: "survie" },
-  { id: "work-shift",    emoji: "💼", label: "Aller au taff",     costLabel: "pêche",  gainLabel: "+Thunes +Côte",      category: "travail", minEnergy: 20 },
+  { id: "work-shift",    emoji: "💼", label: "Aller au taff",     costLabel: "énergie", gainLabel: "+BL +Réputation",    category: "travail", minEnergy: 20 },
   { id: "cafe-chat",     emoji: "☕", label: "Poser au bando",    costLabel: "8 bl",   gainLabel: "+Réseau +Mood",      category: "social",  minMoney: 8 },
-  { id: "team-sport",    emoji: "🏀", label: "Terrain de foot",   costLabel: "pêche",  gainLabel: "+Réseau +Forme",     category: "social",  minEnergy: 25 },
-  { id: "walk",          emoji: "🏃", label: "Faire un tour",     costLabel: "pêche",  gainLabel: "+Mood -Stress",      category: "santé" },
+  { id: "team-sport",    emoji: "🏀", label: "Terrain de foot",   costLabel: "énergie", gainLabel: "+Réseau +Forme",     category: "social",  minEnergy: 25 },
+  { id: "walk",          emoji: "🏃", label: "Faire un tour",     costLabel: "énergie", gainLabel: "+Mood -Stress",      category: "santé" },
   { id: "gym",           emoji: "🏋️", label: "Aller à la salle",  costLabel: "12 bl",  gainLabel: "+Forme +Discipline", category: "santé",   minEnergy: 22, minMoney: 12 },
   { id: "meditate",      emoji: "🧘", label: "Se poser",          costLabel: "temps",  gainLabel: "-Stress +Zen",       category: "santé" },
-  { id: "read-book",     emoji: "📚", label: "S'instruire",       costLabel: "pêche",  gainLabel: "+Motivation",        category: "santé" },
+  { id: "read-book",     emoji: "📚", label: "S'instruire",       costLabel: "énergie", gainLabel: "+Motivation",        category: "santé" },
   { id: "shopping",      emoji: "🛍️", label: "Le Marais / SNKRS", costLabel: "35 bl",  gainLabel: "+Look +Mood",        category: "social",  minMoney: 35 },
 ];
 
@@ -151,7 +151,7 @@ function NpcStoryBubble({ story, onPress }: { story: NpcStory; onPress: () => vo
 }
 
 // ─── Live Toulouse Widget ─────────────────────────────────────────────────────
-function LiveParisWidget() {
+function LiveToulouseWidget() {
   const [count,  setCount]  = useState<number | null>(null);
   const [stories, setStories] = useState<NpcStory[]>([]);
   const countAnim = useRef(new Animated.Value(0)).current;
@@ -204,7 +204,7 @@ function LiveParisWidget() {
         borderBottomWidth: 1, borderBottomColor: L.border }}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <LivePulse />
-          <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Paris en direct</Text>
+          <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Toulouse en direct</Text>
         </View>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
           <View style={{ backgroundColor: L.greenBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
@@ -456,10 +456,10 @@ export default function HomeScreen() {
   // ── Seuils réalistes — alerte avant que ce soit trop tard ─────────────────
   const crises = [
     stats.energy < 25  && { emoji: "🛌", label: "T'es à plat",     body: "Roupille avant de faire quoi que ce soit.",  action: "sleep"        as LifeActionId },
-    stats.hunger < 30  && { emoji: "🍱", label: "T'as la dalle",   body: "Mange quelque chose maintenant.",            action: "healthy-meal" as LifeActionId },
+    stats.hunger < 30  && { emoji: "🍱", label: "Tu as faim",      body: "Mange quelque chose maintenant.",            action: "healthy-meal" as LifeActionId },
     stats.mood < 30    && { emoji: "🧘", label: "Mood au fond",     body: "Pose-toi. Ça changera tout.",                action: "meditate"     as LifeActionId },
     stats.hygiene < 25 && { emoji: "🚿", label: "Look en carton",  body: "Vas te laver avant de sortir.",              action: "shower"       as LifeActionId },
-    stats.money < 20   && { emoji: "💼", label: "Plus de thunes",  body: "File au taff dès que t'as de la pêche.",     action: "work-shift"   as LifeActionId },
+    stats.money < 20   && { emoji: "💼", label: "Plus de BL",      body: "File au taff dès que tu as assez d'énergie.", action: "work-shift"   as LifeActionId },
   ].filter(Boolean) as { emoji: string; label: string; body: string; action: LifeActionId }[];
 
   const topCrisis  = crises[0];
@@ -468,8 +468,8 @@ export default function HomeScreen() {
   // Raison de blocage explicite
   function blockedReason(a: ActionDef): string | undefined {
     if (a.id === "work-shift" && !timeCtx.workAvailable) return "Pas dispo à cette heure";
-    if (a.minEnergy && stats.energy < a.minEnergy) return `Pêche insuffisante (${Math.round(stats.energy)}/${a.minEnergy})`;
-    if (a.minMoney  && stats.money  < a.minMoney)  return `Manque de thunes (${Math.round(stats.money)}/${a.minMoney} bl)`;
+    if (a.minEnergy && stats.energy < a.minEnergy) return `Énergie insuffisante (${Math.round(stats.energy)}/${a.minEnergy})`;
+    if (a.minMoney  && stats.money  < a.minMoney)  return `Manque de BL (${Math.round(stats.money)}/${a.minMoney})`;
     return undefined;
   }
 
@@ -552,12 +552,12 @@ export default function HomeScreen() {
   // ── NPC drama engine — 1 event toutes les 2–4 min ─────────────────────────
   useEffect(() => {
     const NPC_CAST = [
-      { name: "Jok'air",  emoji: "🎤", star: true },
-      { name: "Maska",    emoji: "🎭", star: true },
-      { name: "Doomams",  emoji: "😤", star: false },
-      { name: "Lil Yaz",  emoji: "💜", star: false },
-      { name: "Benz",     emoji: "🔑", star: false },
-      { name: "Sékouba",  emoji: "🧢", star: false },
+      { name: "MyLife Toulouse", emoji: "📍", star: true },
+      { name: "Ava.PNJ",         emoji: "☕", star: false },
+      { name: "Noa.PNJ",         emoji: "🎭", star: false },
+      { name: "Malik.PNJ",       emoji: "💼", star: false },
+      { name: "Leila.PNJ",       emoji: "🏃", star: false },
+      { name: "Sana.PNJ",        emoji: "💪", star: false },
     ];
     const scheduleNext = () => {
       const delay = 120_000 + Math.random() * 120_000; // 2–4 min
@@ -588,14 +588,14 @@ export default function HomeScreen() {
     hapticImpact("medium");
     const playerName = avatar?.displayName ?? "Joueur";
     const playerEmoji = "🧢";
-    const evtPayload = buildActionFeedEvent(id, playerName, playerEmoji, "Paris", false);
+    const evtPayload = buildActionFeedEvent(id, playerName, playerEmoji, "Toulouse", false);
     if (evtPayload) publishFeedEvent(evtPayload);
     const msgs: Record<string, string> = {
-      "work-shift":   "+thunes +côte 💰",
-      "sleep":        "pêche rechargée ⚡",
-      "nap":          "+pêche rapide ⚡",
-      "healthy-meal": "+dalle +forme 🍱",
-      "home-cooking": "+dalle 🍳",
+      "work-shift":   "+BL +réputation 💰",
+      "sleep":        "énergie rechargée ⚡",
+      "nap":          "+énergie rapide ⚡",
+      "healthy-meal": "+faim +forme 🍱",
+      "home-cooking": "+faim 🍳",
       "shower":       "+look +mood 👟",
       "walk":         "+mood -stress 🏃",
       "gym":          "+forme 💪",
@@ -610,11 +610,15 @@ export default function HomeScreen() {
   }
 
   const statRows = [
-    { emoji: "⚡", label: "Pêche",  value: stats.energy   },
-    { emoji: "🍱", label: "Dalle",  value: stats.hunger   },
+    { emoji: "⚡", label: "Énergie", value: stats.energy   },
+    { emoji: "🍱", label: "Faim",    value: stats.hunger   },
     { emoji: "👟", label: "Look",   value: stats.hygiene  },
     { emoji: "😤", label: "Mood",   value: stats.mood     },
   ].sort((a, b) => a.value - b.value);
+
+  const nextAction = listRows.find((row) => !row.blocked)?.action ?? listRows[0]?.action;
+  const liveNowLabel = flashEvents[0]?.title ?? liveEvents[0]?.body ?? "Ouvre la Life Map";
+  const evolutionLabel = `Niv ${playerLevel} · ${Math.round(stats.money)} BL · ${stats.reputation} rep`;
 
   async function handleJoinFlash(evt: FlashEvent) {
     if (joinedFlash.has(evt.id)) return;
@@ -632,9 +636,9 @@ export default function HomeScreen() {
   async function handleCreateRassemblement() {
     if (!avatar) return;
     const loc = await requestAndGetLocation();
-    const lat   = loc?.lat  ?? 48.8673;
-    const lng   = loc?.lng  ?? 2.3630;
-    const label = loc?.locationName ?? "République — Paris";
+    const lat   = loc?.lat  ?? 43.6047;
+    const lng   = loc?.lng  ?? 1.4442;
+    const label = loc?.locationName ?? "Capitole — Toulouse";
     const evt = await createRassemblement(label, lat, lng, avatar.displayName);
     if (evt) {
       setFlashEvents((prev) => [evt, ...prev]);
@@ -821,10 +825,34 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* ── LIVE PARIS ── */}
-        <LiveParisWidget />
+        {/* ── LIVE TOULOUSE ── */}
+        <LiveToulouseWidget />
 
         <View style={{ paddingHorizontal: 20 }}>
+
+          {/* ── AUJOURD'HUI ── */}
+          <View style={{ marginTop: 18, backgroundColor: L.card, borderRadius: 16,
+            padding: 16, borderWidth: 1, borderColor: L.border, gap: 12 }}>
+            <Text style={{ color: L.muted, fontSize: 9, fontWeight: "900", letterSpacing: 3 }}>
+              AUJOURD'HUI
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              {[
+                { label: "Live", value: liveNowLabel, color: L.teal },
+                { label: "Évolution", value: evolutionLabel, color: L.primary },
+                { label: "Action", value: nextAction?.label ?? "Voir Missions", color: L.green },
+              ].map((item) => (
+                <View key={item.label} style={{ flex: 1, minHeight: 84, borderRadius: 12,
+                  backgroundColor: item.color + "10", borderWidth: 1, borderColor: item.color + "25",
+                  padding: 10, justifyContent: "space-between" }}>
+                  <Text style={{ color: item.color, fontSize: 10, fontWeight: "900" }}>{item.label}</Text>
+                  <Text numberOfLines={3} style={{ color: L.text, fontSize: 12, fontWeight: "800", lineHeight: 16 }}>
+                    {item.value}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
 
           {/* ── URGENT — bouton pleine largeur ── */}
           {topCrisis && (() => {
@@ -958,7 +986,7 @@ export default function HomeScreen() {
             <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
               <LivePulse color={L.green} size={7} />
               <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 2.5 }}>
-                FEED PARIS
+                FEED TOULOUSE
               </Text>
               <View style={{ flex: 1, height: 1, backgroundColor: L.border }} />
               <Text style={{ color: L.muted, fontSize: 9, letterSpacing: 1 }}>
@@ -1009,13 +1037,13 @@ export default function HomeScreen() {
                         {evt.is_star && (
                           <View style={{ backgroundColor: L.gold + "22", paddingHorizontal: 5, paddingVertical: 1,
                             borderRadius: 4, borderWidth: 1, borderColor: L.gold + "40" }}>
-                            <Text style={{ color: L.gold, fontSize: 9, fontWeight: "800" }}>⭐ STAR</Text>
+                            <Text style={{ color: L.gold, fontSize: 9, fontWeight: "800" }}>OFFICIEL</Text>
                           </View>
                         )}
                         {evt.is_npc && !evt.is_star && (
                           <View style={{ backgroundColor: L.purple + "22", paddingHorizontal: 5, paddingVertical: 1,
                             borderRadius: 4, borderWidth: 1, borderColor: L.purple + "40" }}>
-                            <Text style={{ color: L.purple, fontSize: 9, fontWeight: "800" }}>NPC</Text>
+                            <Text style={{ color: L.purple, fontSize: 9, fontWeight: "800" }}>PNJ DÉMO</Text>
                           </View>
                         )}
                       </View>

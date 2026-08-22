@@ -54,7 +54,7 @@ const ACTION_FEED: Record<string, { emoji: string; templates: string[] }> = {
   "team-sport":   { emoji: "🏀", templates: ["{name} sur le terrain 🏀", "{name} jeu propre au five", "{name} MVP du quartier ce soir"] },
   "healthy-meal": { emoji: "🍱", templates: ["{name} mange propre 🍱", "{name} cuisine healthy — discipline totale", "{name} riz poulet brocoli, classique"] },
   "sleep":        { emoji: "🛌", templates: ["{name} est couché — recovery mode", "{name} dodo, recharge pour demain", "{name} coupe pour la nuit"] },
-  "walk":         { emoji: "🚶", templates: ["{name} marche dans Paris 🗺️", "{name} explore le quartier", "{name} en vadrouille dans la ville"] },
+  "walk":         { emoji: "🚶", templates: ["{name} marche dans Toulouse 🗺️", "{name} explore le quartier", "{name} en vadrouille dans la ville"] },
   "meditate":     { emoji: "🧘", templates: ["{name} se pose et respire 🧘", "{name} zen mode activé", "{name} déstresse, level mental up"] },
 };
 
@@ -79,12 +79,12 @@ export function buildActionFeedEvent(
 // ── NPC drama generator (appelé par le moteur NPC) ────────────────────────────
 const NPC_DRAMA = [
   { emoji: "💰", body: "{name} vient de toucher 800 BL — richesse silencieuse", kind: "rich" as FeedKind },
-  { emoji: "😤", body: "{name} est en mode guerre, personne l'arrête", kind: "npc_drama" as FeedKind },
-  { emoji: "👀", body: "{name} change de quartier — nouveau terrain de chasse", kind: "location_change" as FeedKind },
+  { emoji: "😤", body: "{name} lance un défi positif pour son crew", kind: "npc_drama" as FeedKind },
+  { emoji: "👀", body: "{name} change de quartier pour une mission locale", kind: "location_change" as FeedKind },
   { emoji: "🤝", body: "{name} vient de nouer une alliance dans le {loc}", kind: "encounter" as FeedKind },
   { emoji: "📈", body: "{name} monte en niveau — la grinta paie", kind: "level_up" as FeedKind },
   { emoji: "🎤", body: "{name} fait le buzz dans le {loc} ce soir", kind: "npc_drama" as FeedKind },
-  { emoji: "⚔️", body: "{name} s'est brouillé avec quelqu'un — drama en cours", kind: "crew_war" as FeedKind },
+  { emoji: "🤝", body: "{name} organise une mission collective dans le {loc}", kind: "encounter" as FeedKind },
   { emoji: "🔥", body: "{name} est intouchable ce soir", kind: "npc_drama" as FeedKind },
 ];
 
@@ -103,14 +103,14 @@ export async function publishNpcDrama(npcName: string, npcEmoji: string, isStar 
 
 // ── NPC cast complet Toulouse ─────────────────────────────────────────────────
 const NPC_CAST = [
-  { name: "Jok'air",     emoji: "🎤", is_star: true  },
-  { name: "Maska",       emoji: "🎭", is_star: true  },
-  { name: "Doomams",     emoji: "😤", is_star: false },
-  { name: "Lil Yaz",     emoji: "💜", is_star: false },
-  { name: "Benz",        emoji: "🔑", is_star: false },
-  { name: "Sékouba",     emoji: "🧢", is_star: false },
+  { name: "MyLife Toulouse", emoji: "📍", is_star: true  },
+  { name: "Ava.PNJ",         emoji: "☕", is_star: false },
+  { name: "Noa.PNJ",         emoji: "🎭", is_star: false },
+  { name: "Malik.PNJ",       emoji: "💼", is_star: false },
+  { name: "Leila.PNJ",       emoji: "🏃", is_star: false },
+  { name: "Sana.PNJ",        emoji: "💪", is_star: false },
   { name: "Karim_93",    emoji: "⚽", is_star: false },
-  { name: "Lina.P",      emoji: "👑", is_star: false },
+  { name: "Lina.TLS",    emoji: "👑", is_star: false },
   { name: "Toxic_Nat",   emoji: "🔥", is_star: false },
   { name: "Amina.M",     emoji: "💄", is_star: false },
 ];

@@ -12,23 +12,23 @@ const C = {
 
 const STEPS = [
   {
-    emoji: "🗺️", title: "La Map de Paris",
-    body: "Retrouve des joueurs réels dans ta ville. Active ta localisation pour apparaître sur la map live.",
+    emoji: "🗺️", title: "Life Map Toulouse",
+    body: "Vois joueurs visibles, crews, missions et zones chaudes. Ghost reste actif tant que tu n'apparais pas volontairement.",
     accent: C.blue,
   },
   {
-    emoji: "⚡", title: "Actions & XP",
-    body: "Chaque action de ta vie réelle te rapporte de l'XP et des BL. Mange, dors, socialise — progresse.",
+    emoji: "⚡", title: "Actions, XP & BL",
+    body: "Chaque action utile dans ta vraie vie fait monter ton niveau, tes BL et ta réputation locale.",
     accent: C.green,
   },
   {
-    emoji: "👥", title: "Crews & Territoires",
-    body: "Rejoins ou fonde un crew. Revendiquez des zones de Paris et défendez-les contre les autres crews.",
+    emoji: "👥", title: "Crews positifs",
+    body: "Rejoins ou fonde un crew sport, sortie, artiste, business ou quartier. Les zones évoluent grâce aux missions collectives.",
     accent: C.purple,
   },
   {
-    emoji: "🏆", title: "Flash Events",
-    body: "Des événements surgissent en temps réel dans Paris. Sois le premier à participer pour des récompenses rares.",
+    emoji: "🏆", title: "Première mission",
+    body: "Commence par une action simple, puis reviens voir ce qui a changé près de toi.",
     accent: C.gold,
   },
 ];

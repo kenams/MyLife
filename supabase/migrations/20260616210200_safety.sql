@@ -1,4 +1,9 @@
 -- Table signalements
+-- NB: une table `reports` plus étroite existe déjà depuis
+-- 20240201000000_missing_tables.sql — CREATE TABLE IF NOT EXISTS est donc un
+-- no-op ici. On complète avec les colonnes manquantes via ALTER TABLE
+-- (idempotent) au lieu de compter sur cette définition, qui ne s'applique
+-- jamais telle quelle si la table préexiste.
 create table if not exists public.reports (
   id               uuid primary key default gen_random_uuid(),
   reporter_user_id uuid references auth.users(id) on delete set null,
@@ -13,6 +18,15 @@ create table if not exists public.reports (
   created_at       timestamptz default now(),
   reviewed_at      timestamptz
 );
+
+alter table public.reports add column if not exists reporter_name  text;
+alter table public.reports add column if not exists target_user_id uuid references auth.users(id) on delete set null;
+alter table public.reports add column if not exists target_name    text;
+alter table public.reports add column if not exists admin_note     text;
+alter table public.reports add column if not exists reviewed_at    timestamptz;
+-- La table préexistante n'a pas de contrainte CHECK sur status ni de default —
+-- on l'ajoute sans casser si elle existe déjà avec des lignes.
+alter table public.reports alter column status set default 'pending';
 
 -- Un user ne peut pas voir les signalements des autres (admin only)
 alter table public.reports enable row level security;

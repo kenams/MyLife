@@ -85,68 +85,16 @@ type TestAccountPreset = "balanced" | "burnout" | "romantic" | "live";
 
 const WORLD_CHAT_ROOMS: Array<Omit<Room, "createdAt">> = [
   {
-    id: "room-city-neo-paris",
-    name: "Neo Paris Live",
+    id: "room-city-neo-toulouse",
+    name: "Neo Toulouse Live",
     kind: "public" as RoomKind,
-    code: "PARIS",
+    code: "TLS",
     ownerId: "system",
     ownerName: "Systeme",
     locationSlug: "cafe",
     memberCount: 18,
     maxMembers: 120,
-    description: "Chat de ville pour Neo Paris : sorties, rencontres, humeur du quartier.",
-    isActive: true
-  },
-  {
-    id: "room-city-neo-newyork",
-    name: "Neo NewYork Live",
-    kind: "public" as RoomKind,
-    code: "NYORK",
-    ownerId: "system",
-    ownerName: "Systeme",
-    locationSlug: "nightclub",
-    memberCount: 22,
-    maxMembers: 120,
-    description: "Chat de ville pour Neo NewYork : business, nightlife, rencontres rapides.",
-    isActive: true
-  },
-  {
-    id: "room-city-neo-tokyo",
-    name: "Neo Tokyo Live",
-    kind: "public" as RoomKind,
-    code: "TOKYO",
-    ownerId: "system",
-    ownerName: "Systeme",
-    locationSlug: "residence-luxe",
-    memberCount: 16,
-    maxMembers: 120,
-    description: "Chat de ville pour Neo Tokyo : calme, style, tech et rendez-vous discrets.",
-    isActive: true
-  },
-  {
-    id: "room-city-neo-london",
-    name: "Neo London Live",
-    kind: "public" as RoomKind,
-    code: "LONDON",
-    ownerId: "system",
-    ownerName: "Systeme",
-    locationSlug: "library",
-    memberCount: 14,
-    maxMembers: 120,
-    description: "Chat de ville pour Neo London : culture, reseau et discussions longues.",
-    isActive: true
-  },
-  {
-    id: "room-city-neo-bamako",
-    name: "Neo Bamako Live",
-    kind: "public" as RoomKind,
-    code: "BAMAKO",
-    ownerId: "system",
-    ownerName: "Systeme",
-    locationSlug: "park",
-    memberCount: 19,
-    maxMembers: 120,
-    description: "Chat de ville pour Neo Bamako : ambiance, musique, famille sociale et quartier vivant.",
+    description: "Chat de ville pour Neo Toulouse : sorties, missions, crews et humeur des quartiers.",
     isActive: true
   }
 ];
@@ -154,15 +102,15 @@ const WORLD_CHAT_ROOMS: Array<Omit<Room, "createdAt">> = [
 const DEFAULT_ROOMS: Array<Omit<Room, "createdAt">> = [
   {
     id: "room-lounge-global",
-    name: "Chat Monde",
+    name: "Chat Toulouse",
     kind: "public" as RoomKind,
-    code: "WORLD",
+    code: "TOULOUSE",
     ownerId: "system",
     ownerName: "Système",
     locationSlug: "cafe",
     memberCount: 64,
     maxMembers: 500,
-    description: "Chat public de la ville - tout le monde peut écrire ici.",
+    description: "Chat public Toulouse - sorties, missions et crews fondateurs.",
     isActive: true
   },
   ...WORLD_CHAT_ROOMS,
@@ -1541,10 +1489,12 @@ export const useGameStore = create<GameState>()(
       completeAvatar: (avatar) => {
         const stats = createStatsFromAvatar(avatar);
         const createdAt = nowIso();
+        const starterMissions = applyActionToMissions([], "walk", 1).updatedProgresses;
         set({
           avatar,
           stats,
           advice: buildAdvice(stats),
+          missionProgresses: starterMissions,
           invitations: [
             {
               id: "invite-ava-start",
@@ -1558,15 +1508,15 @@ export const useGameStore = create<GameState>()(
           notifications: appendNotification(createInitialRuntime().notifications, {
             id: "onboarding-finished",
             kind: "social",
-            title: "Ava t'attend au Social Cafe",
-            body: "Premier bon move : accepte l'invitation et lance une interaction simple.",
+            title: "Première mission débloquée",
+            body: "Ouvre Missions ou la Life Map Toulouse pour lancer ta première action.",
             createdAt,
             read: false
           }),
           lifeFeed: appendFeed(createInitialRuntime().lifeFeed, {
             id: "feed-avatar-ready",
-            title: "Avatar finalise",
-            body: "Tu entres dans le quartier avec une vraie identite, un style et un profil comportemental clair.",
+            title: "Profil joueur finalisé",
+            body: `${avatar.displayName} rejoint Toulouse en mode Ghost avec un objectif clair : ${avatar.personalGoal}.`,
             createdAt
           })
         });

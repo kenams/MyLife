@@ -6,7 +6,22 @@ import type {
   ResidentSeed
 } from "@/lib/types";
 
-export const cityName = "Neo Paris";
+export const cityName = "Neo Toulouse";
+
+export const toulouseDistrictOptions = [
+  "Capitole",
+  "Saint-Cyprien",
+  "Carmes",
+  "Compans",
+  "Les Minimes",
+  "Rangueil",
+  "Mirail",
+  "Empalot",
+  "Bagatelle",
+  "Bonnefoy",
+  "Croix-Daurade",
+  "La Vache"
+];
 
 export const neighborhoods: NeighborhoodSeed[] = [
   {
@@ -18,37 +33,37 @@ export const neighborhoods: NeighborhoodSeed[] = [
   },
   {
     slug: "central-district",
-    name: "Central District",
-    vibe: "dense et social",
-    lifestyle: "sorties, carriere, rencontres rapides",
+    name: "Capitole",
+    vibe: "central, dense et social",
+    lifestyle: "sorties, carriere, rencontres locales",
     costLevel: "balanced"
   },
   {
     slug: "midtown-residence",
-    name: "Midtown Residences",
-    vibe: "residentiel et stable",
+    name: "Saint-Cyprien",
+    vibe: "residentiel, vivant et stable",
     lifestyle: "confort, routines propres, vie sociale equilibree",
     costLevel: "balanced"
   },
   {
     slug: "riverside",
-    name: "Riverside",
+    name: "Garonne",
     vibe: "calme et sain",
-    lifestyle: "bien-etre, marche, respiration",
+    lifestyle: "bien-etre, marche, respiration au bord de l'eau",
     costLevel: "accessible"
   },
   {
     slug: "studio-heights",
-    name: "Studio Heights",
+    name: "Carmes",
     vibe: "creatif et premium",
-    lifestyle: "style, image, ambition et reseau",
+    lifestyle: "style, image, ambition et reseau local",
     costLevel: "premium"
   },
   {
     slug: "north-estates",
-    name: "North Estates",
-    vibe: "calme, prive et tres riche",
-    lifestyle: "villas, prestige, reseau elite et securite",
+    name: "Côte Pavée",
+    vibe: "calme, prive et premium",
+    lifestyle: "prestige, reseau elite et securite",
     costLevel: "premium"
   }
 ];
@@ -57,7 +72,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "home",
     neighborhoodSlug: "midtown-residence",
-    name: "Home Suite",
+    name: "QG perso",
     kind: "home",
     summary: "Le point de reset. Tu y recuperes ton energie, ton hygiene et ton calme.",
     costHint: "gratuit",
@@ -66,7 +81,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "residence-populaire",
     neighborhoodSlug: "old-quarter",
-    name: "Bloc Populaire",
+    name: "Résidence Bagatelle",
     kind: "home",
     summary: "Residences modestes, loyers faibles, ambiance dense et entraide de quartier.",
     costHint: "pauvre",
@@ -75,7 +90,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "residence-confort",
     neighborhoodSlug: "midtown-residence",
-    name: "Residence Confort",
+    name: "Appart Saint-Cyprien",
     kind: "home",
     summary: "Immeubles propres pour joueurs stables : studio, appartement et loft.",
     costHint: "moyen",
@@ -84,7 +99,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "residence-luxe",
     neighborhoodSlug: "north-estates",
-    name: "North Estates",
+    name: "Villa Côte Pavée",
     kind: "home",
     summary: "Residences riches : penthouse, villa et manoir avec fort impact social.",
     costHint: "riche",
@@ -93,7 +108,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "market",
     neighborhoodSlug: "old-quarter",
-    name: "Fresh Market",
+    name: "Marché Victor Hugo",
     kind: "food",
     summary: "Le meilleur endroit pour gerer le budget alimentation sans degrader la sante.",
     costHint: "economique",
@@ -102,7 +117,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "cafe",
     neighborhoodSlug: "central-district",
-    name: "Social Cafe",
+    name: "Café Saint-Cyprien",
     kind: "social",
     summary: "Le hub de conversation. Idéal pour casser l'isolement et ouvrir une nouvelle relation.",
     costHint: "accessible",
@@ -111,7 +126,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "office",
     neighborhoodSlug: "central-district",
-    name: "Focus Office",
+    name: "Cantine numérique",
     kind: "work",
     summary: "Le lieu ou les routines de travail font monter argent, discipline et credibilite.",
     costHint: "productif",
@@ -120,7 +135,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "park",
     neighborhoodSlug: "riverside",
-    name: "Riverside Park",
+    name: "Prairie des Filtres",
     kind: "public",
     summary: "Un espace utile pour marcher, souffler et reduire le stress sans depenser.",
     costHint: "gratuit",
@@ -129,7 +144,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "gym",
     neighborhoodSlug: "riverside",
-    name: "Pulse Gym",
+    name: "Club Rangueil",
     kind: "wellness",
     summary: "Le lieu fitness pour la discipline, la forme et la perception sociale.",
     costHint: "moyen",
@@ -138,7 +153,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "restaurant",
     neighborhoodSlug: "studio-heights",
-    name: "Maison Ember",
+    name: "Table des Carmes",
     kind: "food",
     summary: "Sorties plus premium, utiles pour l'humeur, la relation et l'image sociale.",
     costHint: "premium",
@@ -147,7 +162,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "cinema",
     neighborhoodSlug: "studio-heights",
-    name: "Luma Cinema",
+    name: "Ciné Wilson",
     kind: "social",
     summary: "Le meilleur decor pour une sortie calme ou un date sobre.",
     costHint: "moyen",
@@ -156,7 +171,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "nightclub",
     neighborhoodSlug: "central-district",
-    name: "Neo Club",
+    name: "Nuit Saint-Pierre",
     kind: "social",
     summary: "La salle de nuit incontournable. Musique, danse, rencontres intenses et ambiance electrique.",
     costHint: "premium",
@@ -165,7 +180,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "library",
     neighborhoodSlug: "midtown-residence",
-    name: "City Library",
+    name: "Médiathèque José-Cabanis",
     kind: "wellness",
     summary: "Espace calme pour etudier, lire et developper ses competences. Ideal pour progresser.",
     costHint: "gratuit",
@@ -174,7 +189,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "spa",
     neighborhoodSlug: "riverside",
-    name: "Zenith Spa",
+    name: "Spa Garonne",
     kind: "wellness",
     summary: "Centre de bien-etre premium : sauna, massage, meditation. Recuperation maximale.",
     costHint: "premium",
@@ -183,7 +198,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "startup",
     neighborhoodSlug: "studio-heights",
-    name: "Startup Lab",
+    name: "Startup Lab Toulouse",
     kind: "work",
     summary: "Espace de co-working tech. Reseau, projets ambitieux et opportunites a saisir.",
     costHint: "moyen",
@@ -192,7 +207,7 @@ export const locations: LocationSeed[] = [
   {
     slug: "rooftop-bar",
     neighborhoodSlug: "north-estates",
-    name: "Sky Lounge",
+    name: "Rooftop Capitole",
     kind: "social",
     summary: "Bar rooftop VIP avec vue panoramique. Cocktails, networking et soirees haut de gamme.",
     costHint: "elite",
@@ -497,34 +512,34 @@ export const ambitionLevels = ["equilibre", "croissance", "elite"];
 export const lifeRhythms = ["matinal", "equilibre", "tardif"];
 export const relationshipStyles = ["stable", "curieux", "selectif", "protecteur"];
 export const personalGoals = [
-  "stabiliser ma vie",
-  "monter socialement",
-  "retrouver une routine saine",
-  "developper mon cercle",
-  "creer une relation de qualite"
+  "voir ce qui se passe pres de moi",
+  "rencontrer de nouvelles personnes",
+  "rejoindre un crew",
+  "monter ma reputation locale",
+  "retrouver une routine saine"
 ];
 export const lifeHabits = ["structure", "spontaneite", "sport", "travail", "social"];
 export const interestOptions = [
-  "fitness",
+  "sport",
+  "sorties",
+  "gaming",
+  "artistes",
   "business",
-  "cinema",
-  "coffee",
+  "etudiants",
+  "nightlife",
   "food",
-  "design",
   "tech",
-  "mindset",
-  "networking",
-  "wellness"
+  "bien-etre"
 ];
 export const lookingForOptions = [
   "amis",
   "discussion",
-  "communaute",
+  "crew",
   "motivation",
-  "relation amoureuse",
+  "rencontres consenties",
   "sorties",
   "sport",
-  "progression personnelle"
+  "progression sociale"
 ];
 export const preferredVibes = ["calme", "elegant", "social", "sportif", "creatif", "ambitieux"];
 export const traitPreferences = ["fiable", "drôle", "discipline", "ambition", "douceur", "charisme"];
