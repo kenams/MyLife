@@ -1441,10 +1441,23 @@ export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
       ...initialState(),
-      signIn: async (email: string, password?: string) => {
-        const cleanedEmail = email.trim().toLowerCase();
-        if (!cleanedEmail) {
-          return { ok: false, error: "Adresse e-mail requise." };
+      signIn: async (identifier: string, password?: string) => {
+        const cleaned = identifier.trim().toLowerCase();
+        if (!cleaned) {
+          return { ok: false, error: "Pseudo requis." };
+        }
+
+        let cleanedEmail = cleaned;
+        if (!cleaned.includes("@") && isSupabaseConfigured && supabase) {
+          // Identifiant sans "@" = pseudo, pas un email : on résout côté DB
+          // (fonction SECURITY DEFINER, n'expose jamais auth.users directement).
+          const { data: resolvedEmail, error: lookupError } = await supabase.rpc("email_for_username", {
+            p_username: cleaned,
+          });
+          if (lookupError || !resolvedEmail) {
+            return { ok: false, error: "Pseudo ou mot de passe incorrect." };
+          }
+          cleanedEmail = String(resolvedEmail).trim().toLowerCase();
         }
 
         if (isSupabaseConfigured && supabase && password) {

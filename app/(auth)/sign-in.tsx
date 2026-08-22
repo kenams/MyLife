@@ -417,7 +417,7 @@ export default function SignInScreen() {
 
   async function handleSignIn() {
     clear();
-    if (!email) { setError("Email requis."); return; }
+    if (!email) { setError("Pseudo requis."); return; }
     setLoading(true);
     const r = await signIn(email, password || undefined);
     setLoading(false);
@@ -621,10 +621,17 @@ export default function SignInScreen() {
 
               {/* Fields */}
               <View style={{ gap: 10, marginBottom: 14 }}>
-                <FieldInput
-                  value={email} onChange={setEmail}
-                  placeholder="ton@email.com" icon="✉️" keyboard="email-address"
-                />
+                {tab === "signin" ? (
+                  <FieldInput
+                    value={email} onChange={setEmail}
+                    placeholder="@TonPseudo" icon="🏷️"
+                  />
+                ) : (
+                  <FieldInput
+                    value={email} onChange={setEmail}
+                    placeholder="ton@email.com" icon="✉️" keyboard="email-address"
+                  />
+                )}
                 {tab !== "reset" && (
                   <FieldInput
                     value={password} onChange={setPassword}
