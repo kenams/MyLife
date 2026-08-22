@@ -25,6 +25,14 @@ import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
 import { supabase } from "@/lib/supabase";
 
+// ── Échappement HTML — tags/noms de crew et pseudos viennent de la DB (donc
+// potentiellement saisis par un joueur) et sont injectés dans des popups/SVG
+// via innerHTML : sans ça, un pseudo ou un tag de crew malveillant serait une
+// XSS stockée exécutée dans le navigateur de tous les autres joueurs.
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c] as string));
+}
+
 // ── Matchmaking helpers ───────────────────────────────────────────────────────
 function haversineMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
   const R = 6371000;
@@ -57,32 +65,47 @@ function playerKind(player: MapPlayer): { label: string; color: string } {
   return { label: "PNJ DÉMO", color: C.purple };
 }
 
-// ── Leaflet loader (injection dynamique dans le DOM) ──────────────────────────
-let leafletLoaded = false;
-let leafletLoading = false;
-const leafletCallbacks: Array<() => void> = [];
+// ── MapLibre GL loader (injection dynamique dans le DOM) ──────────────────────
+// Moteur : MapLibre GL JS (open-source, licence BSD-3, gratuit, pas de clé API).
+// Tuiles : OpenFreeMap (https://openfreemap.org) — vecteur, gratuit, sans clé,
+// sans quota. Choisi après comparaison avec Mapbox (payant au-delà d'un seuil)
+// et MapTiler (quota gratuit limité) : OpenFreeMap est financé pour rester
+// gratuit indéfiniment et ne nécessite aucune inscription/API key à gérer.
+let maplibreLoaded = false;
+let maplibreLoading = false;
+const maplibreCallbacks: Array<() => void> = [];
 
-function loadLeaflet(cb: () => void) {
-  if (leafletLoaded) { cb(); return; }
-  leafletCallbacks.push(cb);
-  if (leafletLoading) return;
-  leafletLoading = true;
+function loadMaplibre(cb: () => void) {
+  if (maplibreLoaded) { cb(); return; }
+  maplibreCallbacks.push(cb);
+  if (maplibreLoading) return;
+  maplibreLoading = true;
 
-  // CSS
   const link = document.createElement("link");
   link.rel = "stylesheet";
-  link.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
+  link.href = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css";
   document.head.appendChild(link);
 
-  // JS
   const script = document.createElement("script");
-  script.src = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.js";
+  script.src = "https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js";
   script.onload = () => {
-    leafletLoaded = true;
-    leafletCallbacks.forEach((fn) => fn());
-    leafletCallbacks.length = 0;
+    maplibreLoaded = true;
+    maplibreCallbacks.forEach((fn) => fn());
+    maplibreCallbacks.length = 0;
   };
   document.head.appendChild(script);
+}
+
+// ── Cercle géographique → polygone (pas de dépendance turf) ───────────────────
+function circlePolygon(lat: number, lng: number, radiusMeters: number, steps = 48): number[][] {
+  const coords: number[][] = [];
+  const distX = radiusMeters / (111320 * Math.cos((lat * Math.PI) / 180));
+  const distY = radiusMeters / 110540;
+  for (let i = 0; i <= steps; i++) {
+    const theta = (i / steps) * 2 * Math.PI;
+    coords.push([lng + distX * Math.cos(theta), lat + distY * Math.sin(theta)]);
+  }
+  return coords;
 }
 
 // ── Styles Leaflet overrides (injectés une fois) ──────────────────────────────
@@ -92,47 +115,33 @@ function injectMapStyles() {
   stylesInjected = true;
   const style = document.createElement("style");
   style.textContent = `
-    .mylife-map-container .leaflet-container { background: #04040A !important; }
-    .mylife-map-container .leaflet-tile-pane {
-      filter: invert(1) hue-rotate(255deg) brightness(1.35) contrast(0.95) saturate(2.2);
-    }
+    .mylife-map-container .maplibregl-canvas { outline: none; }
+    .mylife-map-container .maplibregl-map { background: #04040A !important; }
     .mylife-map-container .mylife-map-vignette {
-      position: absolute; inset: 0; pointer-events: none; z-index: 400;
+      position: absolute; inset: 0; pointer-events: none; z-index: 2;
       background: radial-gradient(120% 85% at 50% 45%, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
     }
     .mylife-map-container .mylife-map-scanlines {
-      position: absolute; inset: 0; pointer-events: none; z-index: 401; opacity: .05;
+      position: absolute; inset: 0; pointer-events: none; z-index: 3; opacity: .05;
       background: repeating-linear-gradient(0deg, #fff 0px, #fff 1px, transparent 1px, transparent 3px);
     }
-    .mylife-map-container .leaflet-overlay-pane path {
-      filter: drop-shadow(0 0 4px rgba(255,255,255,0.35)) drop-shadow(0 0 12px rgba(255,255,255,0.2));
-    }
-    .mylife-map-container .leaflet-control-zoom {
+    .mylife-map-container .maplibregl-ctrl-group {
       border: 1px solid rgba(255,255,255,.08) !important;
       background: rgba(8,8,15,.92) !important;
       border-radius: 10px !important; overflow: hidden;
       box-shadow: 0 4px 20px rgba(0,0,0,.6) !important;
     }
-    .mylife-map-container .leaflet-control-zoom a {
-      color: #E8E4DC !important; background: transparent !important;
-      border: none !important; border-bottom: 1px solid rgba(255,255,255,.06) !important;
-      line-height: 30px !important; width: 30px !important; height: 30px !important;
+    .mylife-map-container .maplibregl-ctrl-group button {
+      background: transparent !important;
+      border-bottom: 1px solid rgba(255,255,255,.06) !important;
     }
-    .mylife-map-container .leaflet-control-zoom a:last-child { border-bottom: none !important; }
-    .mylife-map-container .leaflet-control-zoom a:hover { color: #FFD600 !important; }
-    .mylife-map-container .leaflet-control-attribution {
-      background: rgba(4,4,10,.75) !important; color: rgba(255,255,255,.2) !important;
-      font-size: 8px !important; border-radius: 4px 0 0 0 !important;
+    .mylife-map-container .maplibregl-ctrl-icon { filter: invert(1) brightness(1.6); }
+    .mylife-map-container .maplibregl-ctrl-attrib {
+      background: rgba(4,4,10,.75) !important; color: rgba(255,255,255,.35) !important;
+      font-size: 9px !important; border-radius: 4px 0 0 0 !important;
     }
-    .mylife-map-container .leaflet-control-attribution a { color: rgba(255,255,255,.3) !important; }
-    .mylife-map-container .leaflet-popup-content-wrapper {
-      background: #0E0E16 !important; border: 1px solid rgba(255,255,255,.08) !important;
-      border-radius: 12px !important; color: #E8E4DC !important;
-      box-shadow: 0 8px 32px rgba(0,0,0,.7) !important;
-    }
-    .mylife-map-container .leaflet-popup-tip { background: #0E0E16 !important; }
-    .mylife-map-container .leaflet-popup-close-button { color: #9A968E !important; }
-    .mylife-tooltip {
+    .mylife-map-container .maplibregl-ctrl-attrib a { color: rgba(255,255,255,.5) !important; }
+    .mylife-tooltip .maplibregl-popup-content {
       background: rgba(4,4,10,0.92) !important;
       border: 1px solid rgba(255,255,255,0.1) !important;
       border-radius: 6px !important;
@@ -142,23 +151,16 @@ function injectMapStyles() {
       padding: 4px 8px !important;
       box-shadow: none !important;
     }
-    .mylife-tooltip::before { display: none !important; }
+    .mylife-tooltip .maplibregl-popup-tip { display: none !important; }
 
     /* Glow pulsé pour les grosses zones crew */
     @keyframes crewGlowPulse {
-      0%   { opacity: 0.55; stroke-width: 1.5px; }
-      50%  { opacity: 1;    stroke-width: 3px; }
-      100% { opacity: 0.55; stroke-width: 1.5px; }
+      0%   { opacity: 0.55; }
+      50%  { opacity: 1; }
+      100% { opacity: 0.55; }
     }
-    .crew-zone-glow path {
+    .crew-zone-glow, .crew-zone-mega, .crew-zone-war {
       animation: crewGlowPulse 2.4s ease-in-out infinite;
-    }
-    .crew-zone-mega path {
-      animation: crewGlowPulse 1.6s ease-in-out infinite;
-    }
-    .crew-zone-war path {
-      animation: crewGlowPulse 0.9s ease-in-out infinite;
-      filter: drop-shadow(0 0 8px currentColor);
     }
   `;
   document.head.appendChild(style);
@@ -185,234 +187,183 @@ function buildMarkerSvg(emoji: string, color: string, name: string, star: boolea
   return "data:image/svg+xml," + encodeURIComponent(svg);
 }
 
-// ── LeafletMap (composant DOM pur) ────────────────────────────────────────────
+// ── MapLibreMap (composant DOM pur, moteur vectoriel 3D) ──────────────────────
 interface LeafletMapProps {
   players: MapPlayer[];
   myLat?: number;
   myLng?: number;
   onPlayerClick: (id: string) => void;
   onReady: () => void;
-  onMapReady?: (flyFn: (lat: number, lng: number, zoom?: number) => void) => void;
+  onMapReady?: (flyFn: (lat: number, lng: number, zoom?: number, pitch?: number, bearing?: number) => void) => void;
   crewZones?: CrewZoneRich[];
+}
+
+function playerMarkerEl(p: MapPlayer, dotColor: string): HTMLElement {
+  const radius  = p.is_star ? 9 : 6;
+  const svgSize = p.is_star ? 48 : 32;
+  const cx = svgSize / 2;
+  const svg = [
+    `<svg xmlns="http://www.w3.org/2000/svg" width="${svgSize}" height="${svgSize + 14}">`,
+    p.is_star ? `<circle cx="${cx}" cy="${cx}" r="${cx - 2}" fill="${dotColor}" opacity="0.18"/>` : "",
+    `<circle cx="${cx}" cy="${cx}" r="${radius}" fill="${dotColor}" stroke="#04040A" stroke-width="2"/>`,
+    p.crew_tag ? `<rect x="${cx - p.crew_tag.length * 3.2 - 2}" y="${svgSize + 1}" width="${p.crew_tag.length * 6.4 + 4}" height="11" rx="3" fill="#04040A" opacity="0.85"/>
+    <text x="${cx}" y="${svgSize + 10}" text-anchor="middle" font-size="8" fill="${dotColor}" font-weight="900" font-family="system-ui,sans-serif">${escapeHtml(p.crew_tag)}</text>` : "",
+    `</svg>`,
+  ].join("");
+  const el = document.createElement("div");
+  el.style.cssText = "cursor:pointer;width:" + svgSize + "px;height:" + (svgSize + 14) + "px;";
+  el.innerHTML = `<img src="data:image/svg+xml,${encodeURIComponent(svg)}" width="${svgSize}" height="${svgSize + 14}" />`;
+  return el;
 }
 
 function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, crewZones = [] }: LeafletMapProps) {
   const containerRef = useRef<View>(null);
-  const mapRef       = useRef<unknown>(null);
-  const markersRef   = useRef<Record<string, unknown>>({});
+  const mapRef        = useRef<unknown>(null);
+  const glRef         = useRef<unknown>(null);
+  const markersRef    = useRef<Record<string, { remove: () => void }>>({});
+  const myMarkerRef   = useRef<{ remove: () => void } | null>(null);
 
+  // Init carte — une seule fois
   useEffect(() => {
     injectMapStyles();
 
-    loadLeaflet(() => {
-      const L = (window as unknown as { L: unknown }).L as {
-        map: (el: HTMLElement, opts: object) => {
-          zoomControl: { setPosition: (pos: string) => void };
-          on: (event: string, handler: () => void) => void;
-          flyTo: (coords: number[], zoom: number, opts?: object) => void;
-          remove: () => void;
-        };
-        tileLayer: (url: string, opts: object) => { addTo: (map: unknown) => void; remove: () => void };
-        marker: (coords: number[], opts: object) => {
-          addTo: (map: unknown) => { on: (e: string, h: () => void) => void; remove: () => void; bindTooltip: (t: string, opts: object) => void };
-          on: (event: string, handler: () => void) => void;
-          remove: () => void;
-          bindTooltip: (t: string, opts: object) => void;
-        };
-        icon: (opts: object) => unknown;
-        circleMarker: (coords: number[], opts: object) => { addTo: (map: unknown) => void };
-        circle: (coords: number[], opts: object) => { addTo: (map: unknown) => void };
-      };
-      if (!L) return;
+    loadMaplibre(() => {
+      const gl = (window as unknown as { maplibregl: unknown }).maplibregl as any;
+      glRef.current = gl;
+      if (!gl) return;
 
-      // Trouver le div DOM sous notre ref View
       const domNode = (containerRef.current as unknown as { _nativeTag?: HTMLElement } | null)?._nativeTag
         ?? (containerRef.current as unknown as HTMLElement | null);
-      if (!domNode) return;
-
-      // Chercher le vrai div enfant (React Native Web wrappe dans des divs)
-      let mapEl: HTMLElement | null = domNode instanceof HTMLElement ? domNode : null;
-      if (!mapEl) return;
-
-      // S'assurer que l'élément a la bonne classe
+      if (!domNode || !(domNode instanceof HTMLElement)) return;
+      const mapEl = domNode;
       mapEl.classList.add("mylife-map-container");
       mapEl.style.cssText = "width:100%;height:100%;position:absolute;top:0;left:0;right:0;bottom:0;";
 
-      // Créer la Leaflet map — centré sur Toulouse par défaut
-      const map = L.map(mapEl, {
-        center: [43.6047, 1.4442],
-        zoom: 13,
-        zoomControl: true,
-        preferCanvas: true,
+      // OpenFreeMap "liberty" — vecteur, gratuit, sans clé, sans quota.
+      // Grading sombre appliqué en filtre CSS sur le canvas (même technique
+      // qu'avec les tuiles raster précédentes) car "liberty" est un style clair.
+      const map = new gl.Map({
+        container: mapEl,
+        style: "https://tiles.openfreemap.org/styles/liberty",
+        center: [1.4442, 43.6047], // Toulouse
+        zoom: 11,
+        pitch: 0,
+        bearing: 0,
+        attributionControl: { compact: true },
+        antialias: true,
       });
-      map.zoomControl.setPosition("bottomright");
       mapRef.current = map;
 
-      // Expose flyTo pour le parent
-      if (onMapReady) {
-        onMapReady((lat: number, lng: number, zoom = 16) => {
-          map.flyTo([lat, lng], zoom, { animate: true, duration: zoom < 14 ? 1.2 : 2.5 } as object);
+      map.addControl(new gl.NavigationControl({ visualizePitch: true }), "bottom-right");
+      map.addControl(new gl.FullscreenControl(), "bottom-right");
+
+      map.on("load", () => {
+        const canvasContainer = map.getCanvasContainer?.() as HTMLElement | undefined;
+        if (canvasContainer) {
+          canvasContainer.style.filter =
+            "invert(1) hue-rotate(255deg) brightness(1.35) contrast(0.95) saturate(2.2)";
+        }
+
+        // Extrusion 3D des bâtiments si la source vectorielle les expose
+        // (couche "building" — présente sur les styles OpenFreeMap/OSM standards)
+        try {
+          const style = map.getStyle();
+          const hasBuildingSource = style?.sources && Object.keys(style.sources).length > 0;
+          if (hasBuildingSource) {
+            map.addLayer({
+              id: "mylife-3d-buildings",
+              source: Object.keys(style.sources)[0],
+              "source-layer": "building",
+              type: "fill-extrusion",
+              minzoom: 14,
+              paint: {
+                "fill-extrusion-color": "#1a1830",
+                "fill-extrusion-height": ["coalesce", ["get", "render_height"], ["get", "height"], 8],
+                "fill-extrusion-base": ["coalesce", ["get", "render_min_height"], 0],
+                "fill-extrusion-opacity": 0.75,
+              },
+            });
+          }
+        } catch {
+          // Style sans couche "building" exploitable : pas bloquant, la carte reste 2D à cet endroit
+        }
+
+        // Overlays d'ambiance
+        const vignetteEl = document.createElement("div");
+        vignetteEl.className = "mylife-map-vignette";
+        mapEl.appendChild(vignetteEl);
+        const scanlinesEl = document.createElement("div");
+        scanlinesEl.className = "mylife-map-scanlines";
+        mapEl.appendChild(scanlinesEl);
+
+        // ── Zones crew (polygones GeoJSON — pas de géométrie "circle" native) ──
+        const features = crewZones.map((zone) => {
+          const isBastion = (zone as CrewZoneRich & { is_bastion?: boolean }).is_bastion ?? false;
+          const col       = zone.crew?.color ?? "#FFD600";
+          const members   = zone.crew?.member_count ?? 1;
+          const glow      = computeGlowIntensity(members);
+          return {
+            type: "Feature",
+            properties: {
+              color: col,
+              fillOpacity: isBastion ? 0.16 : 0.05 + glow * 0.12,
+              lineOpacity: isBastion ? 1.0 : 0.35 + glow * 0.5,
+              lineWidth: isBastion ? 3 : 1 + glow * 2.5,
+            },
+            geometry: { type: "Polygon", coordinates: [circlePolygon(zone.lat, zone.lng, zone.radius)] },
+          };
         });
-      }
+        map.addSource("crew-zones", { type: "geojson", data: { type: "FeatureCollection", features } });
+        map.addLayer({
+          id: "crew-zones-fill", type: "fill", source: "crew-zones",
+          paint: { "fill-color": ["get", "color"], "fill-opacity": ["get", "fillOpacity"] },
+        });
+        map.addLayer({
+          id: "crew-zones-line", type: "line", source: "crew-zones",
+          paint: { "line-color": ["get", "color"], "line-opacity": ["get", "lineOpacity"], "line-width": ["get", "lineWidth"] },
+        });
 
-      // Tiles CartoDB Dark Matter sans labels (premier choix) avec fallback OSM
-      // — pas de labels/POI Google-style : la ville devient un canevas neutre,
-      // l'identité visuelle vient du grading couleur + des éléments du jeu (zones, NPCs)
-      const tileLayer = L.tileLayer("https://{s}.basemaps.cartocdn.com/light_nolabels/{z}/{x}/{y}{r}.png", {
-        attribution: '&copy; <a href="https://carto.com">CARTO</a> &copy; <a href="https://openstreetmap.org">OSM</a>',
-        subdomains: "abcd",
-        maxZoom: 19,
-        minZoom: 9,
-        errorTileUrl: "",
-      });
-      tileLayer.addTo(map);
+        // Labels de zone (HTML markers, réutilise le style de badge existant)
+        crewZones.forEach((zone) => {
+          const isBastion = (zone as CrewZoneRich & { is_bastion?: boolean }).is_bastion ?? false;
+          const col       = zone.crew?.color ?? "#FFD600";
+          const members   = zone.crew?.member_count ?? 1;
+          const rep       = zone.crew?.reputation ?? 0;
+          const isBig     = members >= 10;
+          const labelW    = isBastion ? 88 : 72 + (isBig ? 8 : 0);
+          const tagSvg = [
+            `<svg xmlns="http://www.w3.org/2000/svg" width="${labelW}" height="28">`,
+            `<rect x="0" y="0" width="${labelW}" height="28" rx="7" fill="#04040A" stroke="${col}" stroke-width="${isBig ? 1.5 : 1}" opacity="${isBig ? 0.92 : 0.78}"/>`,
+            isBig ? `<circle cx="14" cy="14" r="4" fill="${col}" opacity="0.85"/>` : `<circle cx="14" cy="14" r="3" fill="${col}" opacity="0.5"/>`,
+            `<text x="${labelW / 2}" y="18" text-anchor="middle" font-size="${isBastion ? 12 : isBig ? 11 : 10}" fill="${col}" font-weight="900" font-family="system-ui,sans-serif">${isBastion ? "🏰 " : escapeHtml(zone.crew?.emoji ?? "") + " "}${escapeHtml(zone.crew?.tag ?? "")} · ${isBastion ? "BASE" : members}</text>`,
+            `</svg>`,
+          ].join("");
+          const el = document.createElement("div");
+          el.innerHTML = `<img src="data:image/svg+xml,${encodeURIComponent(tagSvg)}" width="${labelW}" height="28" />`;
+          const popup = new gl.Popup({ closeButton: false, offset: 18, className: "mylife-tooltip" }).setHTML(
+            `<b style="color:${col}">${isBastion ? "🏰 " : ""}${escapeHtml(zone.crew?.emoji ?? "")} ${escapeHtml(zone.crew?.tag ?? "CREW")}</b><br/>
+             <span style="opacity:.7">${escapeHtml(zone.name)}</span><br/>👥 ${members} · ⭐ ${rep} rep`
+          );
+          new gl.Marker({ element: el }).setLngLat([zone.lng, zone.lat]).setPopup(popup).addTo(map);
+        });
 
-      // Overlays d'ambiance : vignette, scanlines (le grading couleur vient du filter sur .leaflet-tile-pane)
-      const vignetteEl = document.createElement("div");
-      vignetteEl.className = "mylife-map-vignette";
-      mapEl.appendChild(vignetteEl);
-      const scanlinesEl = document.createElement("div");
-      scanlinesEl.className = "mylife-map-scanlines";
-      mapEl.appendChild(scanlinesEl);
+        // Ma position
+        if (myLat && myLng) {
+          const el = document.createElement("div");
+          el.style.cssText = "width:20px;height:20px;border-radius:10px;background:#FFD600;border:3px solid #04040A;box-shadow:0 0 16px #FFD600;";
+          myMarkerRef.current = new gl.Marker({ element: el }).setLngLat([myLng, myLat]).addTo(map);
+        }
 
-      // Fallback : si CartoDB ne répond pas après 3s → OSM + filtre dark
-      setTimeout(() => {
-        const container = mapEl?.querySelector?.(".leaflet-tile-pane") as HTMLElement | null;
-        const tiles = container?.querySelectorAll?.(".leaflet-tile-loaded");
-        if (!tiles || tiles.length === 0) {
-          tileLayer.remove?.();
-          const osmLayer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
-            attribution: '&copy; <a href="https://openstreetmap.org">OSM</a>',
-            maxZoom: 19,
+        if (onMapReady) {
+          onMapReady((lat: number, lng: number, zoom = 16, pitch = 55, bearing = -12) => {
+            map.flyTo({ center: [lng, lat], zoom, pitch, bearing, duration: zoom < 14 ? 1200 : 2500, essential: true });
           });
-          osmLayer.addTo(map);
-          // Filtre CSS dark sur les tiles OSM
-          const pane = mapEl?.querySelector?.(".leaflet-tile-pane") as HTMLElement | null;
-          if (pane) pane.style.filter = "invert(1) hue-rotate(180deg) brightness(0.85) contrast(1.1) saturate(0.6)";
-        }
-      }, 3000);
-
-      // ── Zones crew — taille + glow dynamiques ────────────────────────────
-      crewZones.forEach((zone) => {
-        const isBastion  = (zone as CrewZoneRich & { is_bastion?: boolean }).is_bastion ?? false;
-        const col        = zone.crew?.color ?? "#FFD600";
-        const members    = zone.crew?.member_count ?? 1;
-        const rep        = zone.crew?.reputation ?? 0;
-        const glow       = computeGlowIntensity(members);
-        const fillOp     = isBastion ? 0.12 : 0.04 + glow * 0.10;
-        const strokeOp   = isBastion ? 1.0  : 0.3 + glow * 0.5;
-        const weight     = isBastion ? 3.0  : 1 + glow * 2.5;
-
-        // Classe CSS pour l'animation selon taille
-        const isMega = members >= 20;
-        const isBig  = members >= 10;
-        const cssClass = isMega ? "crew-zone-mega" : isBig ? "crew-zone-glow" : "";
-
-        // Cercle principal
-        const circle = L.circle([zone.lat, zone.lng], {
-          radius:      zone.radius,
-          color:       col,
-          fillColor:   col,
-          fillOpacity: fillOp,
-          weight,
-          opacity:     strokeOp,
-          dashArray:   members >= 10 ? undefined : "6 5",
-          className:   cssClass,
-        }).addTo(map);
-
-        // Halo externe pour les mega-crews (>= 20 membres)
-        if (isMega) {
-          L.circle([zone.lat, zone.lng], {
-            radius:      zone.radius * 1.15,
-            color:       col,
-            fillColor:   "transparent",
-            fillOpacity: 0,
-            weight:      0.8,
-            opacity:     0.2,
-            dashArray:   "3 8",
-          }).addTo(map);
         }
 
-        // Anneau externe bastion
-        if (isBastion) {
-          L.circle([zone.lat, zone.lng], {
-            radius: zone.radius * 1.25,
-            color: col, fillColor: "transparent", fillOpacity: 0,
-            weight: 1.5, opacity: 0.4, dashArray: "4 6",
-          }).addTo(map);
-        }
-
-        // Label flottant : emoji + tag + members
-        const labelW = isBastion ? 88 : 72 + (members >= 10 ? 8 : 0);
-        const tagSvg = [
-          `<svg xmlns="http://www.w3.org/2000/svg" width="${labelW}" height="28">`,
-          `<rect x="0" y="0" width="${labelW}" height="28" rx="7" fill="#04040A" stroke="${col}" stroke-width="${isBig ? 1.5 : 1}" opacity="${isBig ? 0.92 : 0.78}"/>`,
-          isBig
-            ? `<circle cx="14" cy="14" r="4" fill="${col}" opacity="0.85"/>`
-            : `<circle cx="14" cy="14" r="3" fill="${col}" opacity="0.5"/>`,
-          `<text x="${labelW / 2}" y="18" text-anchor="middle" font-size="${isBastion ? 12 : isBig ? 11 : 10}" fill="${col}" font-weight="900" font-family="system-ui,sans-serif">${isBastion ? "🏰 " : (zone.crew?.emoji ?? "") + " "}${zone.crew?.tag ?? ""} · ${isBastion ? "BASE" : members}</text>`,
-          `</svg>`,
-        ].join("");
-        const labelIcon = L.icon({
-          iconUrl: "data:image/svg+xml," + encodeURIComponent(tagSvg),
-          iconSize: [labelW, 28], iconAnchor: [labelW / 2, 14],
-        });
-        L.marker([zone.lat, zone.lng], { icon: labelIcon, interactive: false }).addTo(map);
-
-        // Popup info au clic sur le cercle
-        (circle as unknown as { bindPopup: (html: string) => void }).bindPopup(
-          `<div style="font-family:system-ui;padding:4px">
-            <b style="color:${col}">${isBastion ? "🏰 " : ""}${zone.crew?.emoji} ${zone.crew?.tag ?? "CREW"}</b>${isBastion ? ' <span style="font-size:10px;color:#FFD600">BASTION</span>' : ""}<br/>
-            <span style="color:#9A968E;font-size:11px">${zone.name}</span><br/>
-            <span style="font-size:12px">👥 ${members} membres · ⭐ ${rep} rep</span>
-          </div>`
-        );
+        onReady();
       });
 
-      // ── Points joueurs colorés par crew ──────────────────────────────────
-      players.forEach((p) => {
-        const dotColor = p.crew_color ?? STATUS_CONFIG[p.status]?.color ?? "#FFD600";
-        const radius   = p.is_star ? 9 : 6;
-        const name     = p.display_name.split(" ")[0];
-
-        // Dot SVG : cercle coloré + halo pour les stars
-        const svgSize = p.is_star ? 48 : 32;
-        const cx = svgSize / 2;
-        const svg = [
-          `<svg xmlns="http://www.w3.org/2000/svg" width="${svgSize}" height="${svgSize + 14}">`,
-          p.is_star ? `<circle cx="${cx}" cy="${cx}" r="${cx - 2}" fill="${dotColor}" opacity="0.18"/>` : "",
-          `<circle cx="${cx}" cy="${cx}" r="${radius}" fill="${dotColor}" stroke="#04040A" stroke-width="2"/>`,
-          p.crew_tag ? `<rect x="${cx - p.crew_tag.length * 3.2 - 2}" y="${svgSize + 1}" width="${p.crew_tag.length * 6.4 + 4}" height="11" rx="3" fill="#04040A" opacity="0.85"/>
-          <text x="${cx}" y="${svgSize + 10}" text-anchor="middle" font-size="8" fill="${dotColor}" font-weight="900" font-family="system-ui,sans-serif">${p.crew_tag}</text>` : "",
-          `</svg>`,
-        ].join("");
-        const icon = L.icon({
-          iconUrl: "data:image/svg+xml," + encodeURIComponent(svg),
-          iconSize: [svgSize, svgSize + 14],
-          iconAnchor: [cx, cx],
-        });
-        const marker = L.marker([p.lat, p.lng], { icon }).addTo(map);
-        marker.on("click", () => onPlayerClick(p.id));
-        marker.bindTooltip(
-          `<b style="color:${dotColor}">${name}</b>${p.crew_tag ? ` <span style="opacity:.6">[${p.crew_tag}]</span>` : ""}`,
-          { permanent: false, direction: "top", className: "mylife-tooltip" }
-        );
-        markersRef.current[p.id] = marker;
-      });
-
-      // Ma position
-      if (myLat && myLng) {
-        L.circleMarker([myLat, myLng], {
-          radius: 10, color: "#FFD600", fillColor: "#FFD600",
-          fillOpacity: 0.9, weight: 3,
-        }).addTo(map);
-        L.circle([myLat, myLng], {
-          radius: 80, color: "#FFD600", fillColor: "#FFD600",
-          fillOpacity: 0.06, weight: 1, dashArray: "5 5",
-        }).addTo(map);
-      }
-
-      onReady();
+      map.on("error", (e: unknown) => console.warn("[MapLibre]", e));
     });
 
     return () => {
@@ -423,49 +374,26 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
     };
   }, []); // mount once
 
-  // Mise à jour joueurs quand ils changent — replace uniquement le marqueur modifié
+  // Mise à jour joueurs quand ils changent
   useEffect(() => {
-    if (!mapRef.current || !leafletLoaded) return;
-    type LMarker = {
-      addTo: (map: unknown) => LMarker;
-      on: (e: string, h: () => void) => void;
-      remove: () => void;
-      bindTooltip: (t: string, opts: object) => void;
-    };
-    const L = (window as unknown as { L: unknown }).L as {
-      marker: (coords: number[], opts: object) => LMarker;
-      icon: (opts: object) => unknown;
-    };
+    const map = mapRef.current as any;
+    const gl = glRef.current as any;
+    if (!map || !gl) return;
 
-    // Supprimer tous les anciens
-    Object.values(markersRef.current).forEach((m) => (m as { remove: () => void }).remove());
+    Object.values(markersRef.current).forEach((m) => m.remove());
     markersRef.current = {};
 
     players.forEach((p) => {
       const dotColor = p.crew_color ?? STATUS_CONFIG[p.status]?.color ?? "#FFD600";
-      const radius   = p.is_star ? 9 : 6;
-      const name     = p.display_name.split(" ")[0];
-      const svgSize  = p.is_star ? 48 : 32;
-      const cx = svgSize / 2;
-      const svg = [
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${svgSize}" height="${svgSize + 14}">`,
-        p.is_star ? `<circle cx="${cx}" cy="${cx}" r="${cx - 2}" fill="${dotColor}" opacity="0.18"/>` : "",
-        `<circle cx="${cx}" cy="${cx}" r="${radius}" fill="${dotColor}" stroke="#04040A" stroke-width="2"/>`,
-        p.crew_tag ? `<rect x="${cx - p.crew_tag.length * 3.2 - 2}" y="${svgSize + 1}" width="${p.crew_tag.length * 6.4 + 4}" height="11" rx="3" fill="#04040A" opacity="0.85"/>
-        <text x="${cx}" y="${svgSize + 10}" text-anchor="middle" font-size="8" fill="${dotColor}" font-weight="900" font-family="system-ui,sans-serif">${p.crew_tag}</text>` : "",
-        `</svg>`,
-      ].join("");
-      const icon = L.icon({
-        iconUrl: "data:image/svg+xml," + encodeURIComponent(svg),
-        iconSize: [svgSize, svgSize + 14],
-        iconAnchor: [cx, cx],
-      });
-      const marker = L.marker([p.lat, p.lng], { icon }).addTo(mapRef.current);
-      marker.on("click", () => onPlayerClick(p.id));
-      marker.bindTooltip(
-        `<b style="color:${dotColor}">${name}</b>${p.crew_tag ? ` <span style="opacity:.6">[${p.crew_tag}]</span>` : ""}`,
-        { permanent: false, direction: "top", className: "mylife-tooltip" }
+      const name = p.display_name.split(" ")[0];
+      const el = playerMarkerEl(p, dotColor);
+      el.addEventListener("click", () => onPlayerClick(p.id));
+      const popup = new gl.Popup({ closeButton: false, offset: 18, className: "mylife-tooltip" }).setHTML(
+        `<b style="color:${dotColor}">${escapeHtml(name)}</b>${p.crew_tag ? ` <span style="opacity:.6">[${escapeHtml(p.crew_tag)}]</span>` : ""}`
       );
+      const marker = new gl.Marker({ element: el }).setLngLat([p.lng, p.lat]).setPopup(popup).addTo(map);
+      el.addEventListener("mouseenter", () => marker.togglePopup());
+      el.addEventListener("mouseleave", () => marker.togglePopup());
       markersRef.current[p.id] = marker;
     });
   }, [players]);
@@ -707,7 +635,7 @@ export default function LifeMapScreen() {
   const [checkinDone,     setCheckinDone]     = useState(false);
   const [takeoverAlert,   setTakeoverAlert]   = useState<TakeoverNotif | null>(null);
   const [roi,             setRoi]             = useState<RoiDeToulouse | null>(null);
-  const flyToRef = useRef<((lat: number, lng: number, zoom?: number) => void) | null>(null);
+  const flyToRef = useRef<((lat: number, lng: number, zoom?: number, pitch?: number, bearing?: number) => void) | null>(null);
 
   const visible = players.filter((p) =>
     p.status !== "ghost" &&
@@ -808,11 +736,11 @@ export default function LifeMapScreen() {
 
   function zoomAnimTrigger(lat: number, lng: number) {
     if (!flyToRef.current) return;
-    // 1. Dézoome sur la ville (1.2s) — vue d'ensemble
-    flyToRef.current(43.6047, 1.4442, 11);
-    // 2. Fly vers la position du joueur (zoom 17 — street level)
+    // 1. Dézoome sur la ville (1.2s) — vue d'ensemble à plat
+    flyToRef.current(43.6047, 1.4442, 11, 0, 0);
+    // 2. Fly vers la position du joueur (zoom 17 — street level, inclinée 3D)
     setTimeout(() => {
-      flyToRef.current?.(lat, lng, 17);
+      flyToRef.current?.(lat, lng, 17, 55, -12);
     }, 1400);
   }
 
