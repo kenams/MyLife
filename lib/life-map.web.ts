@@ -136,13 +136,29 @@ export async function goGhost(userId: string) {
     .eq("user_id", userId);
 }
 
-// ── Fetch tous les joueurs visibles (non-ghost) ───────────────────────────────
+// ── Présence réelle : heartbeat + expiration (voir lib/life-map.ts pour le
+// détail des raisons — dupliqué ici car web utilise ce fichier via la
+// résolution de plateforme Expo `.web.ts`) ────────────────────────────────────
+export const PRESENCE_TTL_MS = 5 * 60 * 1000;
+export const PRESENCE_HEARTBEAT_MS = 60 * 1000;
+
+export async function heartbeatPresence(userId: string, status: MapStatus) {
+  if (!supabase || status === "ghost") return;
+  await supabase.from("life_map_players").update({ status }).eq("user_id", userId);
+}
+
+export function isPresenceFresh(updatedAt: string, now = Date.now()): boolean {
+  return now - new Date(updatedAt).getTime() < PRESENCE_TTL_MS;
+}
+
+// ── Fetch tous les joueurs visibles (non-ghost, présence fraîche) ────────────
 export async function fetchAllPlayers(): Promise<MapPlayer[]> {
   if (!supabase) return MOCK_PLAYERS;
   const { data, error } = await supabase
     .from("life_map_players")
     .select("*")
     .neq("status", "ghost")
+    .gt("updated_at", new Date(Date.now() - PRESENCE_TTL_MS).toISOString())
     .order("updated_at", { ascending: false })
     .limit(200);
   if (error || !data || data.length === 0) return MOCK_PLAYERS;

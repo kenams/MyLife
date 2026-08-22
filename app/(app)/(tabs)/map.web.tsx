@@ -10,6 +10,7 @@ import { hapticImpact } from "@/lib/safe-haptics";
 import {
   goGhost, MOCK_PLAYERS, fetchAllPlayers,
   publishPosition, requestAndGetLocation, STATUS_CONFIG, subscribeToMap,
+  heartbeatPresence, isPresenceFresh, PRESENCE_HEARTBEAT_MS,
 } from "@/lib/life-map";
 import type { MapPlayer, MapStatus } from "@/lib/life-map";
 import {
@@ -637,13 +638,24 @@ export default function LifeMapScreen() {
   const [roi,             setRoi]             = useState<RoiDeToulouse | null>(null);
   const flyToRef = useRef<((lat: number, lng: number, zoom?: number, pitch?: number, bearing?: number) => void) | null>(null);
 
+  // Recalculée toutes les 20s pour faire disparaître localement les joueurs
+  // dont la présence a expiré, même sans nouvel événement Realtime (un client
+  // qui ferme l'app sans repasser Ghost ne pousse plus aucune mutation).
+  const [presenceTick, setPresenceTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setPresenceTick((t) => t + 1), 20_000);
+    return () => clearInterval(id);
+  }, []);
+
   const visible = players.filter((p) =>
     p.status !== "ghost" &&
     !blocked.includes(p.user_id) &&
+    (p.is_npc || isPresenceFresh(p.updated_at)) &&
     (filter === "all" || p.status === filter)
   );
   const visibleRealCount = visible.filter((p) => !p.is_npc).length;
   const visibleNpcCount = visible.length - visibleRealCount;
+  void presenceTick; // dépendance volontaire pour forcer le recalcul périodique
 
   // Zones crew + détection guerres
   useEffect(() => {
@@ -679,6 +691,23 @@ export default function LifeMapScreen() {
     if (!mapReady || !myLocation || !flyToRef.current) return;
     flyToRef.current(myLocation.lat, myLocation.lng, 17);
   }, [mapReady]); // une seule fois au montage
+
+  // Heartbeat de présence — retouche updated_at pendant que la map est ouverte
+  // et que le joueur n'est pas Ghost, pour que sa ligne reste dans la fenêtre
+  // de fraîcheur RLS (5 min). S'arrête net au démontage : fermer l'onglet ou
+  // quitter l'écran suffit à laisser la présence expirer naturellement.
+  useEffect(() => {
+    if (!myLocation || myStatus === "ghost") return;
+    let cancelled = false;
+    async function tick() {
+      const { data: authData } = await supabase?.auth.getUser() ?? { data: null };
+      const uid = authData?.user?.id ?? avatar?.displayName;
+      if (!cancelled && uid) await heartbeatPresence(uid, myStatus);
+    }
+    void tick();
+    const id = setInterval(() => void tick(), PRESENCE_HEARTBEAT_MS);
+    return () => { cancelled = true; clearInterval(id); };
+  }, [myLocation, myStatus, avatar?.displayName]);
 
   // Fetch initial + Realtime
   useEffect(() => {

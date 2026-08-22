@@ -134,13 +134,33 @@ export async function goGhost(userId: string) {
     .eq("user_id", userId);
 }
 
-// ── Fetch tous les joueurs visibles (non-ghost) ───────────────────────────────
+// ── Présence réelle : heartbeat + expiration ──────────────────────────────────
+// Un joueur qui ferme l'app sans repasser en Ghost ne doit pas rester affiché
+// indéfiniment. Le heartbeat retouche `updated_at` (trigger DB) toutes les
+// PRESENCE_HEARTBEAT_MS ; toute ligne plus vieille que PRESENCE_TTL_MS est
+// exclue par la RLS côté serveur (voir migration presence_hardening) et
+// filtrée une seconde fois côté client pour une disparition visuelle fluide
+// sans attendre un nouveau fetch.
+export const PRESENCE_TTL_MS = 5 * 60 * 1000;
+export const PRESENCE_HEARTBEAT_MS = 60 * 1000;
+
+export async function heartbeatPresence(userId: string, status: MapStatus) {
+  if (!supabase || status === "ghost") return;
+  await supabase.from("life_map_players").update({ status }).eq("user_id", userId);
+}
+
+export function isPresenceFresh(updatedAt: string, now = Date.now()): boolean {
+  return now - new Date(updatedAt).getTime() < PRESENCE_TTL_MS;
+}
+
+// ── Fetch tous les joueurs visibles (non-ghost, présence fraîche) ────────────
 export async function fetchAllPlayers(): Promise<MapPlayer[]> {
   if (!supabase) return MOCK_PLAYERS;
   const { data, error } = await supabase
     .from("life_map_players")
     .select("*")
     .neq("status", "ghost")
+    .gt("updated_at", new Date(Date.now() - PRESENCE_TTL_MS).toISOString())
     .order("updated_at", { ascending: false })
     .limit(200);
   if (error || !data || data.length === 0) return MOCK_PLAYERS;
