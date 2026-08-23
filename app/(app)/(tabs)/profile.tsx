@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import { fetchEventRewardTotals } from "@/lib/flash-events";
 import { Animated, Easing, Pressable, ScrollView, Text, View } from "react-native";
 
 import type { ShiftRecord } from "@/lib/types";
@@ -239,6 +240,10 @@ export default function ProfileScreen() {
   const xpPct       = (xpInLevel / XP_PER_LEVEL) * 100;
 
   const [showShareCard, setShowShareCard] = useState(false);
+  const [eventRewards, setEventRewards] = useState({ xp: 0, money: 0 });
+  useEffect(() => {
+    fetchEventRewardTotals().then(setEventRewards);
+  }, []);
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -304,6 +309,11 @@ export default function ProfileScreen() {
               <Text style={{ color: L.muted, fontSize: 10, marginTop: 2 }}>
                 {sessionData?.email ?? "Mode local"}
               </Text>
+              {eventRewards.xp > 0 && (
+                <Text style={{ color: L.orange, fontSize: 10, marginTop: 2, fontWeight: "700" }}>
+                  🎉 +{eventRewards.xp} XP · +{eventRewards.money} BL via events IRL
+                </Text>
+              )}
             </View>
           </View>
 

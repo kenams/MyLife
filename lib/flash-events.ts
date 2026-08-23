@@ -44,11 +44,48 @@ export function subscribeToFlashEvents(cb: (evt: FlashEvent) => void) {
     .subscribe();
 }
 
-export async function joinFlashEvent(eventId: string, playerName: string, playerEmoji: string) {
-  if (!supabase) return;
-  await supabase.from("flash_event_participants").insert({
-    event_id: eventId, player_name: playerName, player_emoji: playerEmoji,
+export async function joinFlashEvent(eventId: string, _playerName?: string, _playerEmoji?: string) {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { error } = await supabase.rpc("join_flash_event", { p_event_id: eventId });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function leaveFlashEvent(eventId: string) {
+  if (!supabase) return false;
+  const { error } = await supabase.rpc("leave_flash_event", { p_event_id: eventId });
+  return !error;
+}
+
+export async function checkinFlashEvent(eventId: string, lat: number, lng: number) {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { error } = await supabase.rpc("checkin_flash_event", {
+    p_event_id: eventId, p_lat: lat, p_lng: lng,
   });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function claimEventReward(eventId: string): Promise<{
+  ok: boolean; xp?: number; money?: number; error?: string;
+}> {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { data, error } = await supabase.rpc("claim_event_reward", { p_event_id: eventId });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, xp: data?.xp_awarded, money: data?.money_awarded };
+}
+
+/** Total XP + argent accumulés via les events IRL — source de vérité serveur. */
+export async function fetchEventRewardTotals(): Promise<{ xp: number; money: number }> {
+  if (!supabase) return { xp: 0, money: 0 };
+  const { data } = await supabase.from("event_reward_ledger").select("xp_awarded, money_awarded");
+  return (data ?? []).reduce(
+    (acc: { xp: number; money: number }, row: { xp_awarded: number; money_awarded: number }) => ({
+      xp: acc.xp + (row.xp_awarded ?? 0),
+      money: acc.money + (row.money_awarded ?? 0),
+    }),
+    { xp: 0, money: 0 }
+  );
 }
 
 export function getTimeLeft(endsAt: string): string {
@@ -84,36 +121,29 @@ export async function createRassemblement(
   location: string,
   lat: number,
   lng: number,
-  createdBy: string,
+  _createdBy?: string,
 ): Promise<FlashEvent | null> {
   if (!supabase) return null;
   const starts = new Date().toISOString();
   const ends = new Date(Date.now() + 2 * 3600_000).toISOString();
-  const { data, error } = await supabase
-    .from("flash_events")
-    .insert({
-      title: `🔥 Rassemblement — ${location}`,
-      description: `Objectif : réunir ${RASSEMBLEMENT_TARGET} joueurs physiquement à ${location}. Tu as 2h. Sois là.`,
-      emoji: "🔥",
-      location,
-      location_lat: lat,
-      location_lng: lng,
-      starts_at: starts,
-      ends_at: ends,
-      reward_xp: 500,
-      reward_money: 1000,
-      max_players: RASSEMBLEMENT_TARGET,
-      kind: "rassemblement",
-      is_active: true,
-    })
-    .select()
-    .single();
+  const { data, error } = await supabase.rpc("create_flash_event", {
+    p_title: `🔥 Rassemblement — ${location}`,
+    p_description: `Objectif : réunir ${RASSEMBLEMENT_TARGET} joueurs physiquement à ${location}. Tu as 2h. Sois là.`,
+    p_emoji: "🔥",
+    p_location: location,
+    p_lat: lat,
+    p_lng: lng,
+    p_starts_at: starts,
+    p_ends_at: ends,
+    p_reward_xp: 500,
+    p_reward_money: 1000,
+    p_max_players: RASSEMBLEMENT_TARGET,
+    p_kind: "rassemblement",
+  });
   if (error || !data) return null;
 
   // Créateur auto-inscrit
-  await supabase.from("flash_event_participants").insert({
-    event_id: data.id, player_name: createdBy, player_emoji: "⚡",
-  });
+  await supabase.rpc("join_flash_event", { p_event_id: data.id });
 
   return data as FlashEvent;
 }
