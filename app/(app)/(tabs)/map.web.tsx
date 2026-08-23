@@ -25,6 +25,7 @@ import { sendLocalNotification } from "@/lib/push-notifications";
 import { blockUser } from "@/lib/safety";
 import { requestFriend, blockRelation } from "@/lib/relationships";
 import { sendFeeling } from "@/lib/match-chat";
+import { claimTravelReward } from "@/lib/travel";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
 import { supabase } from "@/lib/supabase";
@@ -411,11 +412,13 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
 }
 
 // ── Player Sheet ──────────────────────────────────────────────────────────────
-function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock }: {
+function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock, onGoTo, traveling }: {
   player: MapPlayer | null; myCrewId: string | null; onClose: () => void;
   onInvite: (p: MapPlayer) => void;
   onReport: (p: MapPlayer) => void;
   onBlock:  (p: MapPlayer) => void;
+  onGoTo: (p: MapPlayer) => void;
+  traveling: boolean;
 }) {
   const scale = useRef(new Animated.Value(0.95)).current;
   const [addState, setAddState] = useState<"idle" | "loading" | "sent" | "error">("idle");
@@ -529,6 +532,21 @@ function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock }:
             <Text style={{ color: C.muted, fontSize: 13 }}>{freshness}</Text>
           </View>
         </View>
+
+        {!player.is_npc && (
+          <Pressable
+            onPress={() => { onGoTo(player); onClose(); }}
+            disabled={traveling}
+            style={{
+              backgroundColor: traveling ? C.muted + "18" : C.gold + "18", borderRadius: 14,
+              paddingVertical: 13, alignItems: "center",
+              borderWidth: 1, borderColor: traveling ? C.border : C.gold + "45",
+            }}>
+            <Text style={{ color: traveling ? C.muted : C.gold, fontSize: 13, fontWeight: "900" }}>
+              🚶 Rejoindre à pied · +XP trajet réel
+            </Text>
+          </Pressable>
+        )}
 
         {player.status !== "ghost" && (
           <View style={{ gap: 10 }}>
@@ -732,6 +750,70 @@ export default function LifeMapScreen() {
 
   useEffect(() => {
     getMyOfficerCrewId().then(setMyCrewId);
+  }, []);
+
+  // ── Trajet réel à pied vers un autre joueur ──────────────────────────────
+  // Aucune téléportation : on suit la position GPS réelle (watchPosition),
+  // on cumule la distance effectivement parcourue entre chaque mise à jour,
+  // et l'arrivée + la récompense ne se déclenchent que quand on est vraiment
+  // à proximité de la cible.
+  type TravelSession = {
+    targetId: string; targetName: string; targetLat: number; targetLng: number;
+    destinationVerified: boolean; startAt: number; lastLat: number; lastLng: number;
+    distanceCovered: number; watchId: number;
+  };
+  const [travel, setTravel] = useState<TravelSession | null>(null);
+  const [travelResult, setTravelResult] = useState<{ xp: number } | null>(null);
+  const travelRef = useRef<TravelSession | null>(null);
+  travelRef.current = travel;
+
+  function handleGoTo(p: MapPlayer) {
+    if (!myLocation || typeof navigator === "undefined" || !navigator.geolocation) return;
+    hapticImpact("medium");
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude } = pos.coords;
+        setTravel((prev) => {
+          if (!prev) return prev;
+          const step = haversineMeters({ lat: prev.lastLat, lng: prev.lastLng }, { lat: latitude, lng: longitude });
+          const next: TravelSession = {
+            ...prev, lastLat: latitude, lastLng: longitude,
+            distanceCovered: prev.distanceCovered + (step > 3 ? step : 0), // ignore le bruit GPS < 3m
+          };
+          const remaining = haversineMeters({ lat: latitude, lng: longitude }, { lat: next.targetLat, lng: next.targetLng });
+          if (remaining < 30 && next.distanceCovered >= 80) {
+            navigator.geolocation.clearWatch(next.watchId);
+            const durationS = (Date.now() - next.startAt) / 1000;
+            claimTravelReward(next.targetId, next.distanceCovered, durationS, next.destinationVerified)
+              .then((res) => { if (res.ok) setTravelResult({ xp: res.xp ?? 0 }); });
+            hapticImpact("heavy");
+            return null;
+          }
+          return next;
+        });
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5000 }
+    );
+    setTravel({
+      targetId: p.user_id, targetName: p.display_name, targetLat: p.lat, targetLng: p.lng,
+      destinationVerified: p.location_verified, startAt: Date.now(),
+      lastLat: myLocation.lat, lastLng: myLocation.lng, distanceCovered: 0, watchId,
+    });
+    zoomAnimTrigger(myLocation.lat, myLocation.lng);
+  }
+
+  function cancelTravel() {
+    if (travel && typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.clearWatch(travel.watchId);
+    }
+    setTravel(null);
+  }
+
+  useEffect(() => () => {
+    if (travelRef.current && typeof navigator !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.clearWatch(travelRef.current.watchId);
+    }
   }, []);
 
   // Recalculée toutes les 20s pour faire disparaître localement les joueurs
@@ -1144,7 +1226,53 @@ export default function LifeMapScreen() {
       <PlayerSheet player={selected} myCrewId={myCrewId} onClose={() => setSelected(null)}
         onInvite={handleInvite}
         onReport={(p) => { setSelected(null); setReportTarget(p); }}
-        onBlock={handleBlock} />
+        onBlock={handleBlock}
+        onGoTo={handleGoTo}
+        traveling={!!travel} />
+
+      {/* ── TRAJET EN COURS ──────────────────────────────────────────────── */}
+      {travel && (
+        <View style={{
+          position: "absolute", top: 108, left: 16, right: 16, zIndex: 20,
+          backgroundColor: C.card, borderRadius: 16, padding: 14,
+          borderWidth: 1.5, borderColor: C.gold + "50",
+          flexDirection: "row", alignItems: "center", gap: 12,
+        }}>
+          <Text style={{ fontSize: 24 }}>🚶</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: C.gold, fontSize: 13, fontWeight: "900" }}>
+              En route vers {travel.targetName}
+            </Text>
+            <Text style={{ color: C.soft, fontSize: 11, marginTop: 2 }}>
+              {Math.round(travel.distanceCovered)} m parcourus · reste{" "}
+              {Math.max(0, Math.round(haversineMeters({ lat: travel.lastLat, lng: travel.lastLng }, { lat: travel.targetLat, lng: travel.targetLng })))} m
+            </Text>
+          </View>
+          <Pressable onPress={cancelTravel} style={{ padding: 8 }}>
+            <Text style={{ color: C.muted, fontSize: 18 }}>×</Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* ── RÉSULTAT DU TRAJET ───────────────────────────────────────────── */}
+      {travelResult && (
+        <View style={{
+          position: "absolute", top: 108, left: 16, right: 16, zIndex: 20,
+          backgroundColor: C.green + "18", borderRadius: 16, padding: 14,
+          borderWidth: 1.5, borderColor: C.green + "50",
+          flexDirection: "row", alignItems: "center", gap: 12,
+        }}>
+          <Text style={{ fontSize: 24 }}>🏁</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: C.green, fontSize: 13, fontWeight: "900" }}>
+              Arrivé ! +{travelResult.xp} XP trajet réel
+            </Text>
+          </View>
+          <Pressable onPress={() => setTravelResult(null)} style={{ padding: 8 }}>
+            <Text style={{ color: C.muted, fontSize: 18 }}>×</Text>
+          </Pressable>
+        </View>
+      )}
 
       {reportTarget && (
         <ReportModal visible={!!reportTarget}
