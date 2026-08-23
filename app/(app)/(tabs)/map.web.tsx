@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   Animated, Modal, Pressable, ScrollView,
-  Text, View, ActivityIndicator,
+  Text, View, ActivityIndicator, TextInput,
 } from "react-native";
 import { router } from "expo-router";
 
@@ -26,6 +26,8 @@ import { blockUser } from "@/lib/safety";
 import { requestFriend, blockRelation } from "@/lib/relationships";
 import { sendFeeling } from "@/lib/match-chat";
 import { claimTravelReward } from "@/lib/travel";
+import { sendNpcMessage } from "@/lib/npc-chat";
+import type { NpcChatTurn } from "@/lib/npc-chat";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
 import { supabase } from "@/lib/supabase";
@@ -412,13 +414,14 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
 }
 
 // ── Player Sheet ──────────────────────────────────────────────────────────────
-function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock, onGoTo, traveling }: {
+function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock, onGoTo, traveling, onChatNpc }: {
   player: MapPlayer | null; myCrewId: string | null; onClose: () => void;
   onInvite: (p: MapPlayer) => void;
   onReport: (p: MapPlayer) => void;
   onBlock:  (p: MapPlayer) => void;
   onGoTo: (p: MapPlayer) => void;
   traveling: boolean;
+  onChatNpc: (p: MapPlayer) => void;
 }) {
   const scale = useRef(new Animated.Value(0.95)).current;
   const [addState, setAddState] = useState<"idle" | "loading" | "sent" | "error">("idle");
@@ -544,6 +547,20 @@ function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock, o
             }}>
             <Text style={{ color: traveling ? C.muted : C.gold, fontSize: 13, fontWeight: "900" }}>
               🚶 Rejoindre à pied · +XP trajet réel
+            </Text>
+          </Pressable>
+        )}
+
+        {player.is_npc && (
+          <Pressable
+            onPress={() => { onChatNpc(player); onClose(); }}
+            style={{
+              backgroundColor: C.purple + "18", borderRadius: 14,
+              paddingVertical: 13, alignItems: "center",
+              borderWidth: 1, borderColor: C.purple + "45",
+            }}>
+            <Text style={{ color: C.purple, fontSize: 13, fontWeight: "900" }}>
+              💬 Discuter (PNJ)
             </Text>
           </Pressable>
         )}
@@ -764,6 +781,31 @@ export default function LifeMapScreen() {
   };
   const [travel, setTravel] = useState<TravelSession | null>(null);
   const [travelResult, setTravelResult] = useState<{ xp: number } | null>(null);
+
+  // ── Chat PNJ (IA réelle via /api/npc-chat, jamais persisté) ─────────────
+  const [npcChatTarget, setNpcChatTarget] = useState<MapPlayer | null>(null);
+  const [npcHistory, setNpcHistory] = useState<NpcChatTurn[]>([]);
+  const [npcInput, setNpcInput] = useState("");
+  const [npcSending, setNpcSending] = useState(false);
+  const [npcError, setNpcError] = useState<string | null>(null);
+
+  async function sendToNpc() {
+    if (!npcChatTarget || !npcInput.trim() || npcSending) return;
+    const text = npcInput.trim();
+    setNpcInput("");
+    setNpcError(null);
+    const nextHistory: NpcChatTurn[] = [...npcHistory, { role: "me", text }];
+    setNpcHistory(nextHistory);
+    setNpcSending(true);
+    hapticImpact("light");
+    const res = await sendNpcMessage(npcChatTarget.display_name, npcChatTarget.last_action, npcHistory, text);
+    if (res.ok && res.reply) {
+      setNpcHistory((prev) => [...prev, { role: "npc", text: res.reply as string }]);
+    } else {
+      setNpcError(res.error ?? "Erreur PNJ");
+    }
+    setNpcSending(false);
+  }
   const travelRef = useRef<TravelSession | null>(null);
   travelRef.current = travel;
 
@@ -1228,7 +1270,8 @@ export default function LifeMapScreen() {
         onReport={(p) => { setSelected(null); setReportTarget(p); }}
         onBlock={handleBlock}
         onGoTo={handleGoTo}
-        traveling={!!travel} />
+        traveling={!!travel}
+        onChatNpc={(p) => { setNpcChatTarget(p); setNpcHistory([]); setNpcError(null); }} />
 
       {/* ── TRAJET EN COURS ──────────────────────────────────────────────── */}
       {travel && (
@@ -1284,6 +1327,75 @@ export default function LifeMapScreen() {
       {showPicker && (
         <StatusPicker current={myStatus} onChange={handleStatusChange}
           onClose={() => setShowPicker(false)} />
+      )}
+
+      {/* ── CHAT PNJ (IA réelle) ─────────────────────────────────────────── */}
+      {npcChatTarget && (
+        <Modal transparent animationType="slide" visible onRequestClose={() => setNpcChatTarget(null)}>
+          <Pressable style={{ flex: 1 }} onPress={() => setNpcChatTarget(null)} />
+          <View style={{
+            backgroundColor: C.card, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+            maxHeight: "70%", borderTopWidth: 1, borderColor: C.border,
+          }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10,
+              padding: 16, borderBottomWidth: 1, borderColor: C.border }}>
+              <Text style={{ fontSize: 22 }}>{npcChatTarget.avatar_emoji}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: C.text, fontSize: 15, fontWeight: "900" }}>{npcChatTarget.display_name}</Text>
+                <Text style={{ color: C.purple, fontSize: 10, fontWeight: "800" }}>PNJ · réponses générées par IA</Text>
+              </View>
+              <Pressable onPress={() => setNpcChatTarget(null)} style={{ padding: 6 }}>
+                <Text style={{ color: C.muted, fontSize: 18 }}>×</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ padding: 16, gap: 10 }}>
+              {npcHistory.length === 0 && (
+                <Text style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 20 }}>
+                  Lance la conversation avec {npcChatTarget.display_name}
+                </Text>
+              )}
+              {npcHistory.map((turn, i) => (
+                <View key={i} style={{ alignSelf: turn.role === "me" ? "flex-end" : "flex-start", maxWidth: "80%" }}>
+                  <View style={{
+                    backgroundColor: turn.role === "me" ? C.gold : "#08080F",
+                    borderRadius: 14, paddingHorizontal: 12, paddingVertical: 8,
+                    borderWidth: turn.role === "me" ? 0 : 1, borderColor: C.border,
+                  }}>
+                    <Text style={{ color: turn.role === "me" ? "#04040A" : C.text, fontSize: 13 }}>{turn.text}</Text>
+                  </View>
+                </View>
+              ))}
+              {npcSending && (
+                <Text style={{ color: C.muted, fontSize: 12 }}>{npcChatTarget.display_name} écrit…</Text>
+              )}
+              {npcError && (
+                <Text style={{ color: C.red, fontSize: 12 }}>{npcError}</Text>
+              )}
+            </ScrollView>
+
+            <View style={{ flexDirection: "row", gap: 8, padding: 16, paddingBottom: 32,
+              borderTopWidth: 1, borderColor: C.border, alignItems: "center" }}>
+              <View style={{ flex: 1, backgroundColor: "#08080F", borderRadius: 20,
+                borderWidth: 1, borderColor: C.border, paddingHorizontal: 14, paddingVertical: 10 }}>
+                <TextInput
+                  value={npcInput}
+                  onChangeText={setNpcInput}
+                  onSubmitEditing={sendToNpc}
+                  placeholder="Écris un message..."
+                  placeholderTextColor={C.muted}
+                  style={{ color: C.text, fontSize: 14 }}
+                />
+              </View>
+              <Pressable onPress={sendToNpc} disabled={!npcInput.trim() || npcSending}
+                style={{ width: 42, height: 42, borderRadius: 21,
+                  backgroundColor: npcInput.trim() ? C.purple : "#08080F",
+                  alignItems: "center", justifyContent: "center" }}>
+                <Text style={{ fontSize: 17 }}>➤</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
       )}
 
       {/* ── FEATURE VIRALE 1 — Alerte prise de bastion ──────────────────── */}
