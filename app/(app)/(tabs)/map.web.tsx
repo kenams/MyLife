@@ -746,6 +746,11 @@ export default function LifeMapScreen() {
   const playerLevel      = useGameStore((s) => s.playerLevel ?? 1);
   const markQuestAction  = useGameStore((s) => s.markQuestAction);
 
+  const [myUserId,     setMyUserId]     = useState<string | null>(null);
+  useEffect(() => {
+    supabase?.auth.getUser().then(({ data }) => setMyUserId(data?.user?.id ?? null));
+  }, []);
+
   const [players,      setPlayers]      = useState<MapPlayer[]>([]);
   const [crewZones,    setCrewZones]    = useState<CrewZoneRich[]>([]);
   const [myStatus,     setMyStatus]     = useState<MapStatus>("ghost");
@@ -782,30 +787,40 @@ export default function LifeMapScreen() {
   const [travel, setTravel] = useState<TravelSession | null>(null);
   const [travelResult, setTravelResult] = useState<{ xp: number } | null>(null);
 
-  // ── Chat PNJ (IA réelle via /api/npc-chat, jamais persisté) ─────────────
+  // ── Chat PNJ — moteur local déterministe, LLM en bonus facultatif ───────
   const [npcChatTarget, setNpcChatTarget] = useState<MapPlayer | null>(null);
   const [npcHistory, setNpcHistory] = useState<NpcChatTurn[]>([]);
   const [npcInput, setNpcInput] = useState("");
   const [npcSending, setNpcSending] = useState(false);
   const [npcError, setNpcError] = useState<string | null>(null);
+  const [npcQuickReplies, setNpcQuickReplies] = useState<string[]>([]);
+  const [npcEngine, setNpcEngine] = useState<"local" | "anthropic" | "openai">("local");
 
-  async function sendToNpc() {
-    if (!npcChatTarget || !npcInput.trim() || npcSending) return;
-    const text = npcInput.trim();
+  async function sendToNpcText(text: string) {
+    if (!npcChatTarget || !text.trim() || npcSending || !myUserId) return;
+    const trimmed = text.trim();
     setNpcInput("");
     setNpcError(null);
-    const nextHistory: NpcChatTurn[] = [...npcHistory, { role: "me", text }];
+    setNpcQuickReplies([]);
+    const nextHistory: NpcChatTurn[] = [...npcHistory, { role: "me", text: trimmed }];
     setNpcHistory(nextHistory);
     setNpcSending(true);
     hapticImpact("light");
-    const res = await sendNpcMessage(npcChatTarget.display_name, npcChatTarget.last_action, npcHistory, text);
+    // Délai d'écriture simulé — évite une réponse instantanée irréaliste.
+    await new Promise((r) => setTimeout(r, 450 + Math.random() * 500));
+    const res = await sendNpcMessage(
+      myUserId, npcChatTarget.user_id, npcChatTarget.display_name, npcChatTarget.last_action, npcHistory, trimmed
+    );
     if (res.ok && res.reply) {
       setNpcHistory((prev) => [...prev, { role: "npc", text: res.reply as string }]);
+      setNpcQuickReplies(res.quickReplies ?? []);
+      setNpcEngine(res.engine ?? "local");
     } else {
       setNpcError(res.error ?? "Erreur PNJ");
     }
     setNpcSending(false);
   }
+  const sendToNpc = () => sendToNpcText(npcInput);
   const travelRef = useRef<TravelSession | null>(null);
   travelRef.current = travel;
 
@@ -1271,7 +1286,7 @@ export default function LifeMapScreen() {
         onBlock={handleBlock}
         onGoTo={handleGoTo}
         traveling={!!travel}
-        onChatNpc={(p) => { setNpcChatTarget(p); setNpcHistory([]); setNpcError(null); }} />
+        onChatNpc={(p) => { setNpcChatTarget(p); setNpcHistory([]); setNpcError(null); setNpcQuickReplies([]); setNpcEngine("local"); }} />
 
       {/* ── TRAJET EN COURS ──────────────────────────────────────────────── */}
       {travel && (
@@ -1342,7 +1357,9 @@ export default function LifeMapScreen() {
               <Text style={{ fontSize: 22 }}>{npcChatTarget.avatar_emoji}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={{ color: C.text, fontSize: 15, fontWeight: "900" }}>{npcChatTarget.display_name}</Text>
-                <Text style={{ color: C.purple, fontSize: 10, fontWeight: "800" }}>PNJ · réponses générées par IA</Text>
+                <Text style={{ color: C.purple, fontSize: 10, fontWeight: "800" }}>
+                  🤖 PNJ · personnage fictif · {npcEngine === "local" ? "moteur du jeu" : "IA générative"}
+                </Text>
               </View>
               <Pressable onPress={() => setNpcChatTarget(null)} style={{ padding: 6 }}>
                 <Text style={{ color: C.muted, fontSize: 18 }}>×</Text>
@@ -1373,6 +1390,19 @@ export default function LifeMapScreen() {
                 <Text style={{ color: C.red, fontSize: 12 }}>{npcError}</Text>
               )}
             </ScrollView>
+
+            {npcQuickReplies.length > 0 && !npcSending && (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingHorizontal: 16, paddingVertical: 8 }}>
+                {npcQuickReplies.map((qr, i) => (
+                  <Pressable key={i} onPress={() => sendToNpcText(qr)}
+                    style={{ backgroundColor: "#08080F", borderRadius: 14, borderWidth: 1, borderColor: C.border,
+                      paddingHorizontal: 12, paddingVertical: 8 }}>
+                    <Text style={{ color: C.text, fontSize: 12 }}>{qr}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
 
             <View style={{ flexDirection: "row", gap: 8, padding: 16, paddingBottom: 32,
               borderTopWidth: 1, borderColor: C.border, alignItems: "center" }}>
