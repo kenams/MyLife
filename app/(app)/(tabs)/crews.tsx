@@ -267,11 +267,12 @@ export default function CrewsScreen() {
 
   async function handleTransfer() {
     if (!myCrewId || !transferTarget) return;
+    const targetName = members.find((m) => m.user_id === transferTarget)?.player_name ?? "Le membre";
     setTransferring(true);
-    const result = await transferLeader(myCrewId, playerName, transferTarget);
+    const result = await transferLeader(myCrewId, transferTarget);
     setTransferring(false);
     if (result.ok) {
-      showToast(`👑 ${transferTarget} est maintenant leader`);
+      showToast(`👑 ${targetName} est maintenant leader`);
       setTransferModal(false);
       setTransferTarget(null);
       fetchCrewMembers(myCrewId).then(setMembers);
@@ -957,19 +958,19 @@ export default function CrewsScreen() {
             </Text>
 
             <ScrollView style={{ maxHeight: 280 }} showsVerticalScrollIndicator={false}>
-              {members.filter((m) => m.player_name !== playerName).map((m) => (
-                <Pressable key={m.id} onPress={() => setTransferTarget(m.player_name)}
+              {members.filter((m) => m.player_name !== playerName && m.user_id).map((m) => (
+                <Pressable key={m.id} onPress={() => setTransferTarget(m.user_id ?? null)}
                   style={{ flexDirection: "row", alignItems: "center", gap: 10, padding: 12,
                     borderRadius: 10, marginBottom: 6,
-                    backgroundColor: transferTarget === m.player_name ? C.purple + "20" : C.cardAlt,
+                    backgroundColor: transferTarget === m.user_id ? C.purple + "20" : C.cardAlt,
                     borderWidth: 1,
-                    borderColor: transferTarget === m.player_name ? C.purple + "60" : C.border }}>
+                    borderColor: transferTarget === m.user_id ? C.purple + "60" : C.border }}>
                   <Text style={{ fontSize: 20 }}>{m.player_emoji}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={{ color: C.text, fontSize: 13, fontWeight: "700" }}>{m.player_name}</Text>
                     <Text style={{ color: C.muted, fontSize: 10 }}>{m.role}</Text>
                   </View>
-                  {transferTarget === m.player_name && (
+                  {transferTarget === m.user_id && (
                     <Text style={{ color: C.purple, fontSize: 16 }}>✓</Text>
                   )}
                 </Pressable>

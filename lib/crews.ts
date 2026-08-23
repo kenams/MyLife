@@ -100,46 +100,11 @@ function zonesOverlap(a: CrewZone, b: CrewZone): boolean {
 }
 
 // ── Vérifier conflits et créer guerre si besoin ───────────────────────────────
-export async function checkAndTriggerWars(zones: CrewZoneRich[]): Promise<void> {
-  if (!supabase) return;
-  for (let i = 0; i < zones.length; i++) {
-    for (let j = i + 1; j < zones.length; j++) {
-      const a = zones[i];
-      const b = zones[j];
-      if (a.crew_id === b.crew_id) continue;
-      if (!zonesOverlap(a, b)) continue;
-
-      // Vérifie si une guerre active existe déjà entre ces deux zones
-      const { data: existing } = await supabase
-        .from("crew_wars")
-        .select("id")
-        .eq("zone_a_id", a.id)
-        .eq("zone_b_id", b.id)
-        .eq("status", "active")
-        .maybeSingle();
-      if (existing) continue;
-
-      // Crée la guerre
-      await supabase.from("crew_wars").insert({
-        crew_a_id: a.crew_id, crew_b_id: b.crew_id,
-        zone_a_id: a.id, zone_b_id: b.id,
-      });
-
-      // Flash event automatique
-      await supabase.from("flash_events").insert({
-        title: `⚔️ ${a.crew.tag} vs ${b.crew.tag} — Guerre de territoire`,
-        description: `Les zones de ${a.crew.name ?? a.crew.tag} et ${b.crew.name ?? b.crew.tag} se chevauchent. Rejoins le combat !`,
-        emoji: "⚔️",
-        location: a.name,
-        location_lat: a.lat,
-        location_lng: a.lng,
-        reward_xp: 150,
-        reward_money: 300,
-        kind: "battle",
-        ends_at: new Date(Date.now() + 2 * 3600 * 1000).toISOString(),
-      });
-    }
-  }
+// DÉSACTIVÉ : faisait des .insert() bruts sur crew_wars/flash_events, tables
+// désormais verrouillées (grand ouvertes à l'écriture pour authenticated).
+// À reconstruire en RPC SECURITY DEFINER avant réactivation.
+export async function checkAndTriggerWars(_zones: CrewZoneRich[]): Promise<void> {
+  return;
 }
 
 // ── Ping activité dans la zone (reset decay) ─────────────────────────────────
@@ -212,32 +177,16 @@ export async function joinCrew(
 
 export async function transferLeader(
   crewId: string,
-  currentLeader: string,
-  newLeader: string,
+  newLeaderUserId: string,
 ): Promise<{ ok: boolean; error?: string }> {
   if (!supabase) return { ok: false, error: "Pas de connexion" };
-
-  const { data: target } = await supabase
-    .from("crew_members")
-    .select("id, role")
-    .eq("crew_id", crewId)
-    .eq("player_name", newLeader)
-    .single();
-
-  if (!target) return { ok: false, error: `${newLeader} n'est pas dans le crew.` };
-
-  // Promouvoir le nouveau founder (rôle unifié)
-  await supabase.from("crew_members").update({ role: "founder" }).eq("id", target.id);
-
-  // Rétrograder l'ancien founder en officier
-  await supabase.from("crew_members")
-    .update({ role: "officer" })
-    .eq("crew_id", crewId)
-    .eq("player_name", currentLeader);
-
-  // Mettre à jour le founder dans la table crews
-  await supabase.from("crews").update({ founder: newLeader }).eq("id", crewId);
-
+  // RPC : seul le founder actuel peut transférer, verrouillé côté base
+  // depuis la faille d'auto-promotion trouvée et corrigée (n'importe quel
+  // membre pouvait s'auto-nommer founder via un update direct).
+  const { error } = await supabase.rpc("transfer_crew_leadership", {
+    p_crew_id: crewId, p_new_founder_user_id: newLeaderUserId,
+  });
+  if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
 
