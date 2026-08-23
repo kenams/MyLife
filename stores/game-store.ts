@@ -276,6 +276,7 @@ type GameState = {
   claimDailyReward: () => void;
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: () => void;
+  addSocialNotification: (item: NotificationItem) => void;
   markConversationRead: (conversationId: string) => void;
   resetAll: () => void;
   // Premium
@@ -2340,13 +2341,25 @@ export const useGameStore = create<GameState>()(
             lifeFeed
           };
         }),
-      markNotificationRead: (notificationId) =>
+      markNotificationRead: (notificationId) => {
         set((state) => ({
           notifications: state.notifications.map((item) => (item.id === notificationId ? { ...item, read: true } : item))
-        })),
-      markAllNotificationsRead: () =>
+        }));
+        // Best-effort : si c'est une notif sociale server-side (friend request,
+        // etc.), persiste le "lu" côté base. No-op silencieux sinon (0 ligne
+        // affectée par la RPC si l'id ne correspond à aucune notification
+        // social_notifications de l'utilisateur courant).
+        void supabase?.rpc("mark_notification_read", { notif_id: notificationId });
+      },
+      markAllNotificationsRead: () => {
         set((state) => ({
           notifications: state.notifications.map((item) => ({ ...item, read: true }))
+        }));
+        void supabase?.rpc("mark_all_notifications_read");
+      },
+      addSocialNotification: (item) =>
+        set((state) => ({
+          notifications: appendNotification(state.notifications, item)
         })),
       markConversationRead: (conversationId) =>
         set((state) => ({
