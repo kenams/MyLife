@@ -288,6 +288,30 @@ export async function getMyCrewId(playerName: string): Promise<string | null> {
   return data?.crew_id ?? null;
 }
 
+// Version réelle (auth.uid(), pas player_name) : renvoie le crew dont on est
+// officer/founder — seul cas où on a le droit d'inviter quelqu'un.
+export async function getMyOfficerCrewId(): Promise<string | null> {
+  if (!supabase) return null;
+  const { data: authData } = await supabase.auth.getUser();
+  const uid = authData?.user?.id;
+  if (!uid) return null;
+  const { data } = await supabase
+    .from("crew_members")
+    .select("crew_id")
+    .eq("user_id", uid)
+    .in("role", ["founder", "officer"])
+    .limit(1)
+    .maybeSingle();
+  return data?.crew_id ?? null;
+}
+
+export async function inviteToCrew(crewId: string, targetUserId: string): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { error } = await supabase.rpc("invite_to_crew", { p_crew_id: crewId, p_invitee: targetUserId });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
 export async function getMyCrewZone(crewId: string): Promise<CrewZone | null> {
   if (!supabase) return null;
   const { data } = await supabase

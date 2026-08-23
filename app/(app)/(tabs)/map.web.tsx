@@ -17,6 +17,7 @@ import {
   fetchCrewZones, checkAndTriggerWars,
   computeGlowIntensity, bastionCheckin,
   subscribeToBastionTakeovers, fetchRoiDeToulouse,
+  getMyOfficerCrewId, inviteToCrew,
   type CrewZoneRich, type TakeoverNotif, type RoiDeToulouse,
 } from "@/lib/crews";
 import { startNpcMapEngine, stopNpcMapEngine } from "@/lib/npc-map-engine";
@@ -410,8 +411,8 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
 }
 
 // ── Player Sheet ──────────────────────────────────────────────────────────────
-function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
-  player: MapPlayer | null; onClose: () => void;
+function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock }: {
+  player: MapPlayer | null; myCrewId: string | null; onClose: () => void;
   onInvite: (p: MapPlayer) => void;
   onReport: (p: MapPlayer) => void;
   onBlock:  (p: MapPlayer) => void;
@@ -419,12 +420,22 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
   const scale = useRef(new Animated.Value(0.95)).current;
   const [addState, setAddState] = useState<"idle" | "loading" | "sent" | "error">("idle");
   const [feelState, setFeelState] = useState<"idle" | "loading" | "sent" | "matched" | "error">("idle");
+  const [crewInviteState, setCrewInviteState] = useState<"idle" | "loading" | "sent" | "error">("idle");
   useEffect(() => {
     if (player) Animated.spring(scale, { toValue: 1, tension: 200, friction: 18, useNativeDriver: true }).start();
     setAddState("idle");
     setFeelState("idle");
+    setCrewInviteState("idle");
   }, [player]);
   if (!player) return null;
+
+  async function handleCrewInvite() {
+    if (!player || !myCrewId || player.is_npc || crewInviteState === "loading" || crewInviteState === "sent") return;
+    hapticImpact("light");
+    setCrewInviteState("loading");
+    const res = await inviteToCrew(myCrewId, player.user_id);
+    setCrewInviteState(res.ok ? "sent" : "error");
+  }
 
   async function handleAddFriend() {
     if (!player || player.is_npc || addState === "loading" || addState === "sent") return;
@@ -581,6 +592,27 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
                 </Text>
               </Pressable>
             )}
+            {!player.is_npc && myCrewId && (
+              <Pressable
+                onPress={handleCrewInvite}
+                disabled={crewInviteState === "loading" || crewInviteState === "sent"}
+                style={{
+                  backgroundColor: crewInviteState === "sent" ? C.green + "18" : crewInviteState === "error" ? C.red + "18" : "#08080F",
+                  borderRadius: 14, paddingVertical: 13, alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: crewInviteState === "sent" ? C.green + "50" : crewInviteState === "error" ? C.red + "50" : C.purple + "45",
+                }}>
+                <Text style={{
+                  color: crewInviteState === "sent" ? C.green : crewInviteState === "error" ? C.red : C.purple,
+                  fontSize: 13, fontWeight: "900",
+                }}>
+                  {crewInviteState === "loading" ? "Envoi..."
+                    : crewInviteState === "sent" ? "✓ Invitation envoyée"
+                    : crewInviteState === "error" ? "Erreur — réessayer"
+                    : "🛡️ Inviter dans mon crew"}
+                </Text>
+              </Pressable>
+            )}
           </View>
         )}
         <View style={{ flexDirection: "row", gap: 10 }}>
@@ -695,7 +727,12 @@ export default function LifeMapScreen() {
   const [checkinDone,     setCheckinDone]     = useState(false);
   const [takeoverAlert,   setTakeoverAlert]   = useState<TakeoverNotif | null>(null);
   const [roi,             setRoi]             = useState<RoiDeToulouse | null>(null);
+  const [myCrewId,        setMyCrewId]        = useState<string | null>(null);
   const flyToRef = useRef<((lat: number, lng: number, zoom?: number, pitch?: number, bearing?: number) => void) | null>(null);
+
+  useEffect(() => {
+    getMyOfficerCrewId().then(setMyCrewId);
+  }, []);
 
   // Recalculée toutes les 20s pour faire disparaître localement les joueurs
   // dont la présence a expiré, même sans nouvel événement Realtime (un client
@@ -1104,7 +1141,7 @@ export default function LifeMapScreen() {
       )}
 
       {/* ── MODALS ────────────────────────────────────────────────────────── */}
-      <PlayerSheet player={selected} onClose={() => setSelected(null)}
+      <PlayerSheet player={selected} myCrewId={myCrewId} onClose={() => setSelected(null)}
         onInvite={handleInvite}
         onReport={(p) => { setSelected(null); setReportTarget(p); }}
         onBlock={handleBlock} />
