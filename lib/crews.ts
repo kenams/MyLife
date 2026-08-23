@@ -186,41 +186,27 @@ export async function createCrew(
   if (!supabase) return null;
   const normalizedTag = tag.toUpperCase().trim().replace(/[^A-Z0-9]/g, "").slice(0, 5);
 
-  // Vérif unicité avant insert
   const available = await isTagAvailable(normalizedTag);
   if (!available) return { error: "TAG_TAKEN" };
 
-  const { data, error } = await supabase
-    .from("crews")
-    .insert({ name, tag: normalizedTag, emoji, color, description, founder: founderName })
-    .select()
-    .single();
-  if (error || !data) return null;
-  await supabase.from("crew_members").insert({
-    crew_id: data.id, player_name: founderName,
-    player_emoji: founderEmoji, role: "founder",
+  // Passe par la RPC create_crew (SECURITY DEFINER) : l'insert direct sur
+  // crews/crew_members est verrouillé côté base depuis la faille
+  // d'auto-promotion trouvée et corrigée (n'importe qui pouvait s'insérer
+  // comme founder de n'importe quel crew).
+  const { data, error } = await supabase.rpc("create_crew", {
+    p_name: name, p_tag: normalizedTag, p_emoji: emoji, p_color: color, p_description: description,
   });
+  if (error || !data) return null;
   return data as Crew;
 }
 
 export async function joinCrew(
-  crewId: string, playerName: string, playerEmoji: string
+  crewId: string, _playerName: string, _playerEmoji: string
 ): Promise<boolean> {
   if (!supabase) return false;
-  const { error } = await supabase.from("crew_members").insert({
-    crew_id: crewId, player_name: playerName, player_emoji: playerEmoji, role: "member",
-  });
-  if (!error) {
-    const { data: crew } = await supabase
-      .from("crews").select("member_count,reputation").eq("id", crewId).single();
-    if (crew) {
-      const newCount = (crew.member_count ?? 0) + 1;
-      const newRadius = computeZoneRadius(newCount, crew.reputation ?? 0);
-      await supabase.from("crews").update({ member_count: newCount }).eq("id", crewId);
-      // Mettre à jour le rayon de toutes les zones du crew
-      await supabase.from("crew_zones").update({ radius: newRadius }).eq("crew_id", crewId);
-    }
-  }
+  // RPC : assigne toujours le rôle 'recruit', jamais un rôle passé par le
+  // client (même logique que createCrew — insert direct verrouillé).
+  const { error } = await supabase.rpc("join_crew_open", { p_crew_id: crewId });
   return !error;
 }
 
