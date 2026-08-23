@@ -185,10 +185,21 @@ begin
     raise exception 'Action impossible';
   end if;
 
+  select * into v_row from public.friend_relationships where user_low = v_low and user_high = v_high for update;
+
+  if v_row.id is not null and v_row.status = 'blocked' and v_row.blocked_by <> auth.uid() then
+    -- Quelqu'un d'autre a déjà bloqué cette relation : on ne laisse pas la
+    -- cible "reprendre" le blocage à son nom pour ensuite pouvoir le lever
+    -- elle-même via unblock_user_relationship. Trouvé par revue de sécurité
+    -- automatique juste après le premier déploiement de cette migration,
+    -- corrigé et vérifié avant tout usage réel.
+    raise exception 'Action impossible';
+  end if;
+
   insert into public.friend_relationships (user_low, user_high, requester_id, status, blocked_by)
   values (v_low, v_high, auth.uid(), 'blocked', auth.uid())
   on conflict (user_low, user_high)
-  do update set status = 'blocked', blocked_by = auth.uid()
+  do update set status = 'blocked', blocked_by = auth.uid(), requester_id = auth.uid()
   returning * into v_row;
   return v_row;
 end;

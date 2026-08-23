@@ -22,6 +22,7 @@ import {
 import { startNpcMapEngine, stopNpcMapEngine } from "@/lib/npc-map-engine";
 import { sendLocalNotification } from "@/lib/push-notifications";
 import { blockUser } from "@/lib/safety";
+import { requestFriend, blockRelation } from "@/lib/relationships";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
 import { supabase } from "@/lib/supabase";
@@ -415,10 +416,20 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
   onBlock:  (p: MapPlayer) => void;
 }) {
   const scale = useRef(new Animated.Value(0.95)).current;
+  const [addState, setAddState] = useState<"idle" | "loading" | "sent" | "error">("idle");
   useEffect(() => {
     if (player) Animated.spring(scale, { toValue: 1, tension: 200, friction: 18, useNativeDriver: true }).start();
+    setAddState("idle");
   }, [player]);
   if (!player) return null;
+
+  async function handleAddFriend() {
+    if (!player || player.is_npc || addState === "loading" || addState === "sent") return;
+    hapticImpact("light");
+    setAddState("loading");
+    const res = await requestFriend(player.user_id);
+    setAddState(res.ok ? "sent" : "error");
+  }
 
   const cfg = STATUS_CONFIG[player.status];
   const kind = playerKind(player);
@@ -522,6 +533,27 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
                 Proposer une activité publique
               </Text>
             </Pressable>
+            {!player.is_npc && (
+              <Pressable
+                onPress={handleAddFriend}
+                disabled={addState === "loading" || addState === "sent"}
+                style={{
+                  backgroundColor: addState === "sent" ? C.green + "18" : addState === "error" ? C.red + "18" : "#08080F",
+                  borderRadius: 14, paddingVertical: 13, alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: addState === "sent" ? C.green + "50" : addState === "error" ? C.red + "50" : C.border,
+                }}>
+                <Text style={{
+                  color: addState === "sent" ? C.green : addState === "error" ? C.red : C.text,
+                  fontSize: 13, fontWeight: "900",
+                }}>
+                  {addState === "loading" ? "Envoi..."
+                    : addState === "sent" ? "✓ Demande envoyée"
+                    : addState === "error" ? "Erreur — réessayer"
+                    : "➕ Ajouter en ami"}
+                </Text>
+              </Pressable>
+            )}
           </View>
         )}
         <View style={{ flexDirection: "row", gap: 10 }}>
@@ -793,8 +825,14 @@ export default function LifeMapScreen() {
   }
 
   async function handleBlock(p: MapPlayer) {
-    await blockUser(p.user_id);
+    // Masquage local immédiat (UX) — mais c'est block_user_relationship qui
+    // fait le vrai travail : sans lui, "Bloquer" ne faisait que cacher la
+    // personne sur CET appareil, elle continuait à voir/contacter le joueur
+    // partout ailleurs (bug trouvé en réutilisant lib/safety.blockUser, qui
+    // n'écrit que dans AsyncStorage local).
     setBlocked((prev) => [...prev, p.user_id]);
+    await blockUser(p.user_id);
+    if (!p.is_npc) await blockRelation(p.user_id);
     hapticImpact("medium");
   }
 
