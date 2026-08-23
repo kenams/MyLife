@@ -1,6 +1,50 @@
 // Vercel serverless function — jamais côté client : c'est ici et seulement
-// ici que ANTHROPIC_API_KEY est lue. Le client n'a accès qu'à ce endpoint,
-// jamais à la clé elle-même.
+// ici que ANTHROPIC_API_KEY / OPENAI_API_KEY sont lues. Le client n'a accès
+// qu'à ce endpoint, jamais aux clés elles-mêmes.
+async function callAnthropic(key, systemPrompt, messages) {
+  const r = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "x-api-key": key,
+      "anthropic-version": "2023-06-01",
+    },
+    body: JSON.stringify({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 200,
+      system: systemPrompt,
+      messages,
+    }),
+  });
+  if (!r.ok) {
+    const errText = await r.text();
+    throw new Error(errText.slice(0, 300));
+  }
+  const data = await r.json();
+  return data?.content?.[0]?.text?.trim() || "...";
+}
+
+async function callOpenAI(key, systemPrompt, messages) {
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini",
+      max_tokens: 200,
+      messages: [{ role: "system", content: systemPrompt }, ...messages],
+    }),
+  });
+  if (!r.ok) {
+    const errText = await r.text();
+    throw new Error(errText.slice(0, 300));
+  }
+  const data = await r.json();
+  return data?.choices?.[0]?.message?.content?.trim() || "...";
+}
+
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.status(405).json({ error: "Method not allowed" });
@@ -15,8 +59,8 @@ export default async function handler(req, res) {
   }
 
   // Vérifie que le token est une vraie session Supabase valide — sans ça
-  // n'importe qui sur internet pourrait taper ce endpoint et consommer la
-  // clé Anthropic partagée avec kah-digital-site.
+  // n'importe qui sur internet pourrait taper ce endpoint et consommer les
+  // clés partagées avec kah-digital-site.
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
   try {
@@ -42,12 +86,6 @@ export default async function handler(req, res) {
     return;
   }
 
-  const key = process.env.ANTHROPIC_API_KEY;
-  if (!key) {
-    res.status(500).json({ error: "PNJ indisponible (clé manquante)" });
-    return;
-  }
-
   const systemPrompt = `Tu incarnes ${npcName}, un habitant fictif de Toulouse dans le jeu MyLife. ` +
     `Humeur actuelle : ${npcMood || "détendu"}. Style : jeune adulte toulousain, direct, chaleureux, ` +
     `un peu d'humour et d'accent local sans forcer, phrases courtes (1 à 3 phrases max). ` +
@@ -61,32 +99,35 @@ export default async function handler(req, res) {
     { role: "user", content: message.trim() },
   ];
 
-  try {
-    const anthRes = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": key,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-haiku-4-5-20251001",
-        max_tokens: 200,
-        system: systemPrompt,
-        messages,
-      }),
-    });
+  const anthKey = process.env.ANTHROPIC_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  let lastError = null;
 
-    if (!anthRes.ok) {
-      const errText = await anthRes.text();
-      res.status(502).json({ error: "PNJ momentanément indisponible", detail: errText.slice(0, 200) });
+  // Anthropic d'abord, bascule automatique sur OpenAI si indisponible
+  // (crédit épuisé, clé invalide, erreur réseau, etc.) — le joueur ne voit
+  // jamais laquelle des deux a répondu, juste que le PNJ répond.
+  if (anthKey) {
+    try {
+      const reply = await callAnthropic(anthKey, systemPrompt, messages);
+      res.status(200).json({ reply, provider: "anthropic" });
       return;
+    } catch (e) {
+      lastError = e;
     }
-
-    const data = await anthRes.json();
-    const reply = data?.content?.[0]?.text?.trim() || "...";
-    res.status(200).json({ reply });
-  } catch (e) {
-    res.status(502).json({ error: "PNJ momentanément indisponible" });
   }
+
+  if (openaiKey) {
+    try {
+      const reply = await callOpenAI(openaiKey, systemPrompt, messages);
+      res.status(200).json({ reply, provider: "openai" });
+      return;
+    } catch (e) {
+      lastError = e;
+    }
+  }
+
+  res.status(502).json({
+    error: "PNJ momentanément indisponible",
+    detail: lastError ? String(lastError.message).slice(0, 200) : "Aucune clé configurée",
+  });
 }
