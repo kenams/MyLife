@@ -523,7 +523,7 @@ export default function NotificationsScreen() {
                 <Text style={{ color: L.text, fontSize: 15, fontWeight: "800" }}>
                   Alertes ({unreadNotifs.length})
                 </Text>
-                <Pressable onPress={markAllRead}>
+                <Pressable onPress={markAllRead} testID="mark-all-read" accessibilityLabel="Tout marquer comme lu">
                   <Text style={{ color: L.muted, fontSize: 12 }}>Tout lire</Text>
                 </Pressable>
               </View>
@@ -545,6 +545,9 @@ export default function NotificationsScreen() {
                         <Text style={{ color: L.muted, fontSize: 12, marginTop: 2 }} numberOfLines={2}>{n.body}</Text>
                       </View>
                       <Pressable onPress={() => markRead(n.id)}
+                        testID={`mark-read-${n.id}`}
+                        accessibilityLabel={`Marquer "${n.title}" comme lu`}
+                        hitSlop={10}
                         style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: L.border,
                           alignItems: "center", justifyContent: "center" }}>
                         <Ionicons name="checkmark" size={14} color={L.muted} />

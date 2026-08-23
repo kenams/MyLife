@@ -23,6 +23,7 @@ import { startNpcMapEngine, stopNpcMapEngine } from "@/lib/npc-map-engine";
 import { sendLocalNotification } from "@/lib/push-notifications";
 import { blockUser } from "@/lib/safety";
 import { requestFriend, blockRelation } from "@/lib/relationships";
+import { sendFeeling } from "@/lib/match-chat";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
 import { supabase } from "@/lib/supabase";
@@ -417,9 +418,11 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
 }) {
   const scale = useRef(new Animated.Value(0.95)).current;
   const [addState, setAddState] = useState<"idle" | "loading" | "sent" | "error">("idle");
+  const [feelState, setFeelState] = useState<"idle" | "loading" | "sent" | "matched" | "error">("idle");
   useEffect(() => {
     if (player) Animated.spring(scale, { toValue: 1, tension: 200, friction: 18, useNativeDriver: true }).start();
     setAddState("idle");
+    setFeelState("idle");
   }, [player]);
   if (!player) return null;
 
@@ -429,6 +432,22 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
     setAddState("loading");
     const res = await requestFriend(player.user_id);
     setAddState(res.ok ? "sent" : "error");
+  }
+
+  async function handleFeeling() {
+    if (!player || player.is_npc || feelState === "loading" || feelState === "sent" || feelState === "matched") return;
+    hapticImpact("medium");
+    setFeelState("loading");
+    const res = await sendFeeling(player.user_id);
+    if (res.error) { setFeelState("error"); return; }
+    if (res.matched && res.conversationId) {
+      setFeelState("matched");
+      hapticImpact("heavy");
+      router.push(`/(app)/match-chat?conversationId=${res.conversationId}&targetName=${encodeURIComponent(player.display_name)}&targetEmoji=${encodeURIComponent(player.avatar_emoji)}` as never);
+      onClose();
+    } else {
+      setFeelState("sent");
+    }
   }
 
   const cfg = STATUS_CONFIG[player.status];
@@ -513,13 +532,21 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
                 <Text style={{ color: C.text, fontSize: 13, fontWeight: "900" }}>👋 Saluer</Text>
               </Pressable>
               <Pressable
-                onPress={() => { hapticImpact("medium"); onInvite(player); onClose(); }}
+                onPress={handleFeeling}
+                disabled={feelState === "loading" || feelState === "sent" || feelState === "matched"}
                 style={{
-                  flex: 1, backgroundColor: cfg.color, borderRadius: 14,
-                  paddingVertical: 14, alignItems: "center",
+                  flex: 1, borderRadius: 14, paddingVertical: 14, alignItems: "center",
+                  backgroundColor: feelState === "matched" ? C.green
+                    : feelState === "error" ? C.red : cfg.color,
                   shadowColor: cfg.color, shadowOpacity: 0.4, shadowRadius: 16,
                 }}>
-                <Text style={{ color: "#04040A", fontSize: 13, fontWeight: "900" }}>💫 Feeling</Text>
+                <Text style={{ color: "#04040A", fontSize: 13, fontWeight: "900" }}>
+                  {feelState === "loading" ? "..."
+                    : feelState === "sent" ? "💫 Envoyé"
+                    : feelState === "matched" ? "✓ Match !"
+                    : feelState === "error" ? "Erreur — réessayer"
+                    : "💫 Feeling"}
+                </Text>
               </Pressable>
             </View>
             <Pressable

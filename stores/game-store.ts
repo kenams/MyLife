@@ -2349,13 +2349,17 @@ export const useGameStore = create<GameState>()(
         // etc.), persiste le "lu" côté base. No-op silencieux sinon (0 ligne
         // affectée par la RPC si l'id ne correspond à aucune notification
         // social_notifications de l'utilisateur courant).
-        void supabase?.rpc("mark_notification_read", { notif_id: notificationId });
+        void supabase?.rpc("mark_notification_read", { notif_id: notificationId }).then(({ error }) => {
+          if (error) console.warn("[notif] mark_notification_read failed", notificationId, error.message);
+        });
       },
       markAllNotificationsRead: () => {
         set((state) => ({
           notifications: state.notifications.map((item) => ({ ...item, read: true }))
         }));
-        void supabase?.rpc("mark_all_notifications_read");
+        void supabase?.rpc("mark_all_notifications_read").then(({ error }) => {
+          if (error) console.warn("[notif] mark_all_notifications_read failed", error.message);
+        });
       },
       addSocialNotification: (item) =>
         set((state) => ({

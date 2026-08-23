@@ -6,7 +6,7 @@ create table if not exists public.social_notifications (
   id              uuid primary key default gen_random_uuid(),
   target_user_id  uuid not null references auth.users(id) on delete cascade,
   actor_user_id   uuid references auth.users(id) on delete set null,
-  type            text not null check (type in ('friend_request','friend_accepted')),
+  type            text not null check (type in ('friend_request','friend_accepted','match')),
   title           text not null,
   body            text,
   read_at         timestamptz,

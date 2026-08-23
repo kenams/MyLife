@@ -33,6 +33,11 @@ drop policy if exists "Visible si pas ghost" on public.life_map_players;
 -- ne peut plus jamais passer sa propre ligne en statut 'ghost' (l'UPDATE
 -- échoue en 42501 car la ligne résultante ne satisferait plus la policy
 -- SELECT). Ça a cassé le bouton Ghost pour tout le monde jusqu'au fix.
+-- Second correctif (23/08, après la mise en place du blocage
+-- friend_relationships) : un blocage doit couper la visibilité Map dans
+-- TOUS les statuts publics, pas seulement "taken"/Crew. Trouvé en testant
+-- réellement le blocage de bout en bout — QA-B bloquée restait visible sur
+-- la carte de QA-A en statut "free" malgré le blocage.
 create policy "Visible si actif, frais et autorisé"
   on public.life_map_players for select
   using (
@@ -40,6 +45,12 @@ create policy "Visible si actif, frais et autorisé"
     or (
       status != 'ghost'
       and updated_at > now() - interval '5 minutes'
+      and not exists (
+        select 1 from public.friend_relationships fr
+        where fr.status = 'blocked'
+          and fr.user_low = least(auth.uid(), life_map_players.user_id)
+          and fr.user_high = greatest(auth.uid(), life_map_players.user_id)
+      )
       and (
         status != 'taken'
         or exists (
