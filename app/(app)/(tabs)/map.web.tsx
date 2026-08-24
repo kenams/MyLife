@@ -721,6 +721,13 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
           map.on("mouseleave", MISSION_POINT_LAYER, () => missionHoverPopup.remove());
 
           syncMissionsSource(map, missionsRef.current, missionSuperclusterRef);
+
+          // Hook QA — expose l'instance map pour des tests d'intégration
+          // stables (attendre map.idle, projeter les coordonnées réelles
+          // d'une feature, cliquer au centre exact). Ne renvoie rien de
+          // sensible (pas de données joueur), gardé en permanence plutôt
+          // que retiré/réajouté à chaque test.
+          (window as any).__mylifeMapDebug = { map, sourceId: PLAYERS_SOURCE_ID, missionsSourceId: MISSIONS_SOURCE_ID };
         }
 
         if (onMapReady) {
@@ -1640,13 +1647,22 @@ export default function LifeMapScreen() {
       </View>
 
       {/* ── FILTER PILLS ──────────────────────────────────────────────────── */}
-      <View style={{ zIndex: 5 }}>
+      {/* BUG RÉEL TROUVÉ ET CORRIGÉ : ce wrapper n'était pas positionné en
+      absolute, donc en tant qu'enfant flex normal dans le conteneur racine
+      (flex:1), il s'étirait pour occuper tout l'espace vertical restant
+      (~800px de haut) et interceptait TOUS les clics vers la carte en
+      dessous, sauf sur les pastilles elles-mêmes. `pointerEvents="box-none"`
+      laisse passer les clics sauf sur les enfants interactifs réels — même
+      correctif appliqué au wrapper des filtres missions juste après. */}
+      <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 5 }} pointerEvents="box-none">
         <FilterPills active={filter} onChange={setFilter} />
       </View>
 
       {/* ── FILTRES MISSIONS — indépendants des filtres joueurs ─────────────── */}
       {seasonId && (
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ zIndex: 5, marginTop: 6 }}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          style={{ position: "absolute", top: 148, left: 0, right: 0, zIndex: 5 }}
+          pointerEvents="box-none"
           contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
           {([
             ["all", "🌆 Missions"], ["explore", "Explorer"], ["move", "Bouger"], ["social", "Social"],
