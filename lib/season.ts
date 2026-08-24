@@ -48,9 +48,9 @@ export async function fetchDistricts(): Promise<District[]> {
 
 export async function fetchMyDistrict(): Promise<{ district_id: string } | null> {
   if (!supabase) return null;
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth?.user) return null;
-  const { data } = await supabase.from("player_districts").select("district_id").eq("user_id", auth.user.id).maybeSingle();
+  const { data: auth } = await supabase.auth.getSession();
+  if (!auth?.session?.user) return null;
+  const { data } = await supabase.from("player_districts").select("district_id").eq("user_id", auth.session.user.id).maybeSingle();
   return data ?? null;
 }
 
@@ -112,9 +112,9 @@ export function subscribeToSeasonUpdates(onChange: () => void) {
 
 export async function fetchMyParticipations(): Promise<Record<string, MissionParticipationStatus>> {
   if (!supabase) return {};
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth?.user) return {};
-  const { data } = await supabase.from("mission_participations").select("mission_id,status").eq("user_id", auth.user.id);
+  const { data: auth } = await supabase.auth.getSession();
+  if (!auth?.session?.user) return {};
+  const { data } = await supabase.from("mission_participations").select("mission_id,status").eq("user_id", auth.session.user.id);
   const map: Record<string, MissionParticipationStatus> = {};
   (data ?? []).forEach((row: { mission_id: string; status: MissionParticipationStatus }) => { map[row.mission_id] = row.status; });
   return map;
@@ -193,12 +193,12 @@ export async function abandonMoveSession(sessionId: string): Promise<boolean> {
 
 export async function fetchMyBadges(): Promise<{ code: string; name: string; icon: string; awarded_at: string }[]> {
   if (!supabase) return [];
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth?.user) return [];
+  const { data: auth } = await supabase.auth.getSession();
+  if (!auth?.session?.user) return [];
   const { data } = await supabase
     .from("badge_awards")
     .select("awarded_at, badges(code,name,icon)")
-    .eq("user_id", auth.user.id);
+    .eq("user_id", auth.session.user.id);
   return (data ?? []).map((row: { awarded_at: string; badges: { code: string; name: string; icon: string } | { code: string; name: string; icon: string }[] }) => {
     const b = Array.isArray(row.badges) ? row.badges[0] : row.badges;
     return { code: b?.code ?? "", name: b?.name ?? "", icon: b?.icon ?? "🏅", awarded_at: row.awarded_at };
@@ -212,9 +212,9 @@ export type ActivityEvent = {
 
 export async function fetchMyActivity(): Promise<ActivityEvent[]> {
   if (!supabase) return [];
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth?.user) return [];
-  const { data } = await supabase.rpc("fetch_activity_feed", { p_user_id: auth.user.id, p_limit: 10, p_offset: 0 });
+  const { data: auth } = await supabase.auth.getSession();
+  if (!auth?.session?.user) return [];
+  const { data } = await supabase.rpc("fetch_activity_feed", { p_user_id: auth.session.user.id, p_limit: 10, p_offset: 0 });
   return (data ?? []) as ActivityEvent[];
 }
 

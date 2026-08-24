@@ -30,8 +30,8 @@ export const unblockRelation = (target: string) => callRpc<FriendRelationship>("
 
 export async function getRelationshipWith(targetId: string): Promise<FriendRelationship | null> {
   if (!supabase) return null;
-  const { data: authData } = await supabase.auth.getUser();
-  const me = authData?.user?.id;
+  const { data: authData } = await supabase.auth.getSession();
+  const me = authData?.session?.user?.id;
   if (!me) return null;
   const low = me < targetId ? me : targetId;
   const high = me < targetId ? targetId : me;

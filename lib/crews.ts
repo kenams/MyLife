@@ -241,8 +241,8 @@ export async function getMyCrewId(playerName: string): Promise<string | null> {
 // officer/founder — seul cas où on a le droit d'inviter quelqu'un.
 export async function getMyOfficerCrewId(): Promise<string | null> {
   if (!supabase) return null;
-  const { data: authData } = await supabase.auth.getUser();
-  const uid = authData?.user?.id;
+  const { data: authData } = await supabase.auth.getSession();
+  const uid = authData?.session?.user?.id;
   if (!uid) return null;
   const { data } = await supabase
     .from("crew_members")

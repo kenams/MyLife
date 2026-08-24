@@ -37,10 +37,10 @@ export async function upsertPlayerProfile(profile: {
   isPremium:   boolean;
 }) {
   if (!supabase) return;
-  const { data: auth } = await supabase.auth.getUser();
-  if (!auth?.user) return;
+  const { data: auth } = await supabase.auth.getSession();
+  if (!auth?.session?.user) return;
   await supabase.from("player_profiles").upsert({
-    user_id:      auth.user.id,
+    user_id:      auth.session.user.id,
     player_id:    profile.playerId,
     display_name: profile.displayName,
     player_emoji: profile.playerEmoji,
