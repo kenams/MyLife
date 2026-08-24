@@ -562,49 +562,22 @@ export interface CheckinResult {
 export async function bastionCheckin(
   zoneId: string,
   crewId: string,
-  playerName: string,
+  _playerName: string,
 ): Promise<CheckinResult> {
   if (!supabase) return { ok: false, blEarned: 0, error: "Pas de connexion" };
-
-  // Vérifie si déjà check-in dans les 24h
-  const since = new Date(Date.now() - 86400000).toISOString();
-  const { data: recent } = await supabase
-    .from("bastion_checkins")
-    .select("checked_in_at")
-    .eq("zone_id", zoneId)
-    .eq("player_name", playerName)
-    .gte("checked_in_at", since)
-    .maybeSingle();
-
-  if (recent) {
-    const until = new Date(new Date(recent.checked_in_at).getTime() + 86400000);
-    return { ok: false, blEarned: 0, cooldownUntil: until, error: "Déjà check-in aujourd'hui." };
-  }
-
-  // Récupère la récompense configurée
-  const { data: crew } = await supabase
-    .from("crews").select("treasury, visitor_reward").eq("id", crewId).single();
-
-  const reward = crew?.visitor_reward ?? 0;
-  const treasury = crew?.treasury ?? 0;
-
-  if (reward > 0 && treasury < reward) {
-    return { ok: false, blEarned: 0, error: "Trésorerie insuffisante." };
-  }
-
-  // Enregistre le check-in
-  await supabase.from("bastion_checkins").insert({
-    zone_id: zoneId, player_name: playerName, bl_earned: reward,
+  // RPC : cooldown 24h + calcul de récompense + débit trésorerie vérifiés
+  // côté serveur — un insert direct laissait n'importe qui injecter
+  // n'importe quel bl_earned et contourner le cooldown.
+  const { data, error } = await supabase.rpc("bastion_checkin", {
+    p_zone_id: zoneId, p_crew_id: crewId,
   });
-
-  // Débite la trésorerie
-  if (reward > 0) {
-    await supabase.from("crews")
-      .update({ treasury: treasury - reward })
-      .eq("id", crewId);
+  if (error) {
+    if (error.message.includes("Déjà check-in")) {
+      return { ok: false, blEarned: 0, error: "Déjà check-in aujourd'hui." };
+    }
+    return { ok: false, blEarned: 0, error: error.message };
   }
-
-  return { ok: true, blEarned: reward };
+  return { ok: true, blEarned: data?.bl_earned ?? 0 };
 }
 
 export async function getBastionCheckinCount(zoneId: string): Promise<number> {
