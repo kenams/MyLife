@@ -34,9 +34,9 @@ export type District = {
   center_lat: number; center_lng: number;
 };
 
-export async function fetchActiveSeason(): Promise<{ id: string; name: string; theme_color: string } | null> {
+export async function fetchActiveSeason(): Promise<{ id: string; name: string; theme_color: string; ends_at: string } | null> {
   if (!supabase) return null;
-  const { data } = await supabase.from("seasons").select("id,name,theme_color").eq("status", "active").limit(1).maybeSingle();
+  const { data } = await supabase.from("seasons").select("id,name,theme_color,ends_at").eq("status", "active").limit(1).maybeSingle();
   return data ?? null;
 }
 
@@ -215,6 +215,26 @@ export async function fetchPlayerLeaderboard(seasonId: string, period: "week" | 
   if (!supabase) return [];
   const { data } = await supabase.rpc("leaderboard_players", { p_season_id: seasonId, p_period: period, p_limit: 20, p_offset: 0 });
   return data ?? [];
+}
+
+export type DailyChallenge = {
+  template_code: string; title: string; description: string; category: MissionCategory;
+  target_count: number; reward_xp: number; reward_money: number;
+  progress_count: number; completed_at: string | null; claimed_at: string | null;
+};
+
+export async function fetchTodayChallenges(): Promise<DailyChallenge[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.rpc("get_today_challenges");
+  return (data ?? []) as DailyChallenge[];
+}
+
+export async function claimDailyChallenge(templateCode: string): Promise<{ ok: boolean; xp?: number; money?: number; error?: string }> {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { data, error } = await supabase.rpc("claim_daily_challenge", { p_template_code: templateCode });
+  if (error) return { ok: false, error: error.message };
+  const row = Array.isArray(data) ? data[0] : data;
+  return { ok: true, xp: row?.xp, money: row?.money };
 }
 
 export async function fetchMySeasonTotals(): Promise<{ xp: number; money: number; reputation: number }> {
