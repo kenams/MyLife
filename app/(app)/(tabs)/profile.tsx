@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { fetchEventRewardTotals } from "@/lib/flash-events";
+import { fetchMySeasonTotals, fetchMyBadges } from "@/lib/season";
 import { Animated, Easing, Pressable, ScrollView, Text, View } from "react-native";
 
 import type { ShiftRecord } from "@/lib/types";
@@ -241,8 +242,12 @@ export default function ProfileScreen() {
 
   const [showShareCard, setShowShareCard] = useState(false);
   const [eventRewards, setEventRewards] = useState({ xp: 0, money: 0 });
+  const [seasonTotals, setSeasonTotals] = useState({ xp: 0, money: 0, reputation: 0 });
+  const [myBadges, setMyBadges] = useState<{ code: string; name: string; icon: string }[]>([]);
   useEffect(() => {
     fetchEventRewardTotals().then(setEventRewards);
+    fetchMySeasonTotals().then(setSeasonTotals);
+    fetchMyBadges().then(setMyBadges);
   }, []);
 
   const fadeAnim  = useRef(new Animated.Value(0)).current;
@@ -313,6 +318,21 @@ export default function ProfileScreen() {
                 <Text style={{ color: L.orange, fontSize: 10, marginTop: 2, fontWeight: "700" }}>
                   🎉 +{eventRewards.xp} XP · +{eventRewards.money} BL via events IRL
                 </Text>
+              )}
+              {seasonTotals.xp > 0 && (
+                <Text style={{ color: L.primary, fontSize: 10, marginTop: 2, fontWeight: "700" }}>
+                  🌆 +{seasonTotals.xp} XP · +{seasonTotals.money} BL · +{seasonTotals.reputation} rép — Saison 1
+                </Text>
+              )}
+              {myBadges.length > 0 && (
+                <View style={{ flexDirection: "row", gap: 4, marginTop: 6 }}>
+                  {myBadges.map((b) => (
+                    <View key={b.code} style={{ backgroundColor: L.cardAlt, borderRadius: 10, width: 26, height: 26,
+                      alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: L.border }}>
+                      <Text style={{ fontSize: 13 }}>{b.icon}</Text>
+                    </View>
+                  ))}
+                </View>
               )}
             </View>
           </View>

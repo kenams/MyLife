@@ -79,6 +79,20 @@ function playerKind(player: MapPlayer): { label: string; color: string } {
 // sans quota. Choisi après comparaison avec Mapbox (payant au-delà d'un seuil)
 // et MapTiler (quota gratuit limité) : OpenFreeMap est financé pour rester
 // gratuit indéfiniment et ne nécessite aucune inscription/API key à gérer.
+//
+// DÉPENDANCE ÉPINGLÉE : version exacte 4.7.1 dans les deux URLs ci-dessous
+// (CSS + JS), jamais de version flottante (@latest). CSP du projet : aucune
+// (vérifié, ne bloque pas les Web Workers).
+//
+// Piste évaluée : `npm install maplibre-gl@4.7.1` + import ES au lieu du
+// <script> CDN. Testé le 2026-08-24 — le bundling via Metro/Expo Web
+// réussit sans erreur (+0.8 Mo sur le bundle web, cohérent). Non adopté ce
+// tour faute de temps pour revalider en conditions réelles (création du
+// worker, getClusterExpansionZoom — voir le contournement Supercluster
+// plus bas, dont on ignore si le bug qu'il contourne existe aussi côté
+// bundle npm) : re-tester l'intégralité clustering/3D/zoom d'expansion
+// avant un éventuel remplacement. Ne jamais faire cohabiter CDN et bundle
+// npm en même temps.
 let maplibreLoaded = false;
 let maplibreLoading = false;
 const maplibreCallbacks: Array<() => void> = [];

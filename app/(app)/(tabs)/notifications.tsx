@@ -7,6 +7,12 @@ import { starterResidents } from "@/lib/game-engine";
 import { getActiveMissions, getMission } from "@/lib/missions";
 import { buildSmartNotifications, type SmartNotificationPriority } from "@/lib/smart-notifications";
 import { useGameStore } from "@/stores/game-store";
+import {
+  fetchActiveSeason, fetchDistricts, fetchMyDistrict, chooseDistrict,
+  fetchActiveMissions, fetchMyParticipations, joinMission, validateMission, claimMissionReward,
+  type SeasonMission, type District, type MissionParticipationStatus,
+} from "@/lib/season";
+import { requestAndGetLocation } from "@/lib/life-map";
 
 // ─── Dark theme void-black ─────────────────────────────────────────────────────
 const L = {
@@ -156,6 +162,166 @@ function NotifCard({ title, body, priority, action, route, onAction }: {
         <Text style={{ color: "#fff", fontSize: 10, fontWeight: "800" }}>{action}</Text>
       </View>
     </Pressable>
+  );
+}
+
+// ─── Saison 1 — Toulouse s'éveille (missions IRL, distinct des missions
+// quotidiennes du life-sim ci-dessus) ────────────────────────────────────────
+const MISSION_CATEGORY_LABEL: Record<SeasonMission["category"], { label: string; emoji: string }> = {
+  explore: { label: "Explorer", emoji: "🧭" },
+  move:    { label: "Bouger",   emoji: "🚶" },
+  social:  { label: "Social",   emoji: "🤝" },
+};
+
+function SeasonCard() {
+  const [seasonId, setSeasonId] = useState<string | null>(null);
+  const [seasonName, setSeasonName] = useState("");
+  const [districts, setDistricts] = useState<District[]>([]);
+  const [myDistrictId, setMyDistrictId] = useState<string | null>(null);
+  const [missions, setMissions] = useState<SeasonMission[]>([]);
+  const [participations, setParticipations] = useState<Record<string, MissionParticipationStatus>>({});
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [showDistrictPicker, setShowDistrictPicker] = useState(false);
+
+  async function refresh() {
+    const season = await fetchActiveSeason();
+    if (!season) return;
+    setSeasonId(season.id);
+    setSeasonName(season.name);
+    const [ds, myD, ms, parts] = await Promise.all([
+      fetchDistricts(), fetchMyDistrict(), fetchActiveMissions(season.id), fetchMyParticipations(),
+    ]);
+    setDistricts(ds);
+    setMyDistrictId(myD?.district_id ?? null);
+    setMissions(ms);
+    setParticipations(parts);
+  }
+
+  useEffect(() => { refresh(); }, []);
+
+  async function handleChooseDistrict(id: string) {
+    const res = await chooseDistrict(id);
+    if (res.ok) { setMyDistrictId(id); setShowDistrictPicker(false); refresh(); }
+    else setError(res.error ?? "Erreur");
+  }
+
+  async function handleJoin(missionId: string) {
+    setBusyId(missionId); setError(null);
+    const res = await joinMission(missionId);
+    if (res.ok) setParticipations((p) => ({ ...p, [missionId]: "joined" }));
+    else setError(res.error ?? "Erreur");
+    setBusyId(null);
+  }
+
+  async function handleValidate(mission: SeasonMission) {
+    setBusyId(mission.id); setError(null);
+    if (mission.category === "move") {
+      // MVP prudent : sans capteur de pas fiable, on ne simule pas une
+      // distance côté client — la validation "Bouger" nécessite l'écran
+      // dédié (à construire) qui mesure un vrai trajet GPS, comme le fait
+      // déjà claimTravelReward. Ici on bloque proprement plutôt que de
+      // faire semblant.
+      setError("Mission Bouger : ouvre-la depuis la Map pour mesurer ton trajet réel.");
+      setBusyId(null);
+      return;
+    }
+    const loc = await requestAndGetLocation();
+    if (!loc) { setError("Position GPS requise pour valider"); setBusyId(null); return; }
+    const res = await validateMission(mission.id, loc.lat, loc.lng);
+    if (res.ok) setParticipations((p) => ({ ...p, [mission.id]: "validated" }));
+    else setError(res.error ?? "Erreur");
+    setBusyId(null);
+  }
+
+  async function handleClaim(missionId: string) {
+    setBusyId(missionId); setError(null);
+    const res = await claimMissionReward(missionId);
+    if (res.ok) {
+      setParticipations((p) => ({ ...p, [missionId]: "rewarded" }));
+      setError(null);
+    } else setError(res.error ?? "Erreur");
+    setBusyId(null);
+  }
+
+  if (!seasonId) return null;
+  const myDistrict = districts.find((d) => d.id === myDistrictId);
+
+  return (
+    <View style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+      <View style={{ backgroundColor: L.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: L.primary + "25" }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+          <Text style={{ color: L.primary, fontSize: 13, fontWeight: "900" }}>🌆 Saison 1 · {seasonName}</Text>
+          <Pressable onPress={() => setShowDistrictPicker((s) => !s)}>
+            <Text style={{ color: L.textSoft, fontSize: 11 }}>
+              {myDistrict ? `${myDistrict.emoji} ${myDistrict.name}` : "Choisir un quartier"}
+            </Text>
+          </Pressable>
+        </View>
+
+        {showDistrictPicker && (
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
+            {districts.map((d) => (
+              <Pressable key={d.id} onPress={() => handleChooseDistrict(d.id)}
+                style={{ backgroundColor: d.id === myDistrictId ? L.primaryBg : L.cardAlt, borderRadius: 12,
+                  paddingHorizontal: 12, paddingVertical: 8, marginRight: 8,
+                  borderWidth: 1, borderColor: d.id === myDistrictId ? L.primary + "50" : L.border }}>
+                <Text style={{ color: L.text, fontSize: 12 }}>{d.emoji} {d.name}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+        )}
+
+        {missions.length === 0 && (
+          <Text style={{ color: L.muted, fontSize: 12 }}>Aucune mission active pour le moment.</Text>
+        )}
+
+        {missions.map((m) => {
+          const status = participations[m.id];
+          const cat = MISSION_CATEGORY_LABEL[m.category];
+          const busy = busyId === m.id;
+          return (
+            <View key={m.id} style={{ backgroundColor: L.cardAlt, borderRadius: 14, padding: 12, marginBottom: 8,
+              borderWidth: 1, borderColor: L.border }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                <Text style={{ fontSize: 16 }}>{cat.emoji}</Text>
+                <Text style={{ color: L.text, fontSize: 13, fontWeight: "800", flex: 1 }}>{m.title}</Text>
+                <Text style={{ color: L.muted, fontSize: 10 }}>{cat.label}</Text>
+              </View>
+              <Text style={{ color: L.textSoft, fontSize: 11, marginBottom: 8 }} numberOfLines={2}>{m.description}</Text>
+              <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                <Text style={{ color: L.gold, fontSize: 11, fontWeight: "700" }}>
+                  +{m.reward_xp} XP · +{m.reward_money} BL · +{m.reward_reputation} rép
+                </Text>
+                {!status && (
+                  <Pressable disabled={busy} onPress={() => handleJoin(m.id)}
+                    style={{ backgroundColor: L.primary, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}>
+                    <Text style={{ color: "#04040A", fontSize: 11, fontWeight: "900" }}>{busy ? "..." : "Rejoindre"}</Text>
+                  </Pressable>
+                )}
+                {(status === "joined" || status === "in_progress") && (
+                  <Pressable disabled={busy} onPress={() => handleValidate(m)}
+                    style={{ backgroundColor: L.blue, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}>
+                    <Text style={{ color: "#fff", fontSize: 11, fontWeight: "900" }}>{busy ? "..." : "Valider"}</Text>
+                  </Pressable>
+                )}
+                {status === "validated" && (
+                  <Pressable disabled={busy} onPress={() => handleClaim(m.id)}
+                    style={{ backgroundColor: L.green, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 7 }}>
+                    <Text style={{ color: "#04040A", fontSize: 11, fontWeight: "900" }}>{busy ? "..." : "Réclamer"}</Text>
+                  </Pressable>
+                )}
+                {status === "rewarded" && (
+                  <Text style={{ color: L.green, fontSize: 11, fontWeight: "800" }}>✓ Récompensée</Text>
+                )}
+              </View>
+            </View>
+          );
+        })}
+
+        {error && <Text style={{ color: L.red, fontSize: 11, marginTop: 4 }}>{error}</Text>}
+      </View>
+    </View>
   );
 }
 
@@ -336,6 +502,9 @@ export default function NotificationsScreen() {
             </View>
           )}
         </View>
+
+        {/* ── SAISON 1 — Toulouse s'éveille ── */}
+        <SeasonCard />
 
         {/* ── FILTRES ── */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false}

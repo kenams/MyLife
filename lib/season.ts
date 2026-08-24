@@ -1,0 +1,155 @@
+import { supabase } from "./supabase";
+
+export type MissionCategory = "explore" | "move" | "social";
+export type MissionParticipationStatus =
+  | "joined" | "in_progress" | "validatable" | "validated" | "rewarded"
+  | "expired" | "abandoned" | "rejected";
+
+export type SeasonMission = {
+  id: string;
+  season_id: string;
+  category: MissionCategory;
+  title: string;
+  description: string;
+  district_id: string | null;
+  approx_lat: number | null;
+  approx_lng: number | null;
+  starts_at: string;
+  ends_at: string;
+  capacity: number | null;
+  reward_xp: number;
+  reward_money: number;
+  reward_reputation: number;
+  cooldown_hours: number;
+  repeatable: boolean;
+  difficulty: "easy" | "medium" | "hard";
+  status: string;
+  organizer: string;
+  linked_event_id: string | null;
+};
+
+export type District = {
+  id: string; slug: string; name: string; emoji: string;
+  center_lat: number; center_lng: number;
+};
+
+export async function fetchActiveSeason(): Promise<{ id: string; name: string; theme_color: string } | null> {
+  if (!supabase) return null;
+  const { data } = await supabase.from("seasons").select("id,name,theme_color").eq("status", "active").limit(1).maybeSingle();
+  return data ?? null;
+}
+
+export async function fetchDistricts(): Promise<District[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.from("districts").select("*").order("name");
+  return (data ?? []) as District[];
+}
+
+export async function fetchMyDistrict(): Promise<{ district_id: string } | null> {
+  if (!supabase) return null;
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth?.user) return null;
+  const { data } = await supabase.from("player_districts").select("district_id").eq("user_id", auth.user.id).maybeSingle();
+  return data ?? null;
+}
+
+export async function chooseDistrict(districtId: string): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { error } = await supabase.rpc("choose_district", { p_district_id: districtId });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function fetchActiveMissions(seasonId: string): Promise<SeasonMission[]> {
+  if (!supabase) return [];
+  const now = new Date().toISOString();
+  const { data } = await supabase
+    .from("mission_definitions")
+    .select("*")
+    .eq("season_id", seasonId)
+    .eq("status", "available")
+    .lte("starts_at", now)
+    .gte("ends_at", now)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as SeasonMission[];
+}
+
+export async function fetchMyParticipations(): Promise<Record<string, MissionParticipationStatus>> {
+  if (!supabase) return {};
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth?.user) return {};
+  const { data } = await supabase.from("mission_participations").select("mission_id,status").eq("user_id", auth.user.id);
+  const map: Record<string, MissionParticipationStatus> = {};
+  (data ?? []).forEach((row: { mission_id: string; status: MissionParticipationStatus }) => { map[row.mission_id] = row.status; });
+  return map;
+}
+
+export async function joinMission(missionId: string): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { error } = await supabase.rpc("join_mission", { p_mission_id: missionId });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function validateMission(
+  missionId: string, lat?: number, lng?: number, progress?: Record<string, unknown>
+): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { error } = await supabase.rpc("validate_mission", {
+    p_mission_id: missionId, p_lat: lat ?? null, p_lng: lng ?? null, p_progress: progress ?? null,
+  });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+export async function claimMissionReward(missionId: string): Promise<{
+  ok: boolean; xp?: number; money?: number; reputation?: number; error?: string;
+}> {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { data, error } = await supabase.rpc("claim_mission_reward", { p_mission_id: missionId });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, xp: data?.xp, money: data?.money, reputation: data?.reputation };
+}
+
+export async function abandonMission(missionId: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.rpc("abandon_mission", { p_mission_id: missionId });
+  return !error;
+}
+
+export async function fetchMyBadges(): Promise<{ code: string; name: string; icon: string; awarded_at: string }[]> {
+  if (!supabase) return [];
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth?.user) return [];
+  const { data } = await supabase
+    .from("badge_awards")
+    .select("awarded_at, badges(code,name,icon)")
+    .eq("user_id", auth.user.id);
+  return (data ?? []).map((row: { awarded_at: string; badges: { code: string; name: string; icon: string } | { code: string; name: string; icon: string }[] }) => {
+    const b = Array.isArray(row.badges) ? row.badges[0] : row.badges;
+    return { code: b?.code ?? "", name: b?.name ?? "", icon: b?.icon ?? "🏅", awarded_at: row.awarded_at };
+  });
+}
+
+export async function fetchDistrictLeaderboard(seasonId: string) {
+  if (!supabase) return [];
+  const { data } = await supabase.rpc("leaderboard_districts", { p_season_id: seasonId });
+  return data ?? [];
+}
+
+export async function fetchPlayerLeaderboard(seasonId: string, period: "week" | "season" = "season") {
+  if (!supabase) return [];
+  const { data } = await supabase.rpc("leaderboard_players", { p_season_id: seasonId, p_period: period, p_limit: 20, p_offset: 0 });
+  return data ?? [];
+}
+
+export async function fetchMySeasonTotals(): Promise<{ xp: number; money: number; reputation: number }> {
+  if (!supabase) return { xp: 0, money: 0, reputation: 0 };
+  const { data } = await supabase.from("season_reward_ledger").select("xp,money,reputation");
+  return (data ?? []).reduce(
+    (acc: { xp: number; money: number; reputation: number }, r: { xp: number; money: number; reputation: number }) => ({
+      xp: acc.xp + (r.xp ?? 0), money: acc.money + (r.money ?? 0), reputation: acc.reputation + (r.reputation ?? 0),
+    }),
+    { xp: 0, money: 0, reputation: 0 }
+  );
+}
