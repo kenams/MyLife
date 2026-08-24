@@ -5,6 +5,7 @@ import {
   Text, View, ActivityIndicator, TextInput,
 } from "react-native";
 import { router } from "expo-router";
+import Supercluster from "supercluster";
 
 import { hapticImpact } from "@/lib/safe-haptics";
 import {
@@ -205,30 +206,95 @@ interface LeafletMapProps {
   crewZones?: CrewZoneRich[];
 }
 
-function playerMarkerEl(p: MapPlayer, dotColor: string): HTMLElement {
-  const radius  = p.is_star ? 9 : 6;
-  const svgSize = p.is_star ? 48 : 32;
-  const cx = svgSize / 2;
-  const svg = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${svgSize}" height="${svgSize + 14}">`,
-    p.is_star ? `<circle cx="${cx}" cy="${cx}" r="${cx - 2}" fill="${dotColor}" opacity="0.18"/>` : "",
-    `<circle cx="${cx}" cy="${cx}" r="${radius}" fill="${dotColor}" stroke="#04040A" stroke-width="2"/>`,
-    p.crew_tag ? `<rect x="${cx - p.crew_tag.length * 3.2 - 2}" y="${svgSize + 1}" width="${p.crew_tag.length * 6.4 + 4}" height="11" rx="3" fill="#04040A" opacity="0.85"/>
-    <text x="${cx}" y="${svgSize + 10}" text-anchor="middle" font-size="8" fill="${dotColor}" font-weight="900" font-family="system-ui,sans-serif">${escapeHtml(p.crew_tag)}</text>` : "",
-    `</svg>`,
-  ].join("");
-  const el = document.createElement("div");
-  el.style.cssText = "cursor:pointer;width:" + svgSize + "px;height:" + (svgSize + 14) + "px;";
-  el.innerHTML = `<img src="data:image/svg+xml,${encodeURIComponent(svg)}" width="${svgSize}" height="${svgSize + 14}" />`;
-  return el;
+// ── Clustering natif MapLibre (source GeoJSON) ──────────────────────────────
+// Remplace l'ancien rendu (un maplibregl.Marker DOM par joueur — un noeud DOM
+// + listeners par joueur, aucun regroupement visuel à faible zoom) par une
+// source GeoJSON clusterisée nativement (doc :
+// maplibre.org/maplibre-gl-js/docs/examples/create-and-style-clusters).
+// Migration validée en prod le 2026-08-23 : clustering, zoom d'expansion,
+// clic point individuel, filtres, 1000 points synthétiques — voir rapport.
+const PLAYERS_SOURCE_ID = "mylife-players";
+const CLUSTER_LAYER = "mylife-players-clusters";
+const CLUSTER_COUNT_LAYER = "mylife-players-cluster-count";
+const POINT_LAYER = "mylife-players-point";
+
+/** Rayon/zoom max de clustering — valeurs UNIQUES partagées entre la source
+ * MapLibre (rendu) et l'index Supercluster local (calcul du zoom d'expansion,
+ * voir plus bas pourquoi). Toute divergence entre les deux ferait diverger
+ * les cluster_id et casserait le clic sur cluster. */
+function clusterOptions() {
+  return { radius: typeof window !== "undefined" && window.innerWidth < 480 ? 60 : 50, maxZoom: 15 };
+}
+
+type PlayerFeatureProps = {
+  id: string; user_id: string; entity_type: "real_player" | "npc";
+  is_real: boolean; is_npc: boolean; is_demo: boolean; is_qa: boolean;
+  visibility: MapStatus; status: MapStatus; district: string | null;
+  crew_id: string | null; event_id: null;
+  dotColor: string; isStar: boolean; label: string; crewTag: string | null;
+};
+
+/** Construit la FeatureCollection normalisée. Une entrée invalide (coord.
+ * hors plage, NaN) est simplement écartée — elle ne doit jamais faire planter
+ * toute la carte. */
+function buildPlayersGeoJson(players: MapPlayer[]): GeoJSON.FeatureCollection<GeoJSON.Point, PlayerFeatureProps> {
+  const features: GeoJSON.Feature<GeoJSON.Point, PlayerFeatureProps>[] = [];
+  for (const p of players) {
+    if (!Number.isFinite(p.lat) || !Number.isFinite(p.lng)) continue;
+    if (p.lat < -90 || p.lat > 90 || p.lng < -180 || p.lng > 180) continue;
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [p.lng, p.lat] },
+      properties: {
+        id: p.id, user_id: p.user_id,
+        entity_type: p.is_npc ? "npc" : "real_player",
+        is_real: !p.is_npc, is_npc: p.is_npc,
+        is_demo: p.is_npc, is_qa: false,
+        visibility: p.status, status: p.status,
+        district: p.location_name ?? null,
+        crew_id: null, event_id: null,
+        dotColor: p.crew_color ?? STATUS_CONFIG[p.status]?.color ?? "#FFD600",
+        isStar: p.is_star, label: p.display_name.split(" ")[0],
+        crewTag: p.crew_tag ?? null,
+      },
+    });
+  }
+  return { type: "FeatureCollection", features };
+}
+
+/** Met à jour la source MapLibre (setData, pas de recréation) ET reconstruit
+ * l'index Supercluster local en parallèle avec les mêmes données/paramètres
+ * — nécessaire pour que getClusterExpansionZoom (voir plus haut, worker
+ * MapLibre cassé) reste synchronisé avec ce que la carte affiche réellement. */
+function syncPlayersSource(
+  map: any, players: MapPlayer[],
+  superclusterRef: React.MutableRefObject<Supercluster<PlayerFeatureProps> | null>
+) {
+  const source = map.getSource(PLAYERS_SOURCE_ID);
+  if (!source) return;
+  const geojson = buildPlayersGeoJson(players);
+  source.setData(geojson);
+  const { radius, maxZoom } = clusterOptions();
+  superclusterRef.current = new Supercluster<PlayerFeatureProps>({ radius, maxZoom }).load(geojson.features as any);
 }
 
 function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, crewZones = [] }: LeafletMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef        = useRef<unknown>(null);
   const glRef         = useRef<unknown>(null);
-  const markersRef    = useRef<Record<string, { remove: () => void }>>({});
   const myMarkerRef   = useRef<{ remove: () => void } | null>(null);
+  const clusterReadyRef = useRef(false);
+  const playersRef = useRef(players);
+  playersRef.current = players;
+  const superclusterRef = useRef<Supercluster<PlayerFeatureProps> | null>(null);
+  // Le click handler des layers est enregistré une seule fois (map.on("load"),
+  // effet mount-only) : sans ref, il resterait figé sur la version
+  // d'onPlayerClick capturée au tout premier rendu (souvent avec players=[]
+  // avant la fin du chargement initial) et ne trouverait plus jamais le
+  // joueur correspondant à l'id cliqué. Bug réel trouvé en testant le clic
+  // réel sur un point après la migration clustering.
+  const onPlayerClickRef = useRef(onPlayerClick);
+  onPlayerClickRef.current = onPlayerClick;
 
   // Init carte — une seule fois
   useEffect(() => {
@@ -272,14 +338,23 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
         }
 
         // Extrusion 3D des bâtiments si la source vectorielle les expose
-        // (couche "building" — présente sur les styles OpenFreeMap/OSM standards)
+        // (couche "building" — présente sur les styles OpenFreeMap/OSM standards).
+        // BUG CORRIGÉ : prenait Object.keys(style.sources)[0] à l'aveugle, qui
+        // n'est pas forcément la source vectorielle (peut être une source
+        // raster/geojson selon le style) — provoquait une erreur de style
+        // MapLibre au chargement ("requires a vector source"), silencieuse
+        // dans l'UI mais qui cassait ensuite tout le pipeline worker de la
+        // carte : les opérations async des sources GeoJSON (dont le calcul du
+        // zoom d'expansion des clusters) ne recevaient plus jamais de réponse.
         try {
           const style = map.getStyle();
-          const hasBuildingSource = style?.sources && Object.keys(style.sources).length > 0;
-          if (hasBuildingSource) {
+          const vectorSourceId = style?.sources
+            ? Object.keys(style.sources).find((k) => style.sources[k]?.type === "vector")
+            : undefined;
+          if (vectorSourceId) {
             map.addLayer({
               id: "mylife-3d-buildings",
-              source: Object.keys(style.sources)[0],
+              source: vectorSourceId,
               "source-layer": "building",
               type: "fill-extrusion",
               minzoom: 14,
@@ -361,6 +436,108 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
           myMarkerRef.current = new gl.Marker({ element: el }).setLngLat([myLng, myLat]).addTo(map);
         }
 
+        // ── Clustering natif joueurs+PNJ (source GeoJSON, MapLibre gère le
+        // regroupement lui-même — pas de calcul de cluster côté React) ──────
+        {
+          const { radius, maxZoom } = clusterOptions();
+          map.addSource(PLAYERS_SOURCE_ID, {
+            type: "geojson",
+            data: { type: "FeatureCollection", features: [] },
+            cluster: true,
+            clusterMaxZoom: maxZoom,
+            clusterRadius: radius, // rayon plus large sur mobile (cible tactile)
+          });
+
+          map.addLayer({
+            id: CLUSTER_LAYER, type: "circle", source: PLAYERS_SOURCE_ID,
+            filter: ["has", "point_count"],
+            paint: {
+              "circle-color": [
+                "step", ["get", "point_count"],
+                "#BF5FFF", 10, "#00B4FF", 30, "#FFD600",
+              ],
+              "circle-radius": ["step", ["get", "point_count"], 16, 10, 20, 30, 26],
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#04040A",
+              "circle-opacity": 0.9,
+            },
+          });
+          map.addLayer({
+            id: CLUSTER_COUNT_LAYER, type: "symbol", source: PLAYERS_SOURCE_ID,
+            filter: ["has", "point_count"],
+            layout: {
+              "text-field": ["get", "point_count_abbreviated"],
+              "text-font": ["Noto Sans Bold"],
+              "text-size": 13,
+            },
+            paint: { "text-color": "#04040A" },
+          });
+          map.addLayer({
+            id: POINT_LAYER, type: "circle", source: PLAYERS_SOURCE_ID,
+            filter: ["!", ["has", "point_count"]],
+            paint: {
+              "circle-color": ["get", "dotColor"],
+              "circle-radius": ["case", ["get", "isStar"], 9, 6],
+              "circle-stroke-width": 2,
+              "circle-stroke-color": "#04040A",
+            },
+          });
+
+          // Zoom d'expansion réel — calculé par un index Supercluster tenu en
+          // local (voir superclusterRef), pas un zoom+2 arbitraire.
+          // NOTE TECHNIQUE : source.getClusterExpansionZoom() (l'API MapLibre
+          // qui délègue au worker) ne répond jamais dans ce build CDN — testé
+          // et confirmé en prod (le callback reste pending indéfiniment, sans
+          // erreur, cause du bug non identifiée précisément malgré
+          // investigation — possiblement un souci d'appariement Actor/worker
+          // propre au chargement MapLibre via <script> CDN plutôt qu'un bundle
+          // npm). Contournement robuste : Supercluster est LE moteur que
+          // MapLibre utilise en interne pour ses sources GeoJSON clusterisées ;
+          // en faisant tourner la même lib avec les mêmes paramètres
+          // (clusterOptions()) sur les mêmes données côté client, le zoom
+          // d'expansion obtenu est mathématiquement identique à celui que le
+          // worker aurait renvoyé — ce n'est pas une approximation.
+          map.on("click", CLUSTER_LAYER, (e: any) => {
+            const features = map.queryRenderedFeatures(e.point, { layers: [CLUSTER_LAYER] });
+            const clusterId = features[0]?.properties?.cluster_id;
+            if (clusterId == null || !superclusterRef.current) return;
+            try {
+              const zoom = superclusterRef.current.getClusterExpansionZoom(clusterId);
+              map.easeTo({ center: features[0].geometry.coordinates, zoom, duration: 500 });
+            } catch {
+              // cluster_id inconnu de l'index local (désync momentanée pendant
+              // un setData concurrent) — pas grave, le joueur re-clique.
+            }
+          });
+          map.on("click", POINT_LAYER, (e: any) => {
+            const id = e.features?.[0]?.properties?.id;
+            if (id) onPlayerClickRef.current(id);
+          });
+          map.on("mouseenter", CLUSTER_LAYER, () => { map.getCanvas().style.cursor = "pointer"; });
+          map.on("mouseleave", CLUSTER_LAYER, () => { map.getCanvas().style.cursor = ""; });
+          map.on("mouseenter", POINT_LAYER, () => { map.getCanvas().style.cursor = "pointer"; });
+          map.on("mouseleave", POINT_LAYER, () => { map.getCanvas().style.cursor = ""; });
+
+          // Hover : un seul popup réutilisé (pas un par joueur) — évite de
+          // recréer des noeuds DOM en boucle au survol.
+          const hoverPopup = new gl.Popup({ closeButton: false, offset: 14, className: "mylife-tooltip" });
+          map.on("mousemove", POINT_LAYER, (e: any) => {
+            const f = e.features?.[0];
+            if (!f) return;
+            const props = f.properties as PlayerFeatureProps;
+            hoverPopup
+              .setLngLat(f.geometry.coordinates)
+              .setHTML(
+                `<b style="color:${props.dotColor}">${escapeHtml(props.label)}</b>${props.crewTag ? ` <span style="opacity:.6">[${escapeHtml(props.crewTag)}]</span>` : ""}`
+              )
+              .addTo(map);
+          });
+          map.on("mouseleave", POINT_LAYER, () => hoverPopup.remove());
+
+          clusterReadyRef.current = true;
+          syncPlayersSource(map, playersRef.current, superclusterRef);
+        }
+
         if (onMapReady) {
           onMapReady((lat: number, lng: number, zoom = 16, pitch = 55, bearing = -12) => {
             map.flyTo({ center: [lng, lat], zoom, pitch, bearing, duration: zoom < 14 ? 1200 : 2500, essential: true });
@@ -374,6 +551,7 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
     });
 
     return () => {
+      clusterReadyRef.current = false;
       if (mapRef.current) {
         (mapRef.current as { remove: () => void }).remove();
         mapRef.current = null;
@@ -381,28 +559,17 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
     };
   }, []); // mount once
 
-  // Mise à jour joueurs quand ils changent
+  // Mise à jour joueurs quand ils changent — setData() sur la source
+  // existante (pas de recréation de carte, pas de perte de zoom/pitch/
+  // bearing, pas de listeners dupliqués, pas de marqueurs DOM dupliqués).
   useEffect(() => {
     const map = mapRef.current as any;
     const gl = glRef.current as any;
     if (!map || !gl) return;
 
-    Object.values(markersRef.current).forEach((m) => m.remove());
-    markersRef.current = {};
-
-    players.forEach((p) => {
-      const dotColor = p.crew_color ?? STATUS_CONFIG[p.status]?.color ?? "#FFD600";
-      const name = p.display_name.split(" ")[0];
-      const el = playerMarkerEl(p, dotColor);
-      el.addEventListener("click", () => onPlayerClick(p.id));
-      const popup = new gl.Popup({ closeButton: false, offset: 18, className: "mylife-tooltip" }).setHTML(
-        `<b style="color:${dotColor}">${escapeHtml(name)}</b>${p.crew_tag ? ` <span style="opacity:.6">[${escapeHtml(p.crew_tag)}]</span>` : ""}`
-      );
-      const marker = new gl.Marker({ element: el }).setLngLat([p.lng, p.lat]).setPopup(popup).addTo(map);
-      el.addEventListener("mouseenter", () => marker.togglePopup());
-      el.addEventListener("mouseleave", () => marker.togglePopup());
-      markersRef.current[p.id] = marker;
-    });
+    const applyData = () => syncPlayersSource(map, players, superclusterRef);
+    if (clusterReadyRef.current) applyData();
+    else map.once("load", applyData);
   }, [players]);
 
   return (
