@@ -11,8 +11,8 @@ import {
   fetchActiveSeason, fetchDistricts, fetchMyDistrict, chooseDistrict,
   fetchActiveMissions, fetchMyParticipations, joinMission, validateMission, claimMissionReward,
   fetchMySeasonTotals, fetchMyBadges, fetchDistrictLeaderboard,
-  fetchTodayChallenges, claimDailyChallenge,
-  type SeasonMission, type District, type MissionParticipationStatus, type DailyChallenge,
+  fetchTodayChallenges, claimDailyChallenge, fetchMyActivity, setActivityVisibility,
+  type SeasonMission, type District, type MissionParticipationStatus, type DailyChallenge, type ActivityEvent,
 } from "@/lib/season";
 import { requestAndGetLocation } from "@/lib/life-map";
 import { joinFlashEvent, checkinFlashEvent } from "@/lib/flash-events";
@@ -205,6 +205,7 @@ function SeasonCard() {
   const [districtBoard, setDistrictBoard] = useState<{ district_name: string; xp: number; level: number }[]>([]);
   const [challenges, setChallenges] = useState<DailyChallenge[]>([]);
   const [claimingChallenge, setClaimingChallenge] = useState<string | null>(null);
+  const [activity, setActivity] = useState<ActivityEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function refresh() {
@@ -213,9 +214,10 @@ function SeasonCard() {
     setSeasonId(season.id);
     setSeasonName(season.name);
     setSeasonEndsAt(season.ends_at);
-    const [ds, myD, ms, parts, totals, badges, board, todayChallenges] = await Promise.all([
+    const [ds, myD, ms, parts, totals, badges, board, todayChallenges, myActivity] = await Promise.all([
       fetchDistricts(), fetchMyDistrict(), fetchActiveMissions(season.id), fetchMyParticipations(),
       fetchMySeasonTotals(), fetchMyBadges(), fetchDistrictLeaderboard(season.id), fetchTodayChallenges(),
+      fetchMyActivity(),
     ]);
     setDistricts(ds);
     setMyDistrictId(myD?.district_id ?? null);
@@ -225,7 +227,14 @@ function SeasonCard() {
     setMyBadges(badges);
     setDistrictBoard(board);
     setChallenges(todayChallenges);
+    setActivity(myActivity);
     setLoading(false);
+  }
+
+  async function handleToggleVisibility(ev: ActivityEvent) {
+    const next: ActivityEvent["visibility"] = ev.visibility === "private" ? "public" : "private";
+    const ok = await setActivityVisibility(ev.id, next);
+    if (ok) setActivity((evs) => evs.map((e) => e.id === ev.id ? { ...e, visibility: next } : e));
   }
 
   async function handleClaimChallenge(code: string) {
@@ -514,6 +523,28 @@ function SeasonCard() {
                 {i + 1}. {d.district_name}
               </Text>
               <Text style={{ color: L.muted, fontSize: 11 }}>Niv. {d.level} · {d.xp} XP</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* ── ACTIVITÉ RÉCENTE ── */}
+      {activity.length > 0 && (
+        <View style={{ backgroundColor: L.card, borderRadius: 20, padding: 16, borderWidth: 1, borderColor: L.border }}>
+          <Text style={{ color: L.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1, marginBottom: 10 }}>ACTIVITÉ RÉCENTE</Text>
+          {activity.map((ev, i) => (
+            <View key={ev.id} style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+              paddingVertical: 8, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: L.border }}>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={{ color: L.text, fontSize: 12, fontWeight: "700" }}>{ev.title}</Text>
+                {ev.body && <Text style={{ color: L.muted, fontSize: 10, marginTop: 1 }}>{ev.body}</Text>}
+              </View>
+              <Pressable onPress={() => handleToggleVisibility(ev)}
+                style={{ backgroundColor: L.cardAlt, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4 }}>
+                <Text style={{ color: L.muted, fontSize: 9, fontWeight: "700" }}>
+                  {ev.visibility === "private" ? "🔒 Privé" : "🌐 Public"}
+                </Text>
+              </Pressable>
             </View>
           ))}
         </View>

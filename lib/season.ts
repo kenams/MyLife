@@ -205,6 +205,25 @@ export async function fetchMyBadges(): Promise<{ code: string; name: string; ico
   });
 }
 
+export type ActivityEvent = {
+  id: string; kind: string; title: string; body: string | null;
+  visibility: "private" | "friends" | "crew" | "public"; created_at: string;
+};
+
+export async function fetchMyActivity(): Promise<ActivityEvent[]> {
+  if (!supabase) return [];
+  const { data: auth } = await supabase.auth.getUser();
+  if (!auth?.user) return [];
+  const { data } = await supabase.rpc("fetch_activity_feed", { p_user_id: auth.user.id, p_limit: 10, p_offset: 0 });
+  return (data ?? []) as ActivityEvent[];
+}
+
+export async function setActivityVisibility(eventId: string, visibility: ActivityEvent["visibility"]): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.from("personal_activity_events").update({ visibility }).eq("id", eventId);
+  return !error;
+}
+
 export async function fetchDistrictLeaderboard(seasonId: string) {
   if (!supabase) return [];
   const { data } = await supabase.rpc("leaderboard_districts", { p_season_id: seasonId });
