@@ -203,7 +203,13 @@ interface LeafletMapProps {
   onPlayerClick: (id: string) => void;
   onReady: () => void;
   onMapReady?: (flyFn: (lat: number, lng: number, zoom?: number, pitch?: number, bearing?: number) => void) => void;
+  onError?: () => void;
   crewZones?: CrewZoneRich[];
+}
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === "undefined" || !window.matchMedia) return false;
+  try { return window.matchMedia("(prefers-reduced-motion: reduce)").matches; } catch { return false; }
 }
 
 // ── Clustering natif MapLibre (source GeoJSON) ──────────────────────────────
@@ -278,7 +284,7 @@ function syncPlayersSource(
   superclusterRef.current = new Supercluster<PlayerFeatureProps>({ radius, maxZoom }).load(geojson.features as any);
 }
 
-function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, crewZones = [] }: LeafletMapProps) {
+function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, onError, crewZones = [] }: LeafletMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef        = useRef<unknown>(null);
   const glRef         = useRef<unknown>(null);
@@ -295,19 +301,30 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
   // réel sur un point après la migration clustering.
   const onPlayerClickRef = useRef(onPlayerClick);
   onPlayerClickRef.current = onPlayerClick;
+  const onErrorRef = useRef(onError);
+  onErrorRef.current = onError;
+  const readyFiredRef = useRef(false);
 
   // Init carte — une seule fois
   useEffect(() => {
     injectMapStyles();
+    readyFiredRef.current = false;
+
+    // Filet de sécurité : si la carte ne charge pas (tuiles injoignables,
+    // perte réseau, style cassé) sous 12s, on prévient l'UI au lieu de
+    // laisser un écran gris silencieux indéfiniment.
+    const loadTimeout = setTimeout(() => {
+      if (!readyFiredRef.current) onErrorRef.current?.();
+    }, 12_000);
 
     loadMaplibre(() => {
       const gl = (window as unknown as { maplibregl: unknown }).maplibregl as any;
       glRef.current = gl;
-      if (!gl) return;
+      if (!gl) { onErrorRef.current?.(); return; }
 
       const domNode = (containerRef.current as unknown as { _nativeTag?: HTMLElement } | null)?._nativeTag
         ?? (containerRef.current as unknown as HTMLElement | null);
-      if (!domNode || !(domNode instanceof HTMLElement)) return;
+      if (!domNode || !(domNode instanceof HTMLElement)) { onErrorRef.current?.(); return; }
       const mapEl = domNode;
       mapEl.classList.add("mylife-map-container");
       mapEl.style.cssText = "width:100%;height:100%;position:absolute;top:0;left:0;right:0;bottom:0;";
@@ -539,18 +556,40 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
         }
 
         if (onMapReady) {
+          const reducedMotion = prefersReducedMotion();
           onMapReady((lat: number, lng: number, zoom = 16, pitch = 55, bearing = -12) => {
-            map.flyTo({ center: [lng, lat], zoom, pitch, bearing, duration: zoom < 14 ? 1200 : 2500, essential: true });
+            map.flyTo({
+              center: [lng, lat],
+              zoom,
+              pitch: reducedMotion ? 0 : pitch,
+              bearing: reducedMotion ? 0 : bearing,
+              duration: reducedMotion ? 0 : (zoom < 14 ? 1200 : 2500),
+              essential: true,
+            });
           });
         }
 
+        readyFiredRef.current = true;
+        clearTimeout(loadTimeout);
         onReady();
       });
 
-      map.on("error", (e: unknown) => console.warn("[MapLibre]", e));
+      // Erreur fatale de style (tuiles injoignables, style corrompu...) avant
+      // même le premier "load" — l'utilisateur doit voir un message, pas un
+      // écran gris. Les erreurs après chargement (ex: une image manquante)
+      // sont bénignes et n'affichent rien de cassé à l'écran ; seule
+      // l'absence de premier "load" déclenche l'état d'erreur ici.
+      map.on("error", (e: unknown) => {
+        console.warn("[MapLibre]", e);
+        if (!readyFiredRef.current) {
+          clearTimeout(loadTimeout);
+          onErrorRef.current?.();
+        }
+      });
     });
 
     return () => {
+      clearTimeout(loadTimeout);
       clusterReadyRef.current = false;
       if (mapRef.current) {
         (mapRef.current as { remove: () => void }).remove();
@@ -929,6 +968,8 @@ export default function LifeMapScreen() {
   const [reportTarget,    setReportTarget]    = useState<MapPlayer | null>(null);
   const [blocked,         setBlocked]         = useState<string[]>([]);
   const [mapReady,        setMapReady]        = useState(false);
+  const [mapFailed,       setMapFailed]       = useState(false);
+  const [mapRetryKey,     setMapRetryKey]     = useState(0);
   const [showMatchmaking, setShowMatchmaking] = useState(false);
   const [bastionAlert,    setBastionAlert]    = useState<{ zone: CrewZoneRich; reward: number } | null>(null);
   const [checkinDone,     setCheckinDone]     = useState(false);
@@ -1212,22 +1253,26 @@ export default function LifeMapScreen() {
     <View style={{ flex: 1, backgroundColor: C.void }}>
 
       {/* ── MAP LEAFLET (DOM direct) ──────────────────────────────────────── */}
-      <LeafletMap
-        players={visible}
-        myLat={myLocation?.lat}
-        myLng={myLocation?.lng}
-        onPlayerClick={(id) => {
-          const p = players.find((pl) => pl.id === id);
-          if (p) { hapticImpact("light"); setSelected(p); }
-        }}
-        onReady={() => setMapReady(true)}
-        onMapReady={(fn) => { flyToRef.current = fn; }}
-        crewZones={crewZones}
-      />
+      {!mapFailed && (
+        <LeafletMap
+          key={mapRetryKey}
+          players={visible}
+          myLat={myLocation?.lat}
+          myLng={myLocation?.lng}
+          onPlayerClick={(id) => {
+            const p = players.find((pl) => pl.id === id);
+            if (p) { hapticImpact("light"); setSelected(p); }
+          }}
+          onReady={() => setMapReady(true)}
+          onMapReady={(fn) => { flyToRef.current = fn; }}
+          onError={() => setMapFailed(true)}
+          crewZones={crewZones}
+        />
+      )}
 
 
       {/* Loading overlay */}
-      {!mapReady && (
+      {!mapReady && !mapFailed && (
         <View style={{
           position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: C.void, alignItems: "center", justifyContent: "center", gap: 20,
@@ -1237,6 +1282,28 @@ export default function LifeMapScreen() {
           <Text style={{ color: C.muted, fontSize: 11, letterSpacing: 3, fontWeight: "900" }}>
             CHARGEMENT DE TOULOUSE...
           </Text>
+        </View>
+      )}
+
+      {/* Panne carte — état visible, pas d'écran gris silencieux */}
+      {mapFailed && (
+        <View style={{
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: C.void, alignItems: "center", justifyContent: "center", gap: 16, padding: 32,
+          zIndex: 10,
+        }}>
+          <Text style={{ fontSize: 40 }}>🗺️</Text>
+          <Text style={{ color: C.text, fontSize: 15, fontWeight: "900", textAlign: "center" }}>
+            La carte n'a pas pu se charger
+          </Text>
+          <Text style={{ color: C.muted, fontSize: 12, textAlign: "center" }}>
+            Vérifie ta connexion réseau, puis réessaie.
+          </Text>
+          <Pressable
+            onPress={() => { setMapFailed(false); setMapReady(false); setMapRetryKey((k) => k + 1); }}
+            style={{ backgroundColor: C.gold, borderRadius: 14, paddingHorizontal: 22, paddingVertical: 12, marginTop: 8 }}>
+            <Text style={{ color: "#04040A", fontWeight: "900", fontSize: 13 }}>Réessayer</Text>
+          </Pressable>
         </View>
       )}
 
