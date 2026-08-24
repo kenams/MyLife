@@ -21,6 +21,7 @@ export type SeasonMission = {
   reward_money: number;
   reward_reputation: number;
   cooldown_hours: number;
+  conditions: Record<string, unknown>;
   repeatable: boolean;
   difficulty: "easy" | "medium" | "hard";
   status: string;
@@ -114,6 +115,44 @@ export async function claimMissionReward(missionId: string): Promise<{
 export async function abandonMission(missionId: string): Promise<boolean> {
   if (!supabase) return false;
   const { error } = await supabase.rpc("abandon_mission", { p_mission_id: missionId });
+  return !error;
+}
+
+// ── Mission Bouger — protocole de session (aucun historique GPS conservé,
+// seul le dernier point + la distance accumulée vivent côté serveur) ──────
+export type MoveSession = {
+  id: string;
+  mission_id: string;
+  status: "active" | "finished" | "abandoned" | "expired";
+  distance_m: number;
+  checkpoint_count: number;
+  speed_flag_count: number;
+};
+
+export async function startMoveSession(missionId: string): Promise<{ ok: boolean; session?: MoveSession; error?: string }> {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { data, error } = await supabase.rpc("start_move_session", { p_mission_id: missionId });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, session: data as MoveSession };
+}
+
+export async function reportMoveCheckpoint(sessionId: string, lat: number, lng: number): Promise<{ ok: boolean; session?: MoveSession; error?: string }> {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { data, error } = await supabase.rpc("report_move_checkpoint", { p_session_id: sessionId, p_lat: lat, p_lng: lng });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, session: data as MoveSession };
+}
+
+export async function finishMoveSession(sessionId: string): Promise<{ ok: boolean; session?: MoveSession; error?: string }> {
+  if (!supabase) return { ok: false, error: "Non connecté" };
+  const { data, error } = await supabase.rpc("finish_move_session", { p_session_id: sessionId });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true, session: data as MoveSession };
+}
+
+export async function abandonMoveSession(sessionId: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.rpc("abandon_move_session", { p_session_id: sessionId });
   return !error;
 }
 
