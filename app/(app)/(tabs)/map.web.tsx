@@ -4,7 +4,7 @@ import {
   Animated, Modal, Pressable, ScrollView,
   Text, View, ActivityIndicator, TextInput,
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import Supercluster from "supercluster";
 
 import { hapticImpact } from "@/lib/safe-haptics";
@@ -1143,6 +1143,10 @@ export default function LifeMapScreen() {
 
   const [players,      setPlayers]      = useState<MapPlayer[]>([]);
   const [crewZones,    setCrewZones]    = useState<CrewZoneRich[]>([]);
+  // Lien profond depuis une notification Saison 1 ("clic ouvre la mission
+  // concernée") : ?missionId=... ouvre directement la fiche correspondante
+  // une fois les missions chargées.
+  const { missionId: deepLinkMissionId } = useLocalSearchParams<{ missionId?: string }>();
   const [seasonId, setSeasonId] = useState<string | null>(null);
   const [seasonMissions, setSeasonMissions] = useState<SeasonMission[]>([]);
   const [missionDistricts, setMissionDistricts] = useState<District[]>([]);
@@ -1176,6 +1180,13 @@ export default function LifeMapScreen() {
     const sub = subscribeToSeasonUpdates(() => refreshSeasonMissions());
     return () => { sub?.unsubscribe(); };
   }, []);
+
+  // Ouverture automatique de la fiche mission depuis un lien de notification
+  useEffect(() => {
+    if (deepLinkMissionId && seasonMissions.some((m) => m.id === deepLinkMissionId)) {
+      setSelectedMissionId(deepLinkMissionId);
+    }
+  }, [deepLinkMissionId, seasonMissions]);
 
   const districtById = Object.fromEntries(missionDistricts.map((d) => [d.id, d]));
 

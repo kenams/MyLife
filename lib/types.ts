@@ -263,6 +263,9 @@ export type NotificationItem = {
   body?: string;
   createdAt: string;
   read: boolean;
+  /** Saison 1 : id de mission à ouvrir directement sur la Map au clic
+   * (link_params.missionId côté serveur), absent pour les autres types. */
+  linkMissionId?: string;
 };
 
 export type RelationshipRecord = {

@@ -730,7 +730,12 @@ export default function NotificationsScreen() {
                   const kindColor = n.kind === "social" ? L.blue : n.kind === "reward" ? L.green : n.kind === "work" ? L.gold : L.red;
                   const kindBg    = n.kind === "social" ? L.blueBg : n.kind === "reward" ? L.greenBg : n.kind === "work" ? L.goldBg : L.redBg;
                   return (
-                    <View key={n.id} style={{ backgroundColor: L.card, borderRadius: 16, padding: 12,
+                    <Pressable key={n.id}
+                      onPress={() => {
+                        markRead(n.id);
+                        if (n.linkMissionId) router.push(`/(app)/(tabs)/map?missionId=${n.linkMissionId}` as never);
+                      }}
+                      style={{ backgroundColor: L.card, borderRadius: 16, padding: 12,
                       borderWidth: 1, borderColor: L.border, borderLeftWidth: 3, borderLeftColor: kindColor,
                       flexDirection: "row", gap: 12, alignItems: "flex-start",
                       shadowColor: "rgba(0,0,0,0.04)", shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 2 } }}>
@@ -742,7 +747,7 @@ export default function NotificationsScreen() {
                         <Text style={{ color: L.text, fontWeight: "700", fontSize: 14 }} numberOfLines={1}>{n.title}</Text>
                         <Text style={{ color: L.muted, fontSize: 12, marginTop: 2 }} numberOfLines={2}>{n.body}</Text>
                       </View>
-                      <Pressable onPress={() => markRead(n.id)}
+                      <Pressable onPress={(e) => { e.stopPropagation?.(); markRead(n.id); }}
                         testID={`mark-read-${n.id}`}
                         accessibilityLabel={`Marquer "${n.title}" comme lu`}
                         hitSlop={10}
@@ -750,7 +755,7 @@ export default function NotificationsScreen() {
                           alignItems: "center", justifyContent: "center" }}>
                         <Ionicons name="checkmark" size={14} color={L.muted} />
                       </Pressable>
-                    </View>
+                    </Pressable>
                   );
                 })}
               </View>
