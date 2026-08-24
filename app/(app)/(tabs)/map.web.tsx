@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated, Modal, Pressable, ScrollView,
   Text, View, ActivityIndicator, TextInput,
@@ -32,6 +32,14 @@ import type { NpcChatTurn } from "@/lib/npc-chat";
 import { ReportModal } from "@/components/report-modal";
 import { useGameStore } from "@/stores/game-store";
 import { supabase } from "@/lib/supabase";
+import {
+  fetchActiveSeason, fetchAllSeasonMissions, fetchDistricts, fetchMyParticipations,
+  fetchMissionParticipantCounts, subscribeToSeasonUpdates,
+  joinMission, validateMission, claimMissionReward,
+  type SeasonMission, type District, type MissionParticipationStatus,
+} from "@/lib/season";
+import { joinFlashEvent, checkinFlashEvent } from "@/lib/flash-events";
+import { MoveMissionModal } from "@/components/move-mission-modal";
 
 // ── Échappement HTML — tags/noms de crew et pseudos viennent de la DB (donc
 // potentiellement saisis par un joueur) et sont injectés dans des popups/SVG
@@ -219,6 +227,8 @@ interface LeafletMapProps {
   onMapReady?: (flyFn: (lat: number, lng: number, zoom?: number, pitch?: number, bearing?: number) => void) => void;
   onError?: () => void;
   crewZones?: CrewZoneRich[];
+  missions?: MissionMapFeatureSource[];
+  onMissionClick?: (missionId: string) => void;
 }
 
 function prefersReducedMotion(): boolean {
@@ -244,6 +254,65 @@ const POINT_LAYER = "mylife-players-point";
  * les cluster_id et casserait le clic sur cluster. */
 function clusterOptions() {
   return { radius: typeof window !== "undefined" && window.innerWidth < 480 ? 60 : 50, maxZoom: 15 };
+}
+
+// ── Couche missions — source GeoJSON séparée, clusterisée indépendamment
+// des joueurs (compteurs jamais mélangés). Réutilise le même mécanisme que
+// les joueurs (setData, Supercluster local pour le zoom d'expansion — le
+// worker MapLibre reste cassé pour getClusterExpansionZoom, cf. plus haut). ─
+const MISSIONS_SOURCE_ID = "mylife-missions";
+const MISSION_CLUSTER_LAYER = "mylife-missions-clusters";
+const MISSION_CLUSTER_COUNT_LAYER = "mylife-missions-cluster-count";
+const MISSION_POINT_LAYER = "mylife-missions-point";
+
+export type MissionMapFeatureSource = {
+  id: string; category: "explore" | "move" | "social"; title: string;
+  userStatus: string | null; district: string | null; difficulty: string;
+  starts_at: string; ends_at: string;
+  reward_xp: number; reward_money: number; reward_reputation: number;
+  capacity: number | null; participant_count: number;
+  lat: number; lng: number; is_demo: boolean; is_qa: boolean;
+};
+
+type MissionFeatureProps = {
+  mission_id: string; category: string; title: string; userStatus: string | null;
+  district: string | null; difficulty: string; ends_at: string;
+  reward_xp: number; participant_count: number; capacity: number | null;
+  dotColor: string; is_demo: boolean; is_qa: boolean;
+};
+
+const MISSION_CATEGORY_COLOR: Record<string, string> = { explore: "#00B4FF", move: "#39FF14", social: "#FF2D78" };
+
+function buildMissionsGeoJson(missions: MissionMapFeatureSource[]): GeoJSON.FeatureCollection<GeoJSON.Point, MissionFeatureProps> {
+  const features: GeoJSON.Feature<GeoJSON.Point, MissionFeatureProps>[] = [];
+  for (const m of missions) {
+    if (!Number.isFinite(m.lat) || !Number.isFinite(m.lng)) continue;
+    if (m.lat < -90 || m.lat > 90 || m.lng < -180 || m.lng > 180) continue;
+    features.push({
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [m.lng, m.lat] },
+      properties: {
+        mission_id: m.id, category: m.category, title: m.title, userStatus: m.userStatus,
+        district: m.district, difficulty: m.difficulty, ends_at: m.ends_at,
+        reward_xp: m.reward_xp, participant_count: m.participant_count, capacity: m.capacity,
+        dotColor: MISSION_CATEGORY_COLOR[m.category] ?? "#FFD600",
+        is_demo: m.is_demo, is_qa: m.is_qa,
+      },
+    });
+  }
+  return { type: "FeatureCollection", features };
+}
+
+function syncMissionsSource(
+  map: any, missions: MissionMapFeatureSource[],
+  superclusterRef: React.MutableRefObject<Supercluster<MissionFeatureProps> | null>
+) {
+  const source = map.getSource(MISSIONS_SOURCE_ID);
+  if (!source) return;
+  const geojson = buildMissionsGeoJson(missions);
+  source.setData(geojson);
+  const { radius, maxZoom } = clusterOptions();
+  superclusterRef.current = new Supercluster<MissionFeatureProps>({ radius, maxZoom }).load(geojson.features as any);
 }
 
 type PlayerFeatureProps = {
@@ -298,7 +367,7 @@ function syncPlayersSource(
   superclusterRef.current = new Supercluster<PlayerFeatureProps>({ radius, maxZoom }).load(geojson.features as any);
 }
 
-function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, onError, crewZones = [] }: LeafletMapProps) {
+function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, onError, crewZones = [], missions = [], onMissionClick }: LeafletMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef        = useRef<unknown>(null);
   const glRef         = useRef<unknown>(null);
@@ -306,7 +375,10 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
   const clusterReadyRef = useRef(false);
   const playersRef = useRef(players);
   playersRef.current = players;
+  const missionsRef = useRef(missions);
+  missionsRef.current = missions;
   const superclusterRef = useRef<Supercluster<PlayerFeatureProps> | null>(null);
+  const missionSuperclusterRef = useRef<Supercluster<MissionFeatureProps> | null>(null);
   // Le click handler des layers est enregistré une seule fois (map.on("load"),
   // effet mount-only) : sans ref, il resterait figé sur la version
   // d'onPlayerClick capturée au tout premier rendu (souvent avec players=[]
@@ -315,6 +387,8 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
   // réel sur un point après la migration clustering.
   const onPlayerClickRef = useRef(onPlayerClick);
   onPlayerClickRef.current = onPlayerClick;
+  const onMissionClickRef = useRef(onMissionClick);
+  onMissionClickRef.current = onMissionClick;
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
   const readyFiredRef = useRef(false);
@@ -361,7 +435,7 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
       map.addControl(new gl.NavigationControl({ visualizePitch: true }), "bottom-right");
       map.addControl(new gl.FullscreenControl(), "bottom-right");
 
-      map.on("load", () => {
+      map.on("load", async () => {
         const canvasContainer = map.getCanvasContainer?.() as HTMLElement | undefined;
         if (canvasContainer) {
           canvasContainer.style.filter =
@@ -567,6 +641,86 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
 
           clusterReadyRef.current = true;
           syncPlayersSource(map, playersRef.current, superclusterRef);
+
+          // ── Couche missions — source séparée, jamais mélangée aux
+          // compteurs joueurs (has/["!",has] filtrent uniquement dans cette
+          // source, aucune interférence avec PLAYERS_SOURCE_ID). ───────────
+          map.addSource(MISSIONS_SOURCE_ID, {
+            type: "geojson", data: { type: "FeatureCollection", features: [] },
+            cluster: true, clusterMaxZoom: maxZoom, clusterRadius: radius,
+          });
+          map.addLayer({
+            id: MISSION_CLUSTER_LAYER, type: "circle", source: MISSIONS_SOURCE_ID,
+            filter: ["has", "point_count"],
+            paint: {
+              "circle-color": "#FFD600",
+              "circle-radius": ["step", ["get", "point_count"], 14, 5, 18, 15, 24],
+              "circle-stroke-width": 2, "circle-stroke-color": "#04040A", "circle-opacity": 0.85,
+            },
+          });
+          map.addLayer({
+            id: MISSION_CLUSTER_COUNT_LAYER, type: "symbol", source: MISSIONS_SOURCE_ID,
+            filter: ["has", "point_count"],
+            layout: { "text-field": ["get", "point_count_abbreviated"], "text-font": ["Noto Sans Bold"], "text-size": 12 },
+            paint: { "text-color": "#04040A" },
+          });
+          // Icônes cohérentes DA MyLife (pas d'emoji brut) — glyphes SVG
+          // vectoriels, un cercle coloré par catégorie + symbole distinctif :
+          // boussole (Explorer), chevrons (Bouger), deux points reliés (Social).
+          const MISSION_ICON_SVG: Record<string, string> = {
+            explore: `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34"><circle cx="17" cy="17" r="15" fill="#00B4FF" stroke="#04040A" stroke-width="2"/><path d="M17 9 L20 17 L17 25 L14 17 Z" fill="#04040A"/></svg>`,
+            move: `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34"><circle cx="17" cy="17" r="15" fill="#39FF14" stroke="#04040A" stroke-width="2"/><path d="M10 13 L17 9 L24 13 M10 21 L17 25 L24 21" stroke="#04040A" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+            social: `<svg xmlns="http://www.w3.org/2000/svg" width="34" height="34"><circle cx="17" cy="17" r="15" fill="#FF2D78" stroke="#04040A" stroke-width="2"/><circle cx="12" cy="15" r="3.2" fill="#04040A"/><circle cx="22" cy="15" r="3.2" fill="#04040A"/><path d="M8 24c0-4 3-6 4-6h10c1 0 4 2 4 6" stroke="#04040A" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`,
+          };
+          await Promise.all(Object.entries(MISSION_ICON_SVG).map(([key, svg]) => new Promise<void>((resolve) => {
+            if (map.hasImage(`mylife-mission-${key}`)) { resolve(); return; }
+            const img = new Image();
+            img.onload = () => { map.addImage(`mylife-mission-${key}`, img); resolve(); };
+            img.onerror = () => resolve();
+            img.src = "data:image/svg+xml," + encodeURIComponent(svg);
+          })));
+
+          map.addLayer({
+            id: MISSION_POINT_LAYER, type: "symbol", source: MISSIONS_SOURCE_ID,
+            filter: ["!", ["has", "point_count"]],
+            layout: {
+              "icon-image": ["case", ["==", ["get", "category"], "explore"], "mylife-mission-explore",
+                ["==", ["get", "category"], "move"], "mylife-mission-move", "mylife-mission-social"],
+              "icon-size": 1, "icon-allow-overlap": true,
+            },
+          });
+
+          map.on("click", MISSION_CLUSTER_LAYER, (e: any) => {
+            const features = map.queryRenderedFeatures(e.point, { layers: [MISSION_CLUSTER_LAYER] });
+            const clusterId = features[0]?.properties?.cluster_id;
+            if (clusterId == null || !missionSuperclusterRef.current) return;
+            try {
+              const zoom = missionSuperclusterRef.current.getClusterExpansionZoom(clusterId);
+              map.easeTo({ center: features[0].geometry.coordinates, zoom, duration: 500 });
+            } catch { /* désync momentanée, le joueur re-clique */ }
+          });
+          map.on("click", MISSION_POINT_LAYER, (e: any) => {
+            const id = e.features?.[0]?.properties?.mission_id;
+            if (id) onMissionClickRef.current?.(id);
+          });
+          map.on("mouseenter", MISSION_CLUSTER_LAYER, () => { map.getCanvas().style.cursor = "pointer"; });
+          map.on("mouseleave", MISSION_CLUSTER_LAYER, () => { map.getCanvas().style.cursor = ""; });
+          map.on("mouseenter", MISSION_POINT_LAYER, () => { map.getCanvas().style.cursor = "pointer"; });
+          map.on("mouseleave", MISSION_POINT_LAYER, () => { map.getCanvas().style.cursor = ""; });
+
+          const missionHoverPopup = new gl.Popup({ closeButton: false, offset: 14, className: "mylife-tooltip" });
+          map.on("mousemove", MISSION_POINT_LAYER, (e: any) => {
+            const f = e.features?.[0];
+            if (!f) return;
+            const props = f.properties as MissionFeatureProps;
+            missionHoverPopup
+              .setLngLat(f.geometry.coordinates)
+              .setHTML(`<b style="color:${props.dotColor}">${escapeHtml(props.title)}</b>${props.district ? ` <span style="opacity:.6">· ${escapeHtml(props.district)}</span>` : ""}`)
+              .addTo(map);
+          });
+          map.on("mouseleave", MISSION_POINT_LAYER, () => missionHoverPopup.remove());
+
+          syncMissionsSource(map, missionsRef.current, missionSuperclusterRef);
         }
 
         if (onMapReady) {
@@ -624,6 +778,15 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
     if (clusterReadyRef.current) applyData();
     else map.once("load", applyData);
   }, [players]);
+
+  useEffect(() => {
+    const map = mapRef.current as any;
+    const gl = glRef.current as any;
+    if (!map || !gl) return;
+    const applyMissions = () => syncMissionsSource(map, missions, missionSuperclusterRef);
+    if (clusterReadyRef.current) applyMissions();
+    else map.once("load", applyMissions);
+  }, [missions]);
 
   return (
     <View
@@ -973,6 +1136,120 @@ export default function LifeMapScreen() {
 
   const [players,      setPlayers]      = useState<MapPlayer[]>([]);
   const [crewZones,    setCrewZones]    = useState<CrewZoneRich[]>([]);
+  const [seasonId, setSeasonId] = useState<string | null>(null);
+  const [seasonMissions, setSeasonMissions] = useState<SeasonMission[]>([]);
+  const [missionDistricts, setMissionDistricts] = useState<District[]>([]);
+  const [missionCounts, setMissionCounts] = useState<Record<string, number>>({});
+  const [myMissionParticipations, setMyMissionParticipations] = useState<Record<string, MissionParticipationStatus>>({});
+  const [missionFilter, setMissionFilter] = useState<"all" | "explore" | "move" | "social" | "available" | "in_progress" | "done">("all");
+  const [selectedMissionId, setSelectedMissionId] = useState<string | null>(null);
+  const [moveModalMission, setMoveModalMission] = useState<SeasonMission | null>(null);
+  const [missionBusy, setMissionBusy] = useState(false);
+  const [missionError, setMissionError] = useState<string | null>(null);
+
+  async function refreshSeasonMissions() {
+    const season = await fetchActiveSeason();
+    if (!season) return;
+    setSeasonId(season.id);
+    const [ms, ds, counts, parts] = await Promise.all([
+      fetchAllSeasonMissions(season.id), fetchDistricts(),
+      fetchMissionParticipantCounts(season.id), fetchMyParticipations(),
+    ]);
+    setSeasonMissions(ms);
+    setMissionDistricts(ds);
+    setMissionCounts(counts);
+    setMyMissionParticipations(parts);
+  }
+
+  useEffect(() => {
+    refreshSeasonMissions();
+    // Un seul abonnement Realtime pour toute la saison (pas un canal par
+    // mission) — tout changement (nouvelle mission, join, validation,
+    // récompense, expiration) redéclenche un simple refetch groupé.
+    const sub = subscribeToSeasonUpdates(() => refreshSeasonMissions());
+    return () => { sub?.unsubscribe(); };
+  }, []);
+
+  const districtById = Object.fromEntries(missionDistricts.map((d) => [d.id, d]));
+
+  // Mémoïsé : sans ça, ce tableau est une NOUVELLE référence à chaque rendu
+  // du composant (heartbeat de présence toutes les 60s, etc.), ce qui
+  // redéclenchait syncMissionsSource en boucle dans LeafletMap et faisait
+  // recalculer les clusters MapLibre en continu — un cluster repéré pour un
+  // clic pouvait avoir déjà changé de forme quelques centaines de ms plus
+  // tard, rendant le clic silencieusement inopérant. Bug réel trouvé en
+  // testant le clic réel sur un cluster de missions.
+  const missionMapFeatures: MissionMapFeatureSource[] = useMemo(() => seasonMissions
+    .filter((m) => {
+      const status = myMissionParticipations[m.id] ?? null;
+      if (missionFilter === "explore" || missionFilter === "move" || missionFilter === "social") return m.category === missionFilter;
+      if (missionFilter === "available") return !status && m.status === "available" && new Date(m.ends_at) > new Date();
+      if (missionFilter === "in_progress") return status === "joined" || status === "in_progress" || status === "validated";
+      if (missionFilter === "done") return status === "rewarded";
+      return true;
+    })
+    .filter((m) => m.approx_lat != null && m.approx_lng != null)
+    .map((m) => ({
+      id: m.id, category: m.category, title: m.title,
+      userStatus: myMissionParticipations[m.id] ?? null,
+      district: m.district_id ? districtById[m.district_id]?.name ?? null : null,
+      difficulty: m.difficulty, starts_at: m.starts_at, ends_at: m.ends_at,
+      reward_xp: m.reward_xp, reward_money: m.reward_money, reward_reputation: m.reward_reputation,
+      capacity: m.capacity, participant_count: missionCounts[m.id] ?? 0,
+      lat: m.approx_lat as number, lng: m.approx_lng as number,
+      is_demo: false, is_qa: false,
+    })),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [seasonMissions, myMissionParticipations, missionCounts, missionFilter, missionDistricts]);
+
+  const selectedMission = seasonMissions.find((m) => m.id === selectedMissionId) ?? null;
+
+  async function handleMissionAction() {
+    if (!selectedMission) return;
+    const status = myMissionParticipations[selectedMission.id];
+    setMissionError(null);
+    setMissionBusy(true);
+    try {
+      if (!status) {
+        const res = await joinMission(selectedMission.id);
+        if (!res.ok) { setMissionError(res.error ?? "Erreur"); return; }
+        setMyMissionParticipations((p) => ({ ...p, [selectedMission.id]: "joined" }));
+        return;
+      }
+      if (status === "joined" || status === "in_progress") {
+        if (selectedMission.category === "move") {
+          setMoveModalMission(selectedMission);
+          return;
+        }
+        if (selectedMission.category === "social") {
+          if (selectedMission.linked_event_id) {
+            await joinFlashEvent(selectedMission.linked_event_id);
+            const loc = await requestAndGetLocation();
+            if (!loc) { setMissionError("Position GPS requise pour le check-in"); return; }
+            const checkin = await checkinFlashEvent(selectedMission.linked_event_id, loc.lat, loc.lng);
+            if (!checkin.ok) { setMissionError(checkin.error ?? "Check-in impossible"); return; }
+          }
+          const res = await validateMission(selectedMission.id);
+          if (!res.ok) { setMissionError(res.error ?? "Erreur"); return; }
+          setMyMissionParticipations((p) => ({ ...p, [selectedMission.id]: "validated" }));
+          return;
+        }
+        const loc = await requestAndGetLocation();
+        if (!loc) { setMissionError("Position GPS requise pour valider"); return; }
+        const res = await validateMission(selectedMission.id, loc.lat, loc.lng);
+        if (!res.ok) { setMissionError(res.error ?? "Erreur"); return; }
+        setMyMissionParticipations((p) => ({ ...p, [selectedMission.id]: "validated" }));
+        return;
+      }
+      if (status === "validated") {
+        const res = await claimMissionReward(selectedMission.id);
+        if (!res.ok) { setMissionError(res.error ?? "Erreur"); return; }
+        setMyMissionParticipations((p) => ({ ...p, [selectedMission.id]: "rewarded" }));
+      }
+    } finally {
+      setMissionBusy(false);
+    }
+  }
   const [myStatus,     setMyStatus]     = useState<MapStatus>("ghost");
   const [myLocation,   setMyLocation]   = useState<{ lat: number; lng: number } | null>(null);
   const [loading,      setLoading]      = useState(false);
@@ -1281,6 +1558,8 @@ export default function LifeMapScreen() {
           onMapReady={(fn) => { flyToRef.current = fn; }}
           onError={() => setMapFailed(true)}
           crewZones={crewZones}
+          missions={missionMapFeatures}
+          onMissionClick={(id) => { hapticImpact("light"); setSelectedMissionId(id); setMissionError(null); }}
         />
       )}
 
@@ -1364,6 +1643,24 @@ export default function LifeMapScreen() {
       <View style={{ zIndex: 5 }}>
         <FilterPills active={filter} onChange={setFilter} />
       </View>
+
+      {/* ── FILTRES MISSIONS — indépendants des filtres joueurs ─────────────── */}
+      {seasonId && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ zIndex: 5, marginTop: 6 }}
+          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+          {([
+            ["all", "🌆 Missions"], ["explore", "Explorer"], ["move", "Bouger"], ["social", "Social"],
+            ["available", "Disponibles"], ["in_progress", "En cours"], ["done", "Terminées"],
+          ] as const).map(([key, label]) => (
+            <Pressable key={key} onPress={() => setMissionFilter(key)}
+              style={{ backgroundColor: missionFilter === key ? C.gold : "rgba(8,8,15,0.88)", borderRadius: 14,
+                paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1,
+                borderColor: missionFilter === key ? C.gold : C.border }}>
+              <Text style={{ color: missionFilter === key ? "#04040A" : C.soft, fontSize: 11, fontWeight: "800" }}>{label}</Text>
+            </Pressable>
+          ))}
+        </ScrollView>
+      )}
 
       {/* ── GÉOLOC ────────────────────────────────────────────────────────── */}
       {!myLocation ? (
@@ -1674,6 +1971,74 @@ export default function LifeMapScreen() {
             </View>
           </View>
         </Modal>
+      )}
+
+      {/* ── FICHE MISSION (Map) — réutilise exactement les parcours
+      Explorer/Bouger/Social déjà construits, aucune logique dupliquée ──── */}
+      {selectedMission && (
+        <Modal transparent animationType="slide" visible onRequestClose={() => setSelectedMissionId(null)}>
+          <Pressable style={{ flex: 1 }} onPress={() => setSelectedMissionId(null)} />
+          <View style={{ backgroundColor: C.card, borderTopLeftRadius: 24, borderTopRightRadius: 24,
+            padding: 20, gap: 10, borderTopWidth: 1, borderColor: C.border }}>
+            {(() => {
+              const status = myMissionParticipations[selectedMission.id];
+              const catLabel = selectedMission.category === "explore" ? "🧭 Explorer"
+                : selectedMission.category === "move" ? "🚶 Bouger" : "🤝 Social";
+              const district = selectedMission.district_id ? districtById[selectedMission.district_id]?.name : null;
+              const expired = new Date(selectedMission.ends_at) < new Date();
+              const actionLabel = !status ? "Rejoindre"
+                : status === "joined" || status === "in_progress"
+                  ? (selectedMission.category === "move" ? "Démarrer" : "Valider")
+                : status === "validated" ? "Réclamer"
+                : status === "rewarded" ? null : "Rejoindre";
+              return (
+                <>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <Text style={{ color: C.gold, fontSize: 11, fontWeight: "800" }}>{catLabel}</Text>
+                    <Pressable onPress={() => setSelectedMissionId(null)}><Text style={{ color: C.muted, fontSize: 18 }}>×</Text></Pressable>
+                  </View>
+                  <Text style={{ color: C.text, fontSize: 16, fontWeight: "900" }}>{selectedMission.title}</Text>
+                  <Text style={{ color: C.soft, fontSize: 12 }}>{selectedMission.description}</Text>
+                  <View style={{ flexDirection: "row", gap: 12, flexWrap: "wrap" }}>
+                    {district && <Text style={{ color: C.muted, fontSize: 11 }}>📍 {district}</Text>}
+                    <Text style={{ color: C.muted, fontSize: 11 }}>⚡ {selectedMission.difficulty}</Text>
+                    <Text style={{ color: C.muted, fontSize: 11 }}>
+                      👥 {missionCounts[selectedMission.id] ?? 0}{selectedMission.capacity ? `/${selectedMission.capacity}` : ""}
+                    </Text>
+                    {expired && <Text style={{ color: C.red, fontSize: 11, fontWeight: "800" }}>Expirée</Text>}
+                  </View>
+                  <Text style={{ color: C.gold, fontSize: 12, fontWeight: "700" }}>
+                    +{selectedMission.reward_xp} XP · +{selectedMission.reward_money} BL · +{selectedMission.reward_reputation} rép
+                  </Text>
+                  <Text style={{ color: C.muted, fontSize: 10 }}>
+                    🔒 Seule ta position approximative (arrondie) est utilisée pour valider — jamais partagée avec les autres joueurs.
+                  </Text>
+                  {missionError && <Text style={{ color: C.red, fontSize: 11 }}>{missionError}</Text>}
+                  {status === "rewarded" ? (
+                    <Text style={{ color: C.green, fontSize: 13, fontWeight: "800" }}>✓ Mission récompensée</Text>
+                  ) : expired && !status ? null : actionLabel && (
+                    <Pressable disabled={missionBusy} onPress={handleMissionAction}
+                      style={{ backgroundColor: C.gold, borderRadius: 14, padding: 14, alignItems: "center", marginTop: 4 }}>
+                      <Text style={{ color: "#04040A", fontWeight: "900" }}>{missionBusy ? "..." : actionLabel}</Text>
+                    </Pressable>
+                  )}
+                </>
+              );
+            })()}
+          </View>
+        </Modal>
+      )}
+
+      {moveModalMission && (
+        <MoveMissionModal
+          mission={moveModalMission}
+          onClose={() => setMoveModalMission(null)}
+          onClaimed={() => {
+            setMyMissionParticipations((p) => ({ ...p, [moveModalMission.id]: "rewarded" }));
+            setMoveModalMission(null);
+            setSelectedMissionId(null);
+          }}
+        />
       )}
 
       {/* ── FEATURE VIRALE 1 — Alerte prise de bastion ──────────────────── */}

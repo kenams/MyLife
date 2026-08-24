@@ -75,6 +75,41 @@ export async function fetchActiveMissions(seasonId: string): Promise<SeasonMissi
   return (data ?? []) as SeasonMission[];
 }
 
+/** Toutes les missions de la saison (y compris expirées) — pour la Map et
+ * ses filtres (Toutes/Disponibles/En cours/Terminées), contrairement à
+ * fetchActiveMissions qui ne renvoie que celles jouables maintenant. */
+export async function fetchAllSeasonMissions(seasonId: string): Promise<SeasonMission[]> {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from("mission_definitions")
+    .select("*")
+    .eq("season_id", seasonId)
+    .order("created_at", { ascending: false });
+  return (data ?? []) as SeasonMission[];
+}
+
+export async function fetchMissionParticipantCounts(seasonId: string): Promise<Record<string, number>> {
+  if (!supabase) return {};
+  const { data } = await supabase.rpc("mission_map_summary", { p_season_id: seasonId });
+  const map: Record<string, number> = {};
+  (data ?? []).forEach((row: { mission_id: string; participant_count: number }) => {
+    map[row.mission_id] = row.participant_count;
+  });
+  return map;
+}
+
+/** Abonnement Realtime unique pour toute la saison — pas un canal par
+ * mission. Rappelle `onChange` sur tout INSERT/UPDATE touchant les missions
+ * ou les participations (le composant appelant se contente de refetch). */
+export function subscribeToSeasonUpdates(onChange: () => void) {
+  if (!supabase) return null;
+  return supabase
+    .channel("season1-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "mission_definitions" }, onChange)
+    .on("postgres_changes", { event: "*", schema: "public", table: "mission_participations" }, onChange)
+    .subscribe();
+}
+
 export async function fetchMyParticipations(): Promise<Record<string, MissionParticipationStatus>> {
   if (!supabase) return {};
   const { data: auth } = await supabase.auth.getUser();
