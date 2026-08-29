@@ -69,11 +69,25 @@ update public.territory_battles set round_started_at = now() - interval '61 seco
 select 'resolve' as step, status, winner_crew, attacker_pct, defender_pct from public.tick_territory_battle(:'battle_id');
 -- idempotence
 select public.resolve_territory_battle_war(:'battle_id');
+select public.resolve_territory_battle_war(:'battle_id');
 
 select 'territory final' as step, owner_crew_id, influence, defenses_won
 from public.territories where district_id = 'dddddddd-dddd-dddd-dddd-dddddddddddd';
 select 'wory movements' as step, count(*) as n, coalesce(sum(delta),0) as total
 from public.wory_ledger where source = 'territory_battle';
 select 'territory events' as step, kind, count(*) from public.territory_events group by kind order by kind;
+select 'battle rewards' as step,
+  (select count(*) from public.crew_trophies where battle_id = :'battle_id') as trophies,
+  (select count(*) from public.crew_title_grants where battle_id = :'battle_id') as titles,
+  (select count(*) from public.crew_badges where source_id = :'battle_id') as badges;
+select 'winner titles' as step, title, expires_at is not null as temporary
+from public.crew_titles('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa');
+
+select set_config('request.jwt.claims', '{"sub":"11111111-1111-1111-1111-111111111111","role":"authenticated"}', true);
+select 'gage options' as step, jsonb_array_length(public.battle_gage_options()) as options;
+select 'apply gage' as step, gage_code, label, expires_at > now() as active
+from public.apply_battle_gage(:'battle_id', 'poulets');
+select 'apply gage idempotent' as step, count(*) as n
+from public.crew_gages where from_battle_id = :'battle_id';
 
 rollback;
