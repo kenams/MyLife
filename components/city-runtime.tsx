@@ -4,12 +4,17 @@ import { livingNpcsToMapPlayers } from "@/lib/city-simulation-map";
 import { clearLocalCityPlayers, publishLocalCityPlayers } from "@/lib/local-city-map-bridge";
 import { useGameStore } from "@/stores/game-store";
 
+const CITY_TICK_MS = 30_000;
+const IMMEDIATE_TICK_STALE_MS = 45_000;
+
 /**
  * Global Living City scheduler.
  *
  * The city is part of the game runtime, not a QA mode tied to the map screen.
- * It starts after Zustand hydration, advances immediately to account for time
- * spent offline, then progresses in coarse batches while the app is open.
+ * Zustand's rehydration already advances the city for offline time, so this
+ * runtime must not blindly run a second simulation tick immediately after
+ * hydration: Living City guarantees at least one simulated minute/event per
+ * tick, which could duplicate feed items and notifications on cold start.
  *
  * Important: one global timer only — never one timer/heartbeat per NPC.
  */
@@ -25,17 +30,22 @@ export function CityRuntime() {
       publishLocalCityPlayers(livingNpcsToMapPlayers(state.npcs ?? []));
     };
 
-    // First tick reconciles elapsed/offline time using Living City's own
-    // lastSimulatedAt state. No manual "activate city" action is required.
-    runLivingCityTick();
+    // Rehydration normally already reconciles offline elapsed time. Only run
+    // immediately when no simulation timestamp exists or the state is stale.
+    const lastSimulatedAt = useGameStore.getState().livingCity?.lastSimulatedAt;
+    const lastSimulatedMs = lastSimulatedAt ? new Date(lastSimulatedAt).getTime() : Number.NaN;
+    const isStale = !Number.isFinite(lastSimulatedMs) || Date.now() - lastSimulatedMs > IMMEDIATE_TICK_STALE_MS;
+
+    if (isStale) runLivingCityTick();
     publishMapSnapshot();
 
-    // Coarse simulation cadence. The Living City engine derives elapsed time
-    // from timestamps, so this remains cheap and resilient to background tabs.
+    // Coarse simulation cadence. The engine derives elapsed time from its own
+    // timestamp and remains bounded; background tabs therefore do not spawn
+    // per-NPC timers or heartbeats.
     const timer = setInterval(() => {
       runLivingCityTick();
       publishMapSnapshot();
-    }, 30_000);
+    }, CITY_TICK_MS);
 
     return () => {
       clearInterval(timer);
