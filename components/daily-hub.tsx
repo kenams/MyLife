@@ -345,6 +345,24 @@ export function DailyHub() {
           <Text style={{ fontSize: 13 }}>💬</Text>
           <Text style={{ color: C.purple, fontSize: 12, fontWeight: "800" }}>Parler à quelqu'un</Text>
         </Pressable>
+        <View style={{ width: 1, backgroundColor: C.border }} />
+        <Pressable
+          onPress={() => {
+            hapticImpact("light");
+            router.push("/(app)/mylife-story");
+          }}
+          style={{
+            flex: 1,
+            paddingVertical: 12,
+            alignItems: "center",
+            flexDirection: "row",
+            justifyContent: "center",
+            gap: 7,
+          }}
+        >
+          <Text style={{ fontSize: 13 }}>📖</Text>
+          <Text style={{ color: C.primary, fontSize: 12, fontWeight: "800" }}>Mon histoire</Text>
+        </Pressable>
       </View>
       </View>
     </>
