@@ -229,7 +229,7 @@ export function SeasonHub() {
         </View>
         <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 8 }}>
           <Text style={{ color: L.text, fontSize: 12 }}>Niv. {seasonLevel} · {xpInLevel}/{SEASON_XP_PER_LEVEL} XP</Text>
-          <Text style={{ color: L.gold, fontSize: 12 }}>{seasonTotals.money} BL</Text>
+          <Text style={{ color: L.gold, fontSize: 12 }}>{seasonTotals.money} 🪙</Text>
           <Text style={{ color: L.blue, fontSize: 12 }}>{seasonTotals.reputation} rép</Text>
         </View>
         <Pressable onPress={() => setShowDistrictPicker((s) => !s)}>
@@ -259,7 +259,7 @@ export function SeasonHub() {
           <Text style={{ color: L.primary, fontSize: 10, fontWeight: "800", marginBottom: 4 }}>MAINTENANT</Text>
           <Text style={{ color: L.text, fontSize: 14, fontWeight: "800" }}>{primaryMission.title}</Text>
           <Text style={{ color: L.muted, fontSize: 11, marginTop: 2, marginBottom: 10 }}>
-            +{primaryMission.reward_xp} XP · +{primaryMission.reward_money} BL
+            +{primaryMission.reward_xp} XP · +{primaryMission.reward_money} 🪙
           </Text>
           <Pressable
             onPress={() => {
@@ -297,7 +297,7 @@ export function SeasonHub() {
                 <View style={{ flex: 1, marginRight: 8 }}>
                   <Text style={{ color: L.text, fontSize: 12, fontWeight: "700" }}>{c.title}</Text>
                   <Text style={{ color: L.muted, fontSize: 10, marginTop: 1 }}>
-                    {claimed ? "Récompense reçue" : `${c.progress_count}/${c.target_count} · +${c.reward_xp} XP · +${c.reward_money} BL`}
+                    {claimed ? "Récompense reçue" : `${c.progress_count}/${c.target_count} · +${c.reward_xp} XP · +${c.reward_money} 🪙`}
                   </Text>
                 </View>
                 {claimed && <Text style={{ color: L.green, fontSize: 11, fontWeight: "800" }}>✓</Text>}
@@ -338,7 +338,7 @@ export function SeasonHub() {
               <Text style={{ color: L.textSoft, fontSize: 11, marginBottom: 8 }} numberOfLines={2}>{m.description}</Text>
               <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
                 <Text style={{ color: L.gold, fontSize: 11, fontWeight: "700" }}>
-                  +{m.reward_xp} XP · +{m.reward_money} BL · +{m.reward_reputation} rép
+                  +{m.reward_xp} XP · +{m.reward_money} 🪙 · +{m.reward_reputation} rép
                 </Text>
                 {!status && (
                   <Pressable disabled={busy} onPress={() => handleJoin(m.id)}

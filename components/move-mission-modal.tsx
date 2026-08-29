@@ -115,7 +115,7 @@ export function MoveMissionModal({ mission, onClose, onClaimed }: {
           <>
             <Text style={{ color: L.primary, fontSize: 12 }}>Objectif : {target} m à parcourir</Text>
             <Text style={{ color: L.primary, fontSize: 12 }}>
-              Récompense : +{mission.reward_xp} XP · +{mission.reward_money} BL · +{mission.reward_reputation} rép
+              Récompense : +{mission.reward_xp} XP · +{mission.reward_money} 🪙 · +{mission.reward_reputation} rép
             </Text>
             <Pressable onPress={handleStart} style={{ backgroundColor: L.primary, borderRadius: 14, padding: 14, alignItems: "center" }}>
               <Text style={{ color: "#04040A", fontWeight: "900" }}>Démarrer</Text>

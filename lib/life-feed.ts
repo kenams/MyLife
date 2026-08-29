@@ -78,7 +78,7 @@ export function buildActionFeedEvent(
 
 // ── NPC drama generator (appelé par le moteur NPC) ────────────────────────────
 const NPC_DRAMA = [
-  { emoji: "💰", body: "{name} vient de toucher 800 BL — richesse silencieuse", kind: "rich" as FeedKind },
+  { emoji: "💰", body: "{name} vient de toucher 800 🪙 — richesse silencieuse", kind: "rich" as FeedKind },
   { emoji: "😤", body: "{name} lance un défi positif pour son crew", kind: "npc_drama" as FeedKind },
   { emoji: "👀", body: "{name} change de quartier pour une mission locale", kind: "location_change" as FeedKind },
   { emoji: "🤝", body: "{name} vient de nouer une alliance dans le {loc}", kind: "encounter" as FeedKind },

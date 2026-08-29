@@ -54,7 +54,7 @@ export function ShareCard({
 
   const gridStats: { label: string; value: string; color: string }[] = [
     { label: "Réputation", value: String(stats.reputation),           color: C.purple },
-    { label: "BL",         value: `${Math.round(money)}`,             color: C.gold   },
+    { label: "Wory",       value: `${Math.round(money)}`,             color: C.gold   },
     { label: "Streak",     value: `${stats.streak}j`,                 color: C.green  },
     { label: "Fitness",    value: `${Math.round(stats.fitness)}`,     color: "#00B4FF" },
   ];

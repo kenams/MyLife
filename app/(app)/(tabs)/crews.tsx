@@ -228,7 +228,7 @@ export default function CrewsScreen() {
     if (ok && !isNaN(reward)) await setVisitorReward(myCrewId, reward);
     setDepositing(false);
     if (ok) {
-      showToast(`💰 ${amount} BL déposés · Trésorerie : ${newBalance} BL`);
+      showToast(`🪙 ${amount} Wory déposés · Trésorerie : ${newBalance}`);
       setTreasuryModal(false);
       fetchCrews().then(setCrews);
     } else {
@@ -428,7 +428,7 @@ export default function CrewsScreen() {
                     <View>
                       <Text style={{ color: C.gold, fontSize: 11, fontWeight: "800" }}>Bastion</Text>
                       <Text style={{ color: C.muted, fontSize: 9 }}>
-                        💰 {crews.find(c => c.id === myCrewId)?.treasury ?? 0} BL
+                        🪙 {crews.find(c => c.id === myCrewId)?.treasury ?? 0}
                         {(crews.find(c => c.id === myCrewId)?.visitor_reward ?? 0) > 0
                           ? ` · +${crews.find(c => c.id === myCrewId)?.visitor_reward} visiteurs`
                           : ""}
@@ -856,11 +856,11 @@ export default function CrewsScreen() {
               💰 Trésorerie du bastion
             </Text>
             <Text style={{ color: C.textSoft, fontSize: 12, textAlign: "center", marginTop: 6, marginBottom: 20 }}>
-              Les BL déposés financent les récompenses des visiteurs qui entrent dans ta zone.
+              Les Wory déposés financent les récompenses des visiteurs qui entrent dans ta zone.
             </Text>
 
             <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 6 }}>
-              DÉPOSER (BL)
+              DÉPOSER (🪙 Wory)
             </Text>
             <TextInput value={depositAmount} onChangeText={setDepositAmount}
               keyboardType="numeric" placeholderTextColor={C.muted}
@@ -869,7 +869,7 @@ export default function CrewsScreen() {
                 borderWidth: 1, borderColor: C.border, textAlign: "center" }} />
 
             <Text style={{ color: C.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5, marginBottom: 6 }}>
-              RÉCOMPENSE PAR VISITEUR (BL · 0 = désactivé)
+              RÉCOMPENSE PAR VISITEUR (🪙 Wory · 0 = désactivé)
             </Text>
             <TextInput value={rewardAmount} onChangeText={setRewardAmount}
               keyboardType="numeric" placeholderTextColor={C.muted}

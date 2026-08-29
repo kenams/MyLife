@@ -1754,7 +1754,7 @@ export default function LifeMapScreen() {
               Tu es dans le bastion [{bastionAlert.zone.crew?.tag}]
             </Text>
             <Text style={{ color: C.soft, fontSize: 11, marginTop: 2 }}>
-              Check-in pour gagner {bastionAlert.reward} BL · 1 fois par 24h
+              Check-in pour gagner {bastionAlert.reward} 🪙 · 1 fois par 24h
             </Text>
           </View>
           <View style={{ gap: 6 }}>
@@ -2035,7 +2035,7 @@ export default function LifeMapScreen() {
                     {expired && <Text style={{ color: C.red, fontSize: 11, fontWeight: "800" }}>Expirée</Text>}
                   </View>
                   <Text style={{ color: C.gold, fontSize: 12, fontWeight: "700" }}>
-                    +{selectedMission.reward_xp} XP · +{selectedMission.reward_money} BL · +{selectedMission.reward_reputation} rép
+                    +{selectedMission.reward_xp} XP · +{selectedMission.reward_money} 🪙 · +{selectedMission.reward_reputation} rép
                   </Text>
                   <Text style={{ color: C.muted, fontSize: 10 }}>
                     🔒 Seule ta position approximative (arrondie) est utilisée pour valider — jamais partagée avec les autres joueurs.

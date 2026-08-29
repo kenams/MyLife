@@ -2,6 +2,7 @@
 import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Animated, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
+import { wory } from "@/lib/branding";
 import { supabase } from "@/lib/supabase";
 import {
   buildActionFeedEvent,
@@ -80,12 +81,12 @@ type ActionDef = {
 };
 
 const ALL_ACTIONS: ActionDef[] = [
-  { id: "healthy-meal",  emoji: "🍱", label: "Manger propre",     costLabel: "14 BL",  gainLabel: "+Faim +Forme",       category: "survie" },
-  { id: "home-cooking",  emoji: "🍳", label: "Faire la popote",   costLabel: "8 BL",   gainLabel: "+Faim économe",      category: "survie" },
+  { id: "healthy-meal",  emoji: "🍱", label: "Manger propre",     costLabel: "🪙 14",  gainLabel: "+Faim +Forme",       category: "survie" },
+  { id: "home-cooking",  emoji: "🍳", label: "Faire la popote",   costLabel: "🪙 8",   gainLabel: "+Faim économe",      category: "survie" },
   { id: "sleep",         emoji: "🛌", label: "Roupiller",         costLabel: "temps",  gainLabel: "+Énergie max",       category: "survie" },
   { id: "nap",           emoji: "💤", label: "Piquer un som",     costLabel: "temps",  gainLabel: "+Énergie rapide",    category: "survie" },
   { id: "shower",        emoji: "🚿", label: "Se laver",          costLabel: "3 bl",   gainLabel: "+Look +Mood",        category: "survie" },
-  { id: "work-shift",    emoji: "💼", label: "Aller au taff",     costLabel: "énergie", gainLabel: "+BL +Réputation",    category: "travail", minEnergy: 20 },
+  { id: "work-shift",    emoji: "💼", label: "Aller au taff",     costLabel: "énergie", gainLabel: "+Wory +Réputation",    category: "travail", minEnergy: 20 },
   { id: "cafe-chat",     emoji: "☕", label: "Poser au bando",    costLabel: "8 bl",   gainLabel: "+Réseau +Mood",      category: "social",  minMoney: 8 },
   { id: "team-sport",    emoji: "🏀", label: "Terrain de foot",   costLabel: "énergie", gainLabel: "+Réseau +Forme",     category: "social",  minEnergy: 25 },
   { id: "walk",          emoji: "🏃", label: "Faire un tour",     costLabel: "énergie", gainLabel: "+Mood -Stress",      category: "santé" },
@@ -460,7 +461,7 @@ export default function HomeScreen() {
     stats.hunger < 30  && { emoji: "🍱", label: "Tu as faim",      body: "Mange quelque chose maintenant.",            action: "healthy-meal" as LifeActionId },
     stats.mood < 30    && { emoji: "🧘", label: "Mood au fond",     body: "Pose-toi. Ça changera tout.",                action: "meditate"     as LifeActionId },
     stats.hygiene < 25 && { emoji: "🚿", label: "Look en carton",  body: "Vas te laver avant de sortir.",              action: "shower"       as LifeActionId },
-    stats.money < 20   && { emoji: "💼", label: "Plus de BL",      body: "File au taff dès que tu as assez d'énergie.", action: "work-shift"   as LifeActionId },
+    stats.money < 20   && { emoji: "💼", label: "Plus de Wory",    body: "File au taff dès que tu as assez d'énergie.", action: "work-shift"   as LifeActionId },
   ].filter(Boolean) as { emoji: string; label: string; body: string; action: LifeActionId }[];
 
   const topCrisis  = crises[0];
@@ -470,7 +471,7 @@ export default function HomeScreen() {
   function blockedReason(a: ActionDef): string | undefined {
     if (a.id === "work-shift" && !timeCtx.workAvailable) return "Pas dispo à cette heure";
     if (a.minEnergy && stats.energy < a.minEnergy) return `Énergie insuffisante (${Math.round(stats.energy)}/${a.minEnergy})`;
-    if (a.minMoney  && stats.money  < a.minMoney)  return `Manque de BL (${Math.round(stats.money)}/${a.minMoney})`;
+    if (a.minMoney  && stats.money  < a.minMoney)  return `Manque de Wory (${Math.round(stats.money)}/${a.minMoney})`;
     return undefined;
   }
 
@@ -592,7 +593,7 @@ export default function HomeScreen() {
     const evtPayload = buildActionFeedEvent(id, playerName, playerEmoji, "Toulouse", false);
     if (evtPayload) publishFeedEvent(evtPayload);
     const msgs: Record<string, string> = {
-      "work-shift":   "+BL +réputation 💰",
+      "work-shift":   "+Wory +réputation 🪙",
       "sleep":        "énergie rechargée ⚡",
       "nap":          "+énergie rapide ⚡",
       "healthy-meal": "+faim +forme 🍱",
@@ -619,7 +620,7 @@ export default function HomeScreen() {
 
   const nextAction = listRows.find((row) => !row.blocked)?.action ?? listRows[0]?.action;
   const liveNowLabel = flashEvents[0]?.title ?? liveEvents[0]?.body ?? "Ouvre la Life Map";
-  const evolutionLabel = `Niv ${playerLevel} · ${Math.round(stats.money)} BL · ${stats.reputation} rep`;
+  const evolutionLabel = `Niv ${playerLevel} · ${wory(stats.money)} · ${stats.reputation} rep`;
 
   async function handleJoinFlash(evt: FlashEvent) {
     if (joinedFlash.has(evt.id)) return;
@@ -679,7 +680,7 @@ export default function HomeScreen() {
                   <Text style={{ color: L.green + "CC", fontSize: 10 }}>+{evt.reward_xp} XP</Text>
                 )}
                 {evt.reward_money > 0 && (
-                  <Text style={{ color: L.gold + "CC", fontSize: 10 }}>+{evt.reward_money} BL</Text>
+                  <Text style={{ color: L.gold + "CC", fontSize: 10 }}>{wory(evt.reward_money, { sign: true })}</Text>
                 )}
               </View>
             </View>
@@ -748,9 +749,8 @@ export default function HomeScreen() {
                 paddingHorizontal: 12, paddingVertical: 6,
                 borderWidth: 1, borderColor: L.primary + "35",
                 shadowColor: L.primary, shadowOpacity: 0.2, shadowRadius: 10 }}>
-                <Text style={{ fontSize: 12 }}>💰</Text>
                 <Text style={{ color: L.primary, fontSize: 14, fontWeight: "900" }}>
-                  {Math.round(stats.money)} BL
+                  {wory(stats.money)}
                 </Text>
               </View>
             </View>

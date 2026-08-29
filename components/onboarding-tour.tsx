@@ -17,8 +17,8 @@ const STEPS = [
     accent: C.blue,
   },
   {
-    emoji: "⚡", title: "Actions, XP & BL",
-    body: "Chaque action utile dans ta vraie vie fait monter ton niveau, tes BL et ta réputation locale.",
+    emoji: "⚡", title: "Actions, XP & Wory",
+    body: "Chaque action utile dans ta vraie vie fait monter ton niveau, tes Wory (🪙 la monnaie du jeu) et ta réputation locale.",
     accent: C.green,
   },
   {

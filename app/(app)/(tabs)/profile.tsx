@@ -316,12 +316,12 @@ export default function ProfileScreen() {
               </Text>
               {eventRewards.xp > 0 && (
                 <Text style={{ color: L.orange, fontSize: 10, marginTop: 2, fontWeight: "700" }}>
-                  🎉 +{eventRewards.xp} XP · +{eventRewards.money} BL via events IRL
+                  🎉 +{eventRewards.xp} XP · +{eventRewards.money} 🪙 via events IRL
                 </Text>
               )}
               {seasonTotals.xp > 0 && (
                 <Text style={{ color: L.primary, fontSize: 10, marginTop: 2, fontWeight: "700" }}>
-                  🌆 +{seasonTotals.xp} XP · +{seasonTotals.money} BL · +{seasonTotals.reputation} rép — Saison 1
+                  🌆 +{seasonTotals.xp} XP · +{seasonTotals.money} 🪙 · +{seasonTotals.reputation} rép — Saison 1
                 </Text>
               )}
               {myBadges.length > 0 && (

@@ -20,7 +20,7 @@ const SLIDES = [
     icon:     "⚡",
     tag:      "TON PROFIL ÉVOLUE",
     title:    "Social, forme,\nstyle, influence",
-    body:     "Chaque action utile fait monter ton niveau, tes BL et ta réputation.",
+    body:     "Chaque action utile fait monter ton niveau, tes Wory et ta réputation.",
     accent:   "#FF6B00",
     glow:     "rgba(255,107,0,0.18)",
     dim:      "#1A0D00",

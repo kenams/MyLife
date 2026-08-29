@@ -3,7 +3,7 @@
 /**
  * GainToast — feedback visuel standardisé de chaque gain (Phase C).
  * Écoute `lastGain` du store et fait apparaître une pastille flottante
- * « +X XP · +Y BL · +Z rép » avec haptique. Monté une seule fois, au niveau
+ * « +X XP · +Y 🪙 · +Z rép » avec haptique. Monté une seule fois, au niveau
  * du layout de l'app, pour flotter au-dessus de tous les écrans.
  */
 
@@ -11,6 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { AccessibilityInfo, Animated, Easing, Platform, Text, View } from "react-native";
 import { useGameStore } from "@/stores/game-store";
 import { hapticImpact } from "@/lib/safe-haptics";
+import { wory } from "@/lib/branding";
 
 const C = {
   bg: "#141414",
@@ -56,7 +57,7 @@ export function GainToast() {
 
   const parts: { label: string; color: string }[] = [];
   if (shown.xp > 0) parts.push({ label: `+${shown.xp} XP`, color: C.xp });
-  if (shown.money > 0) parts.push({ label: `+${shown.money} BL`, color: C.money });
+  if (shown.money > 0) parts.push({ label: wory(shown.money, { sign: true }), color: C.money });
   if (shown.reputation > 0) parts.push({ label: `+${shown.reputation} rép`, color: C.rep });
   if (parts.length === 0) return null;
 
