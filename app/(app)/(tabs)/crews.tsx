@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Animated, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { router } from "expo-router";
 
 import { useGameStore } from "@/stores/game-store";
 import {
@@ -409,6 +410,14 @@ export default function CrewsScreen() {
               )}
 
               <View style={{ flexDirection: "row", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                {/* QG du crew */}
+                <Pressable onPress={() => router.push("/(app)/crew-hq")}
+                  style={{ flexDirection: "row", alignItems: "center", gap: 5,
+                    backgroundColor: C.purple + "1E", borderRadius: 9, paddingHorizontal: 11, paddingVertical: 8,
+                    borderWidth: 1, borderColor: C.purple + "40" }}>
+                  <Text style={{ fontSize: 13 }}>🏠</Text>
+                  <Text style={{ color: C.purple, fontSize: 11.5, fontWeight: "900" }}>QG du crew</Text>
+                </Pressable>
                 {/* Bastion */}
                 {myBastion ? (
                   <Pressable onPress={() => setTreasuryModal(true)}
