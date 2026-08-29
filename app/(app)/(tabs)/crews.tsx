@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Animated, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
 import { router } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 import { useGameStore } from "@/stores/game-store";
 import {
@@ -374,6 +375,18 @@ export default function CrewsScreen() {
             </Text>
           </View>
         </View>
+
+        {/* Territoires de Toulouse */}
+        <Pressable onPress={() => router.push("/(app)/territories")}
+          style={{ flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: C.card,
+            borderRadius: 12, padding: 13, borderWidth: 1, borderColor: C.border, marginBottom: 16 }}>
+          <Text style={{ fontSize: 17 }}>🗺️</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: C.text, fontSize: 13.5, fontWeight: "900" }}>Territoires de Toulouse</Text>
+            <Text style={{ color: C.textSoft, fontSize: 11, marginTop: 1 }}>Qui contrôle quoi · influence · prochaines Battles</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={16} color={C.muted} />
+        </Pressable>
 
         {/* Mon crew banner */}
         {myCrewId && (() => {

@@ -1,0 +1,198 @@
+"use client";
+
+/**
+ * Territoires de Toulouse (spec §4) — vue publique : qui contrôle quoi,
+ * influence, prestige, prochaine Battle. Réagit en temps réel aux conquêtes.
+ */
+
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { router, Stack } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import {
+  fetchTerritories,
+  subscribeTerritories,
+  daysHeld,
+  type Territory,
+} from "@/lib/territories";
+
+const T = {
+  bg: "#080808",
+  card: "#101010",
+  border: "rgba(255,255,255,0.08)",
+  text: "#F5F2E8",
+  textSoft: "#A8A49A",
+  muted: "#4A4844",
+  gold: "#FFD600",
+  green: "#39FF14",
+  red: "#FF3B3B",
+};
+
+const WHEN = new Intl.DateTimeFormat("fr-FR", {
+  weekday: "long",
+  day: "numeric",
+  month: "short",
+  hour: "2-digit",
+  minute: "2-digit",
+});
+
+export default function TerritoriesScreen() {
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [items, setItems] = useState<Territory[]>([]);
+
+  const load = useCallback(async () => {
+    const data = await fetchTerritories();
+    data.sort((a, b) => {
+      // Contestés / avec battle en premier, puis prestige.
+      const ba = a.next_battle_at ? 0 : 1;
+      const bb = b.next_battle_at ? 0 : 1;
+      if (ba !== bb) return ba - bb;
+      return b.prestige - a.prestige;
+    });
+    setItems(data);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => {
+    load();
+    return subscribeTerritories(load);
+  }, [load]);
+
+  async function onRefresh() {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  }
+
+  const owned = items.filter((i) => i.owner_crew_id).length;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: T.bg }}>
+      <Stack.Screen options={{ headerShown: false }} />
+
+      <View
+        style={{
+          paddingTop: 54,
+          paddingHorizontal: 16,
+          paddingBottom: 14,
+          flexDirection: "row",
+          alignItems: "center",
+          gap: 12,
+          borderBottomWidth: 1,
+          borderBottomColor: T.border,
+        }}
+      >
+        <Pressable onPress={() => router.back()} hitSlop={10}>
+          <Ionicons name="chevron-back" size={24} color={T.text} />
+        </Pressable>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: T.muted, fontSize: 10, fontWeight: "900", letterSpacing: 2 }}>TERRITOIRES</Text>
+          <Text style={{ color: T.text, fontSize: 19, fontWeight: "900" }}>Toulouse</Text>
+        </View>
+        {!loading && (
+          <Text style={{ color: T.textSoft, fontSize: 11.5, fontWeight: "800" }}>
+            {owned}/{items.length} contrôlés
+          </Text>
+        )}
+      </View>
+
+      {loading ? (
+        <View style={{ paddingTop: 60, alignItems: "center" }}>
+          <ActivityIndicator color={T.gold} />
+        </View>
+      ) : (
+        <ScrollView
+          contentContainerStyle={{ padding: 16, paddingBottom: 60, gap: 12 }}
+          showsVerticalScrollIndicator={false}
+          refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.gold} />}
+        >
+          {items.length === 0 && (
+            <Text style={{ color: T.textSoft, fontSize: 12.5, lineHeight: 18 }}>
+              Les territoires s'activeront à la prochaine synchro de la ville.
+            </Text>
+          )}
+          {items.map((t) => {
+            const held = daysHeld(t.conquered_at);
+            const accent = t.owner_color ?? T.muted;
+            return (
+              <View
+                key={t.id}
+                style={{
+                  backgroundColor: T.card,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: t.next_battle_at ? T.red + "50" : T.border,
+                  overflow: "hidden",
+                }}
+              >
+                <View style={{ height: 3, backgroundColor: accent }} />
+                <View style={{ padding: 16 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Text style={{ fontSize: 16 }}>{t.district_emoji}</Text>
+                    <Text style={{ color: T.text, fontSize: 16, fontWeight: "900", flex: 1, letterSpacing: 0.5 }}>
+                      {t.district_name.toUpperCase()}
+                    </Text>
+                    {t.prestige > 1 && (
+                      <Text style={{ color: T.gold, fontSize: 11, fontWeight: "900" }}>★{t.prestige}</Text>
+                    )}
+                  </View>
+
+                  <Text style={{ color: t.owner_crew_id ? accent : T.textSoft, fontSize: 13, fontWeight: "800", marginTop: 6 }}>
+                    {t.owner_crew_id
+                      ? `${t.owner_emoji ?? "🏳️"} ${t.owner_name} [${t.owner_tag}]`
+                      : "Territoire neutre"}
+                  </Text>
+
+                  <View
+                    style={{
+                      height: 6,
+                      borderRadius: 3,
+                      backgroundColor: "#1E1E1E",
+                      overflow: "hidden",
+                      marginTop: 10,
+                    }}
+                  >
+                    <View style={{ width: `${t.influence}%`, height: "100%", backgroundColor: accent }} />
+                  </View>
+                  <Text style={{ color: T.textSoft, fontSize: 11, fontWeight: "700", marginTop: 4 }}>
+                    Influence : {t.influence} %
+                  </Text>
+
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 12, marginTop: 8 }}>
+                    {held != null && (
+                      <Text style={{ color: T.muted, fontSize: 11 }}>Contrôlé depuis {held} j</Text>
+                    )}
+                    {t.defenses_won > 0 && (
+                      <Text style={{ color: T.muted, fontSize: 11 }}>{t.defenses_won} défense{t.defenses_won > 1 ? "s" : ""}</Text>
+                    )}
+                  </View>
+
+                  {t.next_battle_at && (
+                    <View
+                      style={{
+                        marginTop: 10,
+                        backgroundColor: T.red + "18",
+                        borderRadius: 9,
+                        paddingHorizontal: 10,
+                        paddingVertical: 7,
+                      }}
+                    >
+                      <Text style={{ color: T.red, fontSize: 11.5, fontWeight: "900" }}>
+                        ⚔️ Prochaine Battle : {cap(WHEN.format(new Date(t.next_battle_at)))}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            );
+          })}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
+function cap(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
