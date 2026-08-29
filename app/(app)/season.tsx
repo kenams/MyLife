@@ -5,6 +5,7 @@ import { router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SeasonHub } from "@/components/season-hub";
 import { SeasonRecapCard } from "@/components/season-recap-card";
+import { CityUnlocks } from "@/components/city-unlocks";
 
 const T = {
   bg: "#080808",
@@ -43,6 +44,7 @@ export default function SeasonScreen() {
 
       <ScrollView contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
         <SeasonRecapCard />
+        <CityUnlocks />
         <SeasonHub />
       </ScrollView>
     </View>

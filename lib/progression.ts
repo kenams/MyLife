@@ -197,3 +197,29 @@ export function isTalentUnlocked(
 export function getTalentPoints(playerLevel: number): number {
   return Math.floor(playerLevel / 3);
 }
+
+// ── Paliers de ville : ce que la progression ouvre dans Toulouse ──
+export interface CityUnlock {
+  id: string;
+  name: string;
+  hint: string;
+  emoji: string;
+  unlockLevel: number;
+}
+
+export const CITY_UNLOCKS: CityUnlock[] = [
+  { id: "quartiers", name: "Carte des quartiers", hint: "Vois qui bouge autour de toi en temps réel", emoji: "🗺️", unlockLevel: 1 },
+  { id: "crew", name: "Crews", hint: "Rejoins ou crée une équipe", emoji: "🤝", unlockLevel: 2 },
+  { id: "missions-irl", name: "Missions IRL de saison", hint: "Des objectifs à faire sur le terrain", emoji: "📍", unlockLevel: 3 },
+  { id: "rencontres", name: "Rencontres", hint: "Mode Disponible, Feeling, Croisés", emoji: "✨", unlockLevel: 4 },
+  { id: "metier", name: "Un vrai métier", hint: "Un job récurrent avec un salaire", emoji: "💼", unlockLevel: 5 },
+  { id: "bastion", name: "Bastion de crew", hint: "Ton crew pose son QG sur la carte", emoji: "🏰", unlockLevel: 7 },
+  { id: "patrimoine", name: "Patrimoine", hint: "Investir, accumuler, transmettre", emoji: "📈", unlockLevel: 10 },
+  { id: "secteurs", name: "Secteurs de la ville", hint: "Des zones à influence longue durée", emoji: "🌆", unlockLevel: 12 },
+  { id: "roi", name: "Course au Roi de Toulouse", hint: "Le sommet du classement de la ville", emoji: "👑", unlockLevel: 15 },
+];
+
+/** Le prochain palier de ville strictement au-dessus du niveau courant. */
+export function nextCityUnlock(playerLevel: number): CityUnlock | null {
+  return CITY_UNLOCKS.find((u) => u.unlockLevel > playerLevel) ?? null;
+}
