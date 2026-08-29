@@ -6,8 +6,11 @@ import { useGameStore } from "@/stores/game-store";
 const PRESETS: LivingCityPreset[] = ["LOW", "NORMAL", "BUSY", "CHAOS"];
 const SPEEDS: LivingCitySpeed[] = [1, 5, 20];
 
-function isDevPanelAllowed() {
-  return typeof __DEV__ !== "undefined" ? __DEV__ : process.env.NODE_ENV !== "production";
+function isDevPanelAllowed(email?: string, displayName?: string) {
+  if (typeof __DEV__ !== "undefined" ? __DEV__ : process.env.NODE_ENV !== "production") return true;
+  const normalizedEmail = email?.trim().toLowerCase() ?? "";
+  const normalizedName = displayName?.trim().toLowerCase() ?? "";
+  return normalizedEmail.endsWith("@mylife-qa.internal") || normalizedName.startsWith("qa-");
 }
 
 const L = {
@@ -39,7 +42,9 @@ function DevButton({ label, onPress }: { label: string; onPress: () => void }) {
 }
 
 export function LivingCityDevPanel() {
-  const allowed = isDevPanelAllowed();
+  const session = useGameStore((s) => s.session);
+  const avatar = useGameStore((s) => s.avatar);
+  const allowed = isDevPanelAllowed(session?.email, avatar?.displayName);
   const livingCity = useGameStore((s) => s.livingCity);
   const npcs = useGameStore((s) => s.npcs);
   const configure = useGameStore((s) => s.configureLivingCity);
