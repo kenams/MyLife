@@ -892,6 +892,11 @@ export function checkStreakMilestone(streak: number): StreakReward | null {
   return STREAK_MILESTONES.find((m) => m.day === streak) ?? null;
 }
 
+/** Prochain palier de série à atteindre (strictement au-dessus de `streak`). */
+export function nextStreakMilestone(streak: number): StreakReward | null {
+  return STREAK_MILESTONES.find((m) => m.day > streak) ?? null;
+}
+
 export function applyMomentumGain(baseValue: number, stats: AvatarStats) {
   const momentum = getMomentumState(stats);
   return Math.round(baseValue * momentum.multiplier);

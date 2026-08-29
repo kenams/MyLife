@@ -38,6 +38,7 @@ import { useGameStore } from "@/stores/game-store";
 import { useAppTheme } from "@/hooks/use-app-theme";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { OnboardingTour } from "@/components/onboarding-tour";
+import { DailyHub } from "@/components/daily-hub";
 
 const L = {
   bg:        "#080808",
@@ -824,6 +825,9 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+
+        {/* ── TA JOURNÉE — boucle quotidienne (Phase A) ── */}
+        <DailyHub />
 
         {/* ── LIVE TOULOUSE ── */}
         <LiveToulouseWidget />
