@@ -422,7 +422,7 @@ export default function SignInScreen() {
     const r = await signIn(email, password || undefined);
     setLoading(false);
     if (!r.ok) { setError(r.error ?? "Connexion impossible."); return; }
-    router.replace(useGameStore.getState().avatar ? "/(app)/(tabs)/home" : "/(auth)/avatar");
+    router.replace(useGameStore.getState().avatar ? "/(app)/(tabs)/map" : "/(auth)/avatar");
   }
 
   async function handleSignUp() {
@@ -449,11 +449,11 @@ export default function SignInScreen() {
 
   function enter(preset: "balanced" | "burnout" | "romantic" | "live" = "balanced") {
     clear(); loadTestAccount(preset);
-    router.replace("/(app)/(tabs)/home");
+    router.replace("/(app)/(tabs)/map");
   }
   async function demo() {
     clear(); await signIn("demo@mylife.app", "");
-    router.replace("/(app)/(tabs)/home");
+    router.replace("/(app)/(tabs)/map");
   }
 
   async function quickTest() {
@@ -461,7 +461,7 @@ export default function SignInScreen() {
     const r = await signIn("test@mylife.app", "test1234");
     setLoading(false);
     if (!r.ok) { setError(r.error ?? "Compte test indisponible."); return; }
-    router.replace("/(app)/(tabs)/home");
+    router.replace("/(app)/(tabs)/map");
   }
 
   const ctaLabel: Record<Tab, string> = {

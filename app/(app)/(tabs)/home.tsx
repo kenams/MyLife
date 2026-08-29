@@ -25,7 +25,8 @@ import {
 import {
   getMyCrewId, getMyCrewZone, isPlayerInZone, pingZoneActivity,
 } from "@/lib/crews";
-import { requestAndGetLocation } from "@/lib/life-map";
+import { fetchAllPlayers, requestAndGetLocation } from "@/lib/life-map";
+import { cityActivitySummary } from "@/lib/city-simulation-map";
 
 import { AvatarSprite } from "@/components/avatar-sprite";
 import { getAvatarVisual } from "@/lib/avatar-visual";
@@ -154,24 +155,42 @@ function NpcStoryBubble({ story, onPress }: { story: NpcStory; onPress: () => vo
 
 // ─── Live Toulouse Widget ─────────────────────────────────────────────────────
 function LiveToulouseWidget() {
-  const [count,  setCount]  = useState<number | null>(null);
+  const npcs = useGameStore((s) => s.npcs);
+  const [realCount, setRealCount] = useState(0);
+  const [simulatedCount, setSimulatedCount] = useState(0);
+  const [mobileEstimate, setMobileEstimate] = useState(0);
   const [stories, setStories] = useState<NpcStory[]>([]);
-  const countAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refreshCityCounts = async () => {
+      try {
+        const players = await fetchAllPlayers();
+        if (cancelled) return;
+        const summary = cityActivitySummary(players, npcs ?? [], new Date());
+        setRealCount(summary.real);
+        setSimulatedCount(summary.materialized);
+        setMobileEstimate(summary.cityMobileEstimate);
+      } catch {
+        if (cancelled) return;
+        const summary = cityActivitySummary([], npcs ?? [], new Date());
+        setRealCount(0);
+        setSimulatedCount(summary.materialized);
+        setMobileEstimate(summary.cityMobileEstimate);
+      }
+    };
+
+    void refreshCityCounts();
+    const timer = setInterval(() => void refreshCityCounts(), 30_000);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [npcs]);
 
   useEffect(() => {
     if (!supabase) return;
-
-    // Compteur joueurs actifs (non ghost)
-    supabase.from("life_map_players")
-      .select("id", { count: "exact" })
-      .neq("status", "ghost")
-      .then(({ count: n }) => {
-        const total = n ?? 0;
-        setCount(total);
-        Animated.timing(countAnim, { toValue: total, duration: 1200, useNativeDriver: false }).start();
-      });
-
-    // Stories NPCs — derniers messages
     supabase.from("quartier_messages")
       .select("display_name, avatar_emoji, body, quartier, is_star, created_at")
       .eq("is_npc", true)
@@ -194,25 +213,18 @@ function LiveToulouseWidget() {
       });
   }, []);
 
-  const displayCount = count ?? 0;
+  const mobileK = Math.max(0, Math.round(mobileEstimate / 1000));
 
   return (
     <View style={{ marginHorizontal: 20, marginTop: 16, backgroundColor: L.card,
       borderRadius: 18, borderWidth: 1, borderColor: L.border, overflow: "hidden" }}>
 
-      {/* Header live */}
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-        paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
-        borderBottomWidth: 1, borderBottomColor: L.border }}>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-          <LivePulse />
-          <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Toulouse en direct</Text>
-        </View>
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-          <View style={{ backgroundColor: L.greenBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
-            borderWidth: 1, borderColor: L.green + "30", flexDirection: "row", alignItems: "center", gap: 5 }}>
-            <Text style={{ color: L.green, fontSize: 12, fontWeight: "900" }}>{displayCount}</Text>
-            <Text style={{ color: L.green, fontSize: 10 }}>actifs</Text>
+      <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
+        borderBottomWidth: 1, borderBottomColor: L.border, gap: 10 }}>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <LivePulse />
+            <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Toulouse en direct</Text>
           </View>
           <Pressable onPress={() => router.push("/(app)/(tabs)/map" as never)}
             style={{ backgroundColor: L.primaryBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
@@ -220,9 +232,23 @@ function LiveToulouseWidget() {
             <Text style={{ color: L.primary, fontSize: 10, fontWeight: "800" }}>MAP →</Text>
           </Pressable>
         </View>
+
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+          <View style={{ backgroundColor: L.greenBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+            borderWidth: 1, borderColor: L.green + "30" }}>
+            <Text style={{ color: L.green, fontSize: 10, fontWeight: "800" }}>{realCount} joueurs réels</Text>
+          </View>
+          <View style={{ backgroundColor: L.blueBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+            borderWidth: 1, borderColor: L.blue + "30" }}>
+            <Text style={{ color: L.blue, fontSize: 10, fontWeight: "800" }}>{simulatedCount} habitants simulés</Text>
+          </View>
+          <View style={{ backgroundColor: L.cardAlt, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+            borderWidth: 1, borderColor: L.border }}>
+            <Text style={{ color: L.textSoft, fontSize: 10 }}>~{mobileK}k en mouvement · estimation ville</Text>
+          </View>
+        </View>
       </View>
 
-      {/* Stories NPCs */}
       {stories.length > 0 && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 12, gap: 4 }}>

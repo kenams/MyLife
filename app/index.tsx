@@ -19,5 +19,6 @@ export default function IndexScreen() {
     return <Redirect href="/(auth)/avatar" />;
   }
 
-  return <Redirect href="/(app)/(tabs)/home" />;
+  // MyLife opens on the living city itself. Home remains a secondary tab.
+  return <Redirect href="/(app)/(tabs)/map" />;
 }

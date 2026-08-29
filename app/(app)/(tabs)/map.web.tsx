@@ -78,7 +78,7 @@ const C = {
 function playerKind(player: MapPlayer): { label: string; color: string } {
   if (!player.is_npc) return { label: "JOUEUR RÉEL", color: C.green };
   if (player.is_star) return { label: "OFFICIEL", color: C.gold };
-  return { label: "PNJ DÉMO", color: C.purple };
+  return { label: "HABITANT SIMULÉ", color: C.purple };
 }
 
 // ── MapLibre GL loader (injection dynamique dans le DOM) ──────────────────────
@@ -1633,11 +1633,11 @@ export default function LifeMapScreen() {
           <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.green,
             shadowColor: C.green, shadowOpacity: 1, shadowRadius: 5 }} />
           <Text style={{ color: C.text, fontSize: 13, fontWeight: "800" }}>
-            {visibleRealCount} en live · Toulouse
+            {visibleRealCount} joueurs · Toulouse
           </Text>
           {visibleNpcCount > 0 && (
             <Text style={{ color: C.gold, fontSize: 10, fontWeight: "800" }}>
-              +{visibleNpcCount} DÉMO
+              +{visibleNpcCount} SIMULÉ
             </Text>
           )}
         </View>

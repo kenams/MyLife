@@ -10,7 +10,11 @@ function isDevPanelAllowed(email?: string, displayName?: string) {
   if (typeof __DEV__ !== "undefined" ? __DEV__ : process.env.NODE_ENV !== "production") return true;
   const normalizedEmail = email?.trim().toLowerCase() ?? "";
   const normalizedName = displayName?.trim().toLowerCase() ?? "";
-  return normalizedEmail.endsWith("@mylife-qa.internal") || normalizedName.startsWith("qa-");
+  const qaEntryEnabled = process.env.EXPO_PUBLIC_ENABLE_QA_ENTRY === "true";
+  const guardedKahProfile =
+    qaEntryEnabled && normalizedName === "kah" && normalizedEmail === "test-live@mylife.app";
+
+  return normalizedEmail.endsWith("@mylife-qa.internal") || normalizedName.startsWith("qa-") || guardedKahProfile;
 }
 
 const L = {

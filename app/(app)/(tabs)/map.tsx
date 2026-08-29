@@ -47,7 +47,7 @@ const L = {
 function playerKind(player: MapPlayer): { label: string; color: string } {
   if (!player.is_npc) return { label: "JOUEUR RÉEL", color: L.green };
   if (player.is_star) return { label: "OFFICIEL", color: L.primary };
-  return { label: "PNJ DÉMO", color: "#BF5FFF" };
+  return { label: "HABITANT SIMULÉ", color: "#BF5FFF" };
 }
 
 // ── Marqueur joueur sur la map ────────────────────────────────────────────────
@@ -513,7 +513,7 @@ export default function LifeMapScreen() {
             {onlineCount} en live · Toulouse
           </Text>
           <Text style={{ color: L.primary, fontSize: 10, fontWeight: "800" }}>
-            DÉMO
+            SIMULÉ
           </Text>
         </View>
 

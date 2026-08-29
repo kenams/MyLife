@@ -12,7 +12,7 @@ async function devBypass(
   await AsyncStorage.setItem("@mylife_consent_v1", "true");
   loadTestAccount("balanced");
   completeTutorial();
-  router.replace("/(app)/(tabs)/home");
+  router.replace("/(app)/(tabs)/map");
 }
 
 const L = {
