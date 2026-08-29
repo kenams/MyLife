@@ -57,6 +57,15 @@ import { checkQuestCompletion, generateDailyQuests, getTodayQuestKey } from "@/l
 import type { DailyQuest } from "@/lib/daily-quests";
 import { generateWorldEvent, isWorldEventActive } from "@/lib/world-events";
 import type { WorldEvent } from "@/lib/world-events";
+import {
+  createLivingCityState,
+  seedLivingCityNpcs,
+  simulateLivingCityTick,
+  type LivingCityEventKind,
+  type LivingCityPreset,
+  type LivingCitySpeed,
+  type LivingCityState,
+} from "@/lib/living-city";
 import { applyItemEffect, getItemById, SHOP_ITEMS } from "@/lib/inventory";
 import type { InventoryItem } from "@/lib/inventory";
 import type { NpcRelation } from "@/lib/types";
@@ -324,7 +333,14 @@ type GameState = {
   wealthScore: number;
   // Monde vivant — NPCs
   npcs: NpcState[];
+  livingCity: LivingCityState;
   tickNpcs: () => void;
+  configureLivingCity: (input: Partial<Pick<LivingCityState, "enabled" | "preset" | "speed">>) => void;
+  runLivingCityTick: (minutes?: number) => void;
+  spawnLivingNpc: () => void;
+  createNpcCrew: () => void;
+  triggerLivingCityEvent: (kind?: string) => void;
+  resetLivingCity: (preset?: LivingCityPreset) => void;
   // Rooms live
   rooms: Room[];
   roomMessages: Record<string, RoomMessage[]>;  // roomId → messages locaux
@@ -439,7 +455,8 @@ function initialState() {
     hasHydrated: false,
     tutorialDone: false,
     session: null as UserSession | null,
-    npcs: seedNpcs() as NpcState[],
+    livingCity: createLivingCityState("NORMAL") as LivingCityState,
+    npcs: seedLivingCityNpcs("NORMAL") as NpcState[],
     rooms: DEFAULT_ROOMS.map(createDefaultRoom) as Room[],
     isPremium: false,
     premiumTier: null as PremiumTier | null,
@@ -2983,6 +3000,103 @@ export const useGameStore = create<GameState>()(
       }),
 
       // ── Rooms live ────────────────────────────────────────────────────────
+      configureLivingCity: (input) => set((s) => {
+        const preset = input.preset ?? s.livingCity.preset;
+        const reseed = input.preset != null && input.preset !== s.livingCity.preset;
+        return {
+          livingCity: {
+            ...s.livingCity,
+            ...input,
+            preset,
+            speed: (input.speed ?? s.livingCity.speed) as LivingCitySpeed,
+          },
+          npcs: reseed ? seedLivingCityNpcs(preset) : s.npcs,
+        };
+      }),
+
+      runLivingCityTick: (minutes) => set((s) => {
+        const result = simulateLivingCityTick({
+          state: s.livingCity ?? createLivingCityState("NORMAL"),
+          npcs: s.npcs ?? [],
+          playerDistrict: s.avatar?.homeDistrict ?? "Capitole",
+          forceMinutes: minutes,
+        });
+        let notifications = s.notifications;
+        for (const item of result.notifications) notifications = appendNotification(notifications, item);
+        let lifeFeed = s.lifeFeed;
+        for (const item of result.feed) lifeFeed = appendFeed(lifeFeed, item);
+        return { livingCity: result.state, npcs: result.npcs, notifications, lifeFeed };
+      }),
+
+      spawnLivingNpc: () => set((s) => {
+        const seeded = seedLivingCityNpcs("LOW");
+        const spawned = seeded.find((npc) => !s.npcs.some((existing) => existing.id === npc.id));
+        const npc = spawned ?? { ...seeded[0], id: `npc-living-extra-${Date.now()}`, name: `QA.${Date.now().toString().slice(-4)}` };
+        return {
+          npcs: [npc, ...s.npcs],
+          lifeFeed: appendFeed(s.lifeFeed, {
+            id: `feed-spawn-npc-${Date.now()}`,
+            title: "Living City",
+            body: `${npc.name} vient d'arriver a Toulouse.`,
+            createdAt: nowIso(),
+          }),
+        };
+      }),
+
+      createNpcCrew: () => set((s) => {
+        const idx = s.livingCity.crews.length + 1;
+        const crew = {
+          id: `npc-crew-qa-${idx}`,
+          name: `Crew QA ${idx}`,
+          tag: `Q${idx}`.slice(0, 5),
+          emoji: "Q",
+          color: "#39FF14",
+          district: "Capitole",
+          reputation: 25 + idx * 3,
+          activity: 55,
+          rivalTags: ["WLV"],
+          is_npc: true as const,
+          is_demo: true as const,
+        };
+        return {
+          livingCity: { ...s.livingCity, crews: [crew, ...s.livingCity.crews] },
+          lifeFeed: appendFeed(s.lifeFeed, {
+            id: `feed-npc-crew-${Date.now()}`,
+            title: "Crew",
+            body: `${crew.name} commence a recruter a ${crew.district}.`,
+            createdAt: nowIso(),
+          }),
+        };
+      }),
+
+      triggerLivingCityEvent: (kind) => set((s) => {
+        const forceKindByAction: Record<string, LivingCityEventKind> = {
+          feeling: "FEELING",
+          crew: "CREW",
+          event: "EVENT",
+          flash: "EVENT",
+          territory: "TERRITORY",
+          mission: "MISSION",
+        };
+        const result = simulateLivingCityTick({
+          state: s.livingCity ?? createLivingCityState("NORMAL"),
+          npcs: s.npcs ?? [],
+          forceMinutes: kind === "day" ? 1440 : kind === "hour" ? 60 : 15,
+          playerDistrict: s.avatar?.homeDistrict ?? "Capitole",
+          forceKind: kind ? forceKindByAction[kind] : undefined,
+        });
+        let notifications = s.notifications;
+        for (const item of result.notifications) notifications = appendNotification(notifications, item);
+        let lifeFeed = s.lifeFeed;
+        for (const item of result.feed) lifeFeed = appendFeed(lifeFeed, item);
+        return { livingCity: result.state, npcs: result.npcs, notifications, lifeFeed };
+      }),
+
+      resetLivingCity: (preset = "NORMAL") => set(() => ({
+        livingCity: createLivingCityState(preset),
+        npcs: seedLivingCityNpcs(preset),
+      })),
+
       createRoom: (name, description, kind) => {
         const code = Math.random().toString(36).slice(2, 8).toUpperCase();
         const state = get();
@@ -3861,6 +3975,7 @@ export const useGameStore = create<GameState>()(
         questLastRefreshDate: state.questLastRefreshDate,
         worldEvent: state.worldEvent,
         worldEventJoined: state.worldEventJoined,
+        livingCity: state.livingCity,
         inventory: state.inventory,
         npcRelations: state.npcRelations,
         appTheme: state.appTheme,
@@ -3894,11 +4009,24 @@ export const useGameStore = create<GameState>()(
           (current, roomId) => current.includes(roomId) ? current : [...current, roomId],
           state.joinedRooms ?? []
         );
+        const livingResult = simulateLivingCityTick({
+          state: state.livingCity ?? createLivingCityState("NORMAL"),
+          npcs: state.npcs ?? seedLivingCityNpcs("NORMAL"),
+          playerDistrict: state.avatar?.homeDistrict ?? "Capitole",
+        });
+        let notifications = buildAutomaticNotifications(stats, state.notifications);
+        for (const item of livingResult.notifications) notifications = appendNotification(notifications, item);
+        let lifeFeed = state.lifeFeed ?? [];
+        for (const item of livingResult.feed) lifeFeed = appendFeed(lifeFeed, item);
+
         useGameStore.setState({
           hasHydrated: true,
           stats,
           advice: buildAdvice(stats),
-          notifications: buildAutomaticNotifications(stats, state.notifications),
+          notifications,
+          lifeFeed,
+          livingCity: livingResult.state,
+          npcs: livingResult.npcs,
           rooms,
           joinedRooms,
           roomMessages: state.roomMessages ?? {},

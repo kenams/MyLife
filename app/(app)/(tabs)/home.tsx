@@ -10,7 +10,6 @@ import {
   publishFeedEvent,
   publishNpcDrama,
   subscribeToFeed,
-  buildRandomNpcEvent,
   type FeedEvent,
 } from "@/lib/life-feed";
 import {
@@ -40,6 +39,7 @@ import { useAppTheme } from "@/hooks/use-app-theme";
 import { NotificationsBell } from "@/components/notifications-bell";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { DailyHub } from "@/components/daily-hub";
+import { LivingCityDevPanel } from "@/components/living-city-dev-panel";
 
 const L = {
   bg:        "#080808",
@@ -434,6 +434,7 @@ export default function HomeScreen() {
   const housingTier      = useGameStore((s) => s.housingTier);
   const checkHousingRent = useGameStore((s) => s.checkHousingRent);
   const lifeFeed         = useGameStore((s) => s.lifeFeed ?? []);
+  const runLivingCityTick = useGameStore((s) => s.runLivingCityTick);
   const [liveEvents,     setLiveEvents]     = useState<FeedEvent[]>([]);
   const [flashEvents,    setFlashEvents]    = useState<FlashEvent[]>([]);
   const [joinedFlash,    setJoinedFlash]    = useState<Set<string>>(new Set());
@@ -519,12 +520,34 @@ export default function HomeScreen() {
     const sub = subscribeToFeed((evt) =>
       setLiveEvents((prev) => [evt, ...prev].slice(0, 20))
     );
-    // Injecte un événement NPC local toutes les 25s (visible même sans Supabase)
+    // Tick agregé: pas de heartbeat individuel par PNJ.
     const localSim = setInterval(() => {
-      setLiveEvents((prev) => [buildRandomNpcEvent(), ...prev].slice(0, 20));
+      runLivingCityTick();
     }, 25_000);
     return () => { sub?.unsubscribe(); clearInterval(localSim); };
-  }, []);
+  }, [runLivingCityTick]);
+
+  useEffect(() => {
+    const mapped: FeedEvent[] = lifeFeed.slice(0, 8).map((item) => ({
+      id: item.id,
+      kind: "npc_drama",
+      emoji: "LC",
+      body: item.body,
+      location: item.title,
+      is_npc: true,
+      is_star: false,
+      created_at: item.createdAt,
+    }));
+    if (mapped.length === 0) return;
+    setLiveEvents((prev) => {
+      const seen = new Set<string>();
+      return [...mapped, ...prev].filter((event) => {
+        if (seen.has(event.id)) return false;
+        seen.add(event.id);
+        return true;
+      }).slice(0, 20);
+    });
+  }, [lifeFeed]);
 
   // ── Flash Events — refresh toutes les 60s ─────────────────────────────────
   useEffect(() => {
@@ -831,6 +854,10 @@ export default function HomeScreen() {
 
         {/* ── LIVE TOULOUSE ── */}
         <LiveToulouseWidget />
+
+        <View style={{ paddingHorizontal: 20 }}>
+          <LivingCityDevPanel />
+        </View>
 
         <View style={{ paddingHorizontal: 20 }}>
 

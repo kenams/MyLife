@@ -92,7 +92,21 @@ export type MomentumState = {
   nextMilestone: number | null;
 };
 
-export type NotificationKind = "needs" | "social" | "work" | "reward" | "tip";
+export type NotificationKind =
+  | "needs"
+  | "social"
+  | "work"
+  | "reward"
+  | "tip"
+  | "feeling"
+  | "match"
+  | "crew"
+  | "event"
+  | "territory"
+  | "mission"
+  | "wory"
+  | "city"
+  | "relationship";
 export type ConversationKind = "local" | "direct";
 export type ConversationMessageKind = "message" | "system" | "invitation";
 export type InvitationStatus = "pending" | "accepted" | "declined";
@@ -386,6 +400,9 @@ export type WorldPresenceMember = {
 export type NpcState = {
   id: string;
   name: string;
+  is_npc?: boolean;
+  is_demo?: boolean;
+  is_qa?: boolean;
   locationSlug: string;
   action: import("@/lib/avatar-visual").AvatarAction;
   mood: number;        // 0-100
@@ -405,6 +422,18 @@ export type NpcState = {
   posY: number;
   presenceOnline: boolean;      // simulé : true = connecté
   lastOnlineAt: string | null;  // ISO — dernière connexion détectée
+  personality?: string;
+  interests?: string[];
+  homeDistrictSlug?: string;
+  currentActivity?: string;
+  lifeRhythm?: string;
+  sociability?: number;
+  competitiveProfile?: "competitive" | "social" | "exploration" | "balanced";
+  crewId?: string | null;
+  crewName?: string | null;
+  crewTag?: string | null;
+  relationMemory?: string[];
+  npcWory?: number;
 };
 
 export type RoomInvite = {
