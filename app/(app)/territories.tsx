@@ -15,6 +15,10 @@ import {
   daysHeld,
   type Territory,
 } from "@/lib/territories";
+import { fetchUpcomingBattles, createBattle, type TerritoryBattle } from "@/lib/territory-wars";
+import { nextBattleSlot, formatSlot } from "@/lib/battle-schedule";
+import { useGameStore } from "@/stores/game-store";
+import { getMyCrewId } from "@/lib/crews";
 
 const T = {
   bg: "#080808",
@@ -40,9 +44,19 @@ export default function TerritoriesScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [items, setItems] = useState<Territory[]>([]);
+  const [battles, setBattles] = useState<TerritoryBattle[]>([]);
+  const [myCrew, setMyCrew] = useState<string | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const avatar = useGameStore((s) => s.avatar);
+  const playerName = avatar?.displayName ?? "Joueur";
+
+  useEffect(() => {
+    getMyCrewId(playerName).then(setMyCrew);
+  }, [playerName]);
 
   const load = useCallback(async () => {
-    const data = await fetchTerritories();
+    const [data, b] = await Promise.all([fetchTerritories(), fetchUpcomingBattles()]);
+    setBattles(b);
     data.sort((a, b) => {
       // Contestés / avec battle en premier, puis prestige.
       const ba = a.next_battle_at ? 0 : 1;
@@ -66,6 +80,19 @@ export default function TerritoriesScreen() {
   }
 
   const owned = items.filter((i) => i.owner_crew_id).length;
+  const battleByDistrict = new Map(battles.map((b) => [b.district_id, b]));
+
+  async function launchBattle(t: Territory) {
+    setBusy(t.id);
+    const slot = nextBattleSlot();
+    const res = await createBattle(t.district_id, slot);
+    setBusy(null);
+    if (res.ok && res.id) {
+      router.push(`/(app)/battle/${res.id}`);
+    } else {
+      alert(res.error ?? "Impossible de lancer la Battle (réservé aux officiers).");
+    }
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: T.bg }}>
@@ -182,6 +209,37 @@ export default function TerritoriesScreen() {
                         ⚔️ Prochaine Battle : {cap(WHEN.format(new Date(t.next_battle_at)))}
                       </Text>
                     </View>
+                  )}
+
+                  {battleByDistrict.has(t.district_id) ? (
+                    <Pressable
+                      onPress={() => router.push(`/(app)/battle/${battleByDistrict.get(t.district_id)!.id}`)}
+                      style={{ marginTop: 10, backgroundColor: T.gold, borderRadius: 9, paddingVertical: 10, alignItems: "center" }}
+                    >
+                      <Text style={{ color: "#080808", fontWeight: "900", fontSize: 12 }}>
+                        {battleByDistrict.get(t.district_id)!.status === "live" ? "Rejoindre la Battle EN COURS" : "Voir la Battle prévue"}
+                      </Text>
+                    </Pressable>
+                  ) : (
+                    myCrew && myCrew !== t.owner_crew_id && (
+                      <Pressable
+                        onPress={() => launchBattle(t)}
+                        disabled={busy === t.id}
+                        style={{
+                          marginTop: 10,
+                          borderRadius: 9,
+                          paddingVertical: 10,
+                          alignItems: "center",
+                          borderWidth: 1,
+                          borderColor: T.red + "55",
+                          opacity: busy === t.id ? 0.5 : 1,
+                        }}
+                      >
+                        <Text style={{ color: T.red, fontWeight: "900", fontSize: 12 }}>
+                          ⚔️ Lancer une Battle · {formatSlot(nextBattleSlot())}
+                        </Text>
+                      </Pressable>
+                    )
                   )}
                 </View>
               </View>
