@@ -157,7 +157,8 @@ function actionStatus(npc: NpcState): MapStatus {
   const action = String(npc.currentActivity ?? npc.action ?? "idle");
   if (action === "chatting") return "vibe";
   if ((npc.sociability ?? 0) >= 72 && npc.presenceOnline) return "charo";
-  if (npc.crewId) return "taken";
+  // Crew membership is a social affiliation, never a romantic relationship status.
+  // Relationship-aware statuses can be projected here once NpcState exposes them explicitly.
   return "free";
 }
 
