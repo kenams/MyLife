@@ -296,6 +296,8 @@ type GameState = {
   shiftHistory: import("@/lib/types").ShiftRecord[];
   playerXp: number;
   playerLevel: number;
+  /** Dernier gain à afficher en toast flottant (transient, non persisté). */
+  lastGain: { xp: number; money: number; reputation: number; at: number } | null;
   // Missions
   missionProgresses: import("@/lib/missions").MissionProgress[];
   claimMission: (missionId: string) => void;
@@ -459,6 +461,7 @@ function initialState() {
     shiftHistory: [] as import("@/lib/types").ShiftRecord[],
     playerXp: 0,
     playerLevel: 1,
+    lastGain: null as { xp: number; money: number; reputation: number; at: number } | null,
     missionProgresses: [] as import("@/lib/missions").MissionProgress[],
     unlockedTalents: [] as string[],
     studyProgress: [] as StudyProgress[],
@@ -1373,6 +1376,14 @@ function withActionApplied(state: GameState, action: LifeActionId): Partial<Game
   // Daily quests progress
   const updatedQuests = checkQuestCompletion(state.dailyQuests ?? [], action);
 
+  const gainXp = newPlayerXp - (state.playerXp ?? 0);
+  const gainMoney = nextStats.money - state.stats.money;
+  const gainRep = nextStats.reputation - state.stats.reputation;
+  const lastGain =
+    gainXp > 0 || gainMoney > 0 || gainRep > 0
+      ? { xp: Math.max(0, gainXp), money: Math.max(0, gainMoney), reputation: Math.max(0, gainRep), at: Date.now() }
+      : state.lastGain;
+
   return {
     stats: nextStats,
     dailyGoals: nextGoals,
@@ -1381,6 +1392,7 @@ function withActionApplied(state: GameState, action: LifeActionId): Partial<Game
     lifeFeed,
     playerXp: newPlayerXp,
     playerLevel: newPlayerLevel,
+    lastGain,
     missionProgresses: updatedProgresses,
     dailyQuests: updatedQuests,
   };
@@ -1773,6 +1785,7 @@ export const useGameStore = create<GameState>()(
           playerXp: newPlayerXp,
           playerLevel: newPlayerLevel,
           stats: normalizeStats({ ...state.stats, money: state.stats.money + money }),
+          lastGain: { xp: Math.max(0, xp), money: Math.max(0, money), reputation: 0, at: Date.now() },
         };
       }),
       unlockTalent: (talentId) => set((state) => ({
@@ -2338,7 +2351,13 @@ export const useGameStore = create<GameState>()(
             stats: nextStats,
             advice: buildAdvice(nextStats),
             notifications,
-            lifeFeed
+            lifeFeed,
+            lastGain: {
+              xp: 0,
+              money: Math.max(0, nextStats.money - state.stats.money),
+              reputation: Math.max(0, nextStats.reputation - state.stats.reputation),
+              at: Date.now(),
+            },
           };
         }),
       markNotificationRead: (notificationId) => {
