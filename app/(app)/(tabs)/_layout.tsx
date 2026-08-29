@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
-import { Text, View } from "react-native";
+import { Platform, Text, View } from "react-native";
 
 import { useAppTheme } from "@/hooks/use-app-theme";
 import { useGameStore } from "@/stores/game-store";
@@ -23,9 +23,9 @@ function Badge({ count, color }: { count: number; color: string }) {
 }
 
 function QuestesIcon({ color, focused }: { color: string; focused: boolean }) {
-  const missions     = useGameStore((s) => s.missionProgresses ?? []);
-  const stats        = useGameStore((s) => s.stats ?? {} as typeof s.stats);
-  const claimable    = missions.filter((m) => m.status === "completed").length;
+  const missions      = useGameStore((s) => s.missionProgresses ?? []);
+  const stats         = useGameStore((s) => s.stats ?? {} as typeof s.stats);
+  const claimable     = missions.filter((m) => m.status === "completed").length;
   const hoursSinceEat = stats.lastMealAt
     ? (Date.now() - new Date(stats.lastMealAt).getTime()) / 3_600_000 : 99;
   const critical = [hoursSinceEat > 7, stats.energy < 15, stats.hygiene < 20].filter(Boolean).length;
@@ -48,24 +48,25 @@ function ChatIcon({ color, focused }: { color: string; focused: boolean }) {
   );
 }
 
-
 export default function TabsLayout() {
   const T = useAppTheme();
+
   return (
     <Tabs
+      initialRouteName="map"
       screenOptions={{
         headerShown: false,
+        tabBarHideOnKeyboard: true,
         tabBarStyle: {
-          position: "absolute",
-          left: 12,
-          right: 12,
-          bottom: 10,
+          // Keep the bar in the normal layout flow. The previous absolute
+          // positioning visually covered the bottom of screens (especially
+          // the NAVIGUER section on desktop/mobile). React Navigation now
+          // reserves the required safe space for screen content.
           backgroundColor: T.tabBg,
           borderTopColor: T.tabBorder,
           borderTopWidth: 1,
-          borderRadius: 24,
-          height: 72,
-          paddingBottom: 10,
+          height: Platform.OS === "web" ? 76 : 72,
+          paddingBottom: Platform.OS === "web" ? 10 : 8,
           paddingTop: 8,
           shadowColor: T.tabShadow,
           shadowOpacity: 1,
