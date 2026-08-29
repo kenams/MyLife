@@ -63,6 +63,11 @@ export async function checkinFlashEvent(eventId: string, lat: number, lng: numbe
     p_event_id: eventId, p_lat: lat, p_lng: lng,
   });
   if (error) return { ok: false, error: error.message };
+  // Croisés (§14) : on enregistre le croisement avec les autres présents.
+  await supabase.rpc("record_event_crossings", { p_event_id: eventId }).then(
+    () => {},
+    () => {}
+  );
   return { ok: true };
 }
 

@@ -114,6 +114,22 @@ export default function RelationsScreen() {
           </View>
         </View>
 
+        {/* ── Rencontres ──────────────────────────────────────────── */}
+        <Pressable
+          onPress={() => router.push("/(app)/rencontres")}
+          style={{ marginHorizontal: 20, marginTop: 16, backgroundColor: L.card, borderRadius: 14,
+            borderWidth: 1, borderColor: L.border, padding: 14, flexDirection: "row", alignItems: "center", gap: 12 }}
+        >
+          <Text style={{ fontSize: 20 }}>💚</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: L.text, fontWeight: "800", fontSize: 14 }}>Rencontres</Text>
+            <Text style={{ color: L.textSoft, fontSize: 11, marginTop: 1 }}>
+              Ton statut, qui peut t'écrire, Open to meet, les gens croisés
+            </Text>
+          </View>
+          <Text style={{ color: L.muted, fontSize: 18 }}>›</Text>
+        </Pressable>
+
         {/* ── Cards ───────────────────────────────────────────────── */}
         <View style={{ padding: 20, gap: 14 }}>
           {sorted.map((rel) => {
