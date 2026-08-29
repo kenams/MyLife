@@ -13,6 +13,7 @@ import { useRouter } from "expo-router";
 import { useGameStore } from "@/stores/game-store";
 import { nextStreakMilestone } from "@/lib/game-engine";
 import { hapticImpact, hapticSuccess } from "@/lib/safe-haptics";
+import { HappeningNow } from "@/components/happening-now";
 
 const C = {
   card: "#111111",
@@ -58,17 +59,19 @@ export function DailyHub() {
   const canClaim = allDone && !claimedToday;
 
   return (
-    <View
-      style={{
-        marginHorizontal: 16,
-        marginTop: 12,
-        backgroundColor: C.card,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: C.border,
-        overflow: "hidden",
-      }}
-    >
+    <>
+      <HappeningNow />
+      <View
+        style={{
+          marginHorizontal: 16,
+          marginTop: 12,
+          backgroundColor: C.card,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: C.border,
+          overflow: "hidden",
+        }}
+      >
       {/* Événement du jour — l'interaction d'arrivée */}
       {openEvent && (
         <View
@@ -343,6 +346,7 @@ export function DailyHub() {
           <Text style={{ color: C.purple, fontSize: 12, fontWeight: "800" }}>Parler à quelqu'un</Text>
         </Pressable>
       </View>
-    </View>
+      </View>
+    </>
   );
 }
