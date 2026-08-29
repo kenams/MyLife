@@ -36,6 +36,18 @@ async function nextFlashEvent(): Promise<{ id: string; title: string } | null> {
   return row ?? null;
 }
 
+async function nextMyLifeEvent(): Promise<{ id: string; title: string } | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from("mylife_events")
+    .select("id, title, starts_at")
+    .gte("starts_at", new Date().toISOString())
+    .order("starts_at", { ascending: true })
+    .limit(1);
+  const row = (data ?? [])[0] as { id: string; title: string } | undefined;
+  return row ?? null;
+}
+
 async function nextCrewOuting(crewId: string): Promise<{ id: string; title: string } | null> {
   if (!supabase) return null;
   const { data } = await supabase
@@ -54,11 +66,12 @@ export async function fetchHappeningNow(myCrewId: string | null): Promise<Happen
   const out: HappeningItem[] = [];
   if (!supabase) return out;
 
-  const [battles, zones, flash, outing] = await Promise.all([
+  const [battles, zones, flash, outing, mlEvent] = await Promise.all([
     safe<TerritoryBattle[]>(fetchUpcomingBattles, []),
     safe<SocialZone[]>(fetchSocialZones, []),
     safe(nextFlashEvent, null),
     myCrewId ? safe(() => nextCrewOuting(myCrewId), null) : Promise.resolve(null),
+    safe(nextMyLifeEvent, null),
   ]);
 
   const nextBattle = battles.find(
@@ -92,7 +105,9 @@ export async function fetchHappeningNow(myCrewId: string | null): Promise<Happen
     });
   }
 
-  if (flash) {
+  if (mlEvent) {
+    out.push({ key: "mylife-event", emoji: "🎟️", text: `MyLife Night : ${mlEvent.title}`, href: "/(app)/my-pass" });
+  } else if (flash) {
     out.push({ key: "event", emoji: "🎉", text: `Événement en cours : ${flash.title}`, href: "/(app)/(tabs)/map" });
   }
 
