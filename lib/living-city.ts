@@ -26,7 +26,9 @@ export type LivingCityEventKind =
   | "CREW"
   | "EVENT"
   | "TERRITORY"
+  | "BATTLE"
   | "MISSION"
+  | "OUTING"
   | "WORY"
   | "CITY"
   | "RELATIONSHIP";
@@ -40,6 +42,8 @@ export type LivingCityEvent = {
   at: string;
   priority: number;
   notify: boolean;
+  actorNpcIds: string[];
+  crewIds: string[];
 };
 
 export type LivingCityState = {
@@ -53,6 +57,9 @@ export type LivingCityState = {
   notificationsLastMinute: number;
   avgTickMs: number;
   lastAbsenceSummary: string[];
+  npcInteractionsLastTick: number;
+  outingsLastTick: number;
+  territorySignalsLastTick: number;
 };
 
 export type LivingCityTickInput = {
@@ -215,6 +222,9 @@ export function createLivingCityState(preset: LivingCityPreset = "NORMAL"): Livi
     notificationsLastMinute: 0,
     avgTickMs: 0,
     lastAbsenceSummary: [],
+    npcInteractionsLastTick: 0,
+    outingsLastTick: 0,
+    territorySignalsLastTick: 0,
   };
 }
 
@@ -272,37 +282,104 @@ export function seedLivingCityNpcs(preset: LivingCityPreset, now = new Date()): 
   return out;
 }
 
-function eventTemplates(): Array<Omit<LivingCityEvent, "id" | "at" | "priority"> & { priorityBase: number }> {
+function eventTemplates(): Array<Omit<LivingCityEvent, "id" | "at" | "priority" | "actorNpcIds" | "crewIds"> & { priorityBase: number }> {
   return [
     { kind: "CITY", title: "Toulouse Live", body: "Jean-Jaures devient actif", district: "Jean-Jaures", notify: false, priorityBase: 34 },
     { kind: "CREW", title: "Crew", body: "Wolves recrutent de nouveaux profils", district: "Compans", notify: true, priorityBase: 68 },
     { kind: "MISSION", title: "Missions", body: "missions terminees a Capitole", district: "Capitole", notify: false, priorityBase: 45 },
     { kind: "TERRITORY", title: "Territoires", body: "Kings mettent la pression sur Saint-Cyprien", district: "Saint-Cyprien", notify: true, priorityBase: 72 },
+    { kind: "BATTLE", title: "Battle", body: "battle de territoire programmee", district: "Compans", notify: true, priorityBase: 82 },
     { kind: "SOCIAL", title: "Social", body: "activite sociale en hausse aux Carmes", district: "Carmes", notify: false, priorityBase: 40 },
     { kind: "FEELING", title: "Feeling", body: "Quelqu'un t'a envoye un Feeling", district: "Esquirol", notify: true, priorityBase: 80 },
+    { kind: "MATCH", title: "Match", body: "deux PNJ matchent apres une sortie", district: "Carmes", notify: true, priorityBase: 78 },
     { kind: "RELATIONSHIP", title: "Relation", body: "Lina a relance une ancienne discussion", district: "Capitole", notify: true, priorityBase: 74 },
     { kind: "EVENT", title: "Sortie", body: "Mehdi invite du monde a une sortie", district: "Saint-Aubin", notify: true, priorityBase: 65 },
+    { kind: "OUTING", title: "Sortie", body: "sortie PNJ spontanee", district: "Saint-Aubin", notify: true, priorityBase: 70 },
     { kind: "WORY", title: "Wory", body: "des PNJ depensent du Wory en ville", district: "Carmes", notify: false, priorityBase: 38 },
   ];
 }
 
-function makeEvent(seed: string, now: Date, activity: number, forceKind?: LivingCityEventKind): LivingCityEvent {
+function pickDifferentNpc(npcs: NpcState[], actor: NpcState, random: () => number): NpcState {
+  const fallback = npcs.find((npc) => npc.id !== actor.id);
+  for (let i = 0; i < 5; i++) {
+    const candidate = pick(npcs, random);
+    if (candidate.id !== actor.id) return candidate;
+  }
+  return fallback ?? actor;
+}
+
+function eventCopy(
+  tpl: ReturnType<typeof eventTemplates>[number],
+  actor: NpcState,
+  target: NpcState,
+  crew: LivingCityCrew,
+  rival: LivingCityCrew,
+  count: number
+): Pick<LivingCityEvent, "body" | "district" | "actorNpcIds" | "crewIds"> {
+  const district = actor.homeDistrictSlug ?? tpl.district;
+  if (tpl.kind === "FEELING") {
+    return { body: `${actor.name} a envoye un Feeling a ${target.name}.`, district, actorNpcIds: [actor.id, target.id], crewIds: [] };
+  }
+  if (tpl.kind === "MATCH") {
+    return { body: `${actor.name} et ${target.name} matchent apres une sortie.`, district, actorNpcIds: [actor.id, target.id], crewIds: [] };
+  }
+  if (tpl.kind === "RELATIONSHIP") {
+    return { body: `${actor.name} relance ${target.name} et garde le lien chaud.`, district, actorNpcIds: [actor.id, target.id], crewIds: [] };
+  }
+  if (tpl.kind === "OUTING" || tpl.kind === "EVENT") {
+    return { body: `${actor.name} sort avec ${target.name} vers ${district}.`, district, actorNpcIds: [actor.id, target.id], crewIds: [] };
+  }
+  if (tpl.kind === "CREW") {
+    return { body: `${crew.name} recrute ${actor.name} autour de ${crew.district}.`, district: crew.district, actorNpcIds: [actor.id], crewIds: [crew.id] };
+  }
+  if (tpl.kind === "TERRITORY") {
+    return { body: `${crew.name} teste ${rival.name} sur ${crew.district}.`, district: crew.district, actorNpcIds: [actor.id], crewIds: [crew.id, rival.id] };
+  }
+  if (tpl.kind === "BATTLE") {
+    return { body: `${crew.name} programme une battle contre ${rival.name} a ${crew.district}.`, district: crew.district, actorNpcIds: [actor.id], crewIds: [crew.id, rival.id] };
+  }
+  if (tpl.kind === "MISSION") {
+    return { body: `${actor.name} termine ${count} missions a ${district}.`, district, actorNpcIds: [actor.id], crewIds: actor.crewId ? [actor.crewId] : [] };
+  }
+  if (tpl.kind === "WORY") {
+    return { body: `${actor.name} depense du Wory chez les commercants de ${district}.`, district, actorNpcIds: [actor.id], crewIds: actor.crewId ? [actor.crewId] : [] };
+  }
+  return { body: `${district} devient actif grace aux PNJ locaux.`, district, actorNpcIds: [actor.id], crewIds: [] };
+}
+
+function makeEvent(
+  seed: string,
+  now: Date,
+  activity: number,
+  npcs: NpcState[],
+  crews: LivingCityCrew[],
+  forceKind?: LivingCityEventKind
+): LivingCityEvent {
   const random = rng(hash(seed));
   const templates = eventTemplates();
   const tpl = forceKind
     ? templates.find((item) => item.kind === forceKind) ?? pick(templates, random)
     : pick(templates, random);
   const count = 3 + Math.floor(random() * 18);
-  const body = tpl.kind === "MISSION" ? `${count} ${tpl.body}` : tpl.body;
+  const actor = pick(npcs, random);
+  const target = pickDifferentNpc(npcs, actor, random);
+  const crew = actor.crewId
+    ? crews.find((item) => item.id === actor.crewId) ?? pick(crews, random)
+    : pick(crews, random);
+  const rivals = crews.filter((item) => item.id !== crew.id);
+  const rival = rivals.length > 0 ? pick(rivals, random) : crew;
+  const copy = eventCopy(tpl, actor, target, crew, rival, count);
   return {
     id: `lc-${hash(`${seed}:${now.toISOString()}`).toString(36)}`,
     kind: tpl.kind,
     title: tpl.title,
-    body,
-    district: tpl.district,
+    body: copy.body,
+    district: copy.district,
     at: now.toISOString(),
     priority: clamp(tpl.priorityBase + activity / 8 + random() * 12, 0, 100),
     notify: tpl.notify,
+    actorNpcIds: copy.actorNpcIds,
+    crewIds: copy.crewIds,
   };
 }
 
@@ -352,6 +429,86 @@ function updateNpc(npc: NpcState, minutes: number, now: Date, playerDistrict: st
   };
 }
 
+function pushMemory(npc: NpcState, line: string): string[] {
+  return [line, ...(npc.relationMemory ?? [])].slice(0, 8);
+}
+
+function applyEventEffectsToNpcs(npcs: NpcState[], events: LivingCityEvent[], crews: LivingCityCrew[], now: Date): NpcState[] {
+  const crewById = new Map(crews.map((crew) => [crew.id, crew]));
+  const mutable = new Map(npcs.map((npc) => [npc.id, npc]));
+
+  for (const event of events) {
+    const [actorId, targetId] = event.actorNpcIds;
+    const actor = actorId ? mutable.get(actorId) : undefined;
+    const target = targetId ? mutable.get(targetId) : undefined;
+    if (!actor) continue;
+
+    if (event.kind === "FEELING" || event.kind === "MATCH" || event.kind === "RELATIONSHIP" || event.kind === "OUTING" || event.kind === "EVENT") {
+      mutable.set(actor.id, {
+        ...actor,
+        mood: Math.round(clamp(actor.mood + 3)),
+        sociability: Math.round(clamp((actor.sociability ?? 50) + 2)),
+        relationMemory: pushMemory(actor, `${event.kind}:${target?.name ?? "ville"}:${now.toISOString()}`),
+        lastMessageAt: now.toISOString(),
+      });
+      if (target) {
+        mutable.set(target.id, {
+          ...target,
+          mood: Math.round(clamp(target.mood + 2)),
+          sociability: Math.round(clamp((target.sociability ?? 50) + 2)),
+          relationMemory: pushMemory(target, `${event.kind}:${actor.name}:${now.toISOString()}`),
+          lastMessageAt: now.toISOString(),
+        });
+      }
+    }
+
+    if (event.kind === "CREW") {
+      const crew = event.crewIds[0] ? crewById.get(event.crewIds[0]) : undefined;
+      if (crew) {
+        mutable.set(actor.id, {
+          ...actor,
+          crewId: crew.id,
+          crewName: crew.name,
+          crewTag: crew.tag,
+          reputation: Math.round(clamp(actor.reputation + 2)),
+          relationMemory: pushMemory(actor, `CREW:${crew.name}:${now.toISOString()}`),
+        });
+      }
+    }
+
+    if (event.kind === "MISSION" || event.kind === "WORY") {
+      mutable.set(actor.id, {
+        ...actor,
+        xp: actor.xp + (event.kind === "MISSION" ? 12 : 3),
+        npcWory: Math.max(0, (actor.npcWory ?? actor.money) + (event.kind === "MISSION" ? 8 : -4)),
+      });
+    }
+  }
+
+  return npcs.map((npc) => mutable.get(npc.id) ?? npc);
+}
+
+function advanceCrews(crews: LivingCityCrew[], events: LivingCityEvent[]): LivingCityCrew[] {
+  const pressure = new Map<string, number>();
+  for (const event of events) {
+    if (event.kind !== "CREW" && event.kind !== "TERRITORY" && event.kind !== "BATTLE") continue;
+    for (const crewId of event.crewIds) {
+      pressure.set(crewId, (pressure.get(crewId) ?? 0) + (event.kind === "BATTLE" ? 3 : 1));
+    }
+  }
+  if (pressure.size === 0) return crews;
+  return crews.map((crew) => {
+    const value = pressure.get(crew.id) ?? 0;
+    return value === 0
+      ? crew
+      : {
+          ...crew,
+          activity: Math.round(clamp(crew.activity + value, 0, 100)),
+          reputation: Math.round(clamp(crew.reputation + value / 2, 0, 100)),
+        };
+  });
+}
+
 export function simulateLivingCityTick(input: LivingCityTickInput): LivingCityTickResult {
   const started = Date.now();
   const now = input.now ?? new Date();
@@ -374,14 +531,19 @@ export function simulateLivingCityTick(input: LivingCityTickInput): LivingCityTi
 
   const eventBudget = Math.max(1, Math.min(8, Math.round(simulatedMinutes / 18) + (population >= 250 ? 2 : 0)));
   const rawEvents: LivingCityEvent[] = [];
+  const activeCrews = (state.crews?.length ?? 0) > 0 ? state.crews : DEFAULT_LIVING_CITY_CREWS;
   for (let i = 0; i < eventBudget; i++) {
     rawEvents.push(makeEvent(
       `${state.tick}:${i}:${population}:${now.toDateString()}:${input.forceKind ?? "auto"}`,
       new Date(now.getTime() - i * 7 * 60000),
       activity,
+      npcs,
+      activeCrews,
       i === 0 ? input.forceKind : undefined
     ));
   }
+  const effectedNpcs = applyEventEffectsToNpcs(npcs, rawEvents, activeCrews, now);
+  const crews = advanceCrews(activeCrews, rawEvents);
   const events = dedupeEvents([...rawEvents, ...state.events]).slice(0, 60);
   const notifyEvents = rawEvents
     .filter((event) => event.notify && event.priority >= 65)
@@ -412,14 +574,18 @@ export function simulateLivingCityTick(input: LivingCityTickInput): LivingCityTi
   return {
     state: {
       ...state,
+      crews,
       events,
       lastSimulatedAt: now.toISOString(),
       tick: state.tick + 1,
       notificationsLastMinute: notifications.length,
       avgTickMs,
       lastAbsenceSummary: absenceSummary,
+      npcInteractionsLastTick: rawEvents.filter((event) => event.actorNpcIds.length > 1).length,
+      outingsLastTick: rawEvents.filter((event) => event.kind === "OUTING" || event.kind === "EVENT").length,
+      territorySignalsLastTick: rawEvents.filter((event) => event.kind === "TERRITORY" || event.kind === "BATTLE").length,
     },
-    npcs,
+    npcs: effectedNpcs,
     feed,
     notifications,
   };

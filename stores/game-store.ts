@@ -3076,7 +3076,10 @@ export const useGameStore = create<GameState>()(
           event: "EVENT",
           flash: "EVENT",
           territory: "TERRITORY",
+          battle: "BATTLE",
           mission: "MISSION",
+          outing: "OUTING",
+          match: "MATCH",
         };
         const result = simulateLivingCityTick({
           state: s.livingCity ?? createLivingCityState("NORMAL"),

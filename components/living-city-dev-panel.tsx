@@ -98,9 +98,11 @@ export function LivingCityDevPanel() {
         <DevButton label="Trigger Feeling" onPress={() => trigger("feeling")} />
         <DevButton label="Trigger Crew Invite" onPress={() => trigger("crew")} />
         <DevButton label="Trigger Event" onPress={() => trigger("event")} />
+        <DevButton label="Trigger Outing" onPress={() => trigger("outing")} />
+        <DevButton label="Trigger Match" onPress={() => trigger("match")} />
         <DevButton label="Trigger Flash Event" onPress={() => trigger("flash")} />
         <DevButton label="Trigger Territory Activity" onPress={() => trigger("territory")} />
-        <DevButton label="Schedule Territory War" onPress={() => trigger("territory")} />
+        <DevButton label="Schedule Territory War" onPress={() => trigger("battle")} />
         <DevButton label="Simulate 1 hour" onPress={() => trigger("hour")} />
         <DevButton label="Simulate 1 day" onPress={() => trigger("day")} />
         <DevButton label="Reset NPC World" onPress={() => reset(livingCity.preset)} />
@@ -114,6 +116,9 @@ export function LivingCityDevPanel() {
           ["Crews NPC", crewCount],
           ["Events", livingCity.events.length],
           ["Notifs/min", livingCity.notificationsLastMinute],
+          ["Relations", livingCity.npcInteractionsLastTick ?? 0],
+          ["Sorties", livingCity.outingsLastTick ?? 0],
+          ["Territoires", livingCity.territorySignalsLastTick ?? 0],
         ].map(([label, value]) => (
           <View key={label} style={{ minWidth: 92, padding: 10, borderRadius: 8, backgroundColor: L.bg, borderWidth: 1, borderColor: L.border }}>
             <Text style={{ color: L.soft, fontSize: 9 }}>{label}</Text>

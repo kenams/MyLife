@@ -103,7 +103,9 @@ export type NotificationKind =
   | "crew"
   | "event"
   | "territory"
+  | "battle"
   | "mission"
+  | "outing"
   | "wory"
   | "city"
   | "relationship";

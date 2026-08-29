@@ -37,6 +37,7 @@ describe("living city simulation", () => {
     expect(result.notifications.length).toBeLessThanOrEqual(2);
     expect(result.state.notificationsLastMinute).toBe(result.notifications.length);
     expect(result.state.avgTickMs).toBeGreaterThan(0);
+    expect(result.state.npcInteractionsLastTick).toBeGreaterThanOrEqual(0);
   });
 
   it("summarizes offline simulation without per-second heartbeats", () => {
@@ -95,10 +96,30 @@ describe("living city simulation", () => {
       state: createLivingCityState("NORMAL"),
       npcs: seedLivingCityNpcs("NORMAL", new Date("2026-08-29T20:00:00Z")),
       now: new Date("2026-08-29T20:10:00Z"),
-      forceKind: "TERRITORY",
+      forceKind: "BATTLE",
     });
 
-    expect(result.feed[0]?.title).toBe("Territoires");
-    expect(result.state.events[0]?.kind).toBe("TERRITORY");
+    expect(result.feed[0]?.title).toBe("Battle");
+    expect(result.state.events[0]?.kind).toBe("BATTLE");
+    expect(result.state.events[0]?.crewIds.length).toBeGreaterThanOrEqual(2);
+    expect(result.state.territorySignalsLastTick).toBe(1);
+  });
+
+  it("records NPC to NPC interactions and local outings", () => {
+    const now = new Date("2026-08-29T20:00:00Z");
+    const result = simulateLivingCityTick({
+      state: createLivingCityState("NORMAL"),
+      npcs: seedLivingCityNpcs("NORMAL", now),
+      now: new Date("2026-08-29T20:15:00Z"),
+      forceKind: "OUTING",
+    });
+    const event = result.state.events[0];
+    const touched = result.npcs.filter((npc) => event?.actorNpcIds.includes(npc.id));
+
+    expect(event?.kind).toBe("OUTING");
+    expect(event?.actorNpcIds).toHaveLength(2);
+    expect(result.state.outingsLastTick).toBe(1);
+    expect(result.state.npcInteractionsLastTick).toBe(1);
+    expect(touched.every((npc) => (npc.relationMemory ?? []).some((line) => line.startsWith("OUTING:")))).toBe(true);
   });
 });
