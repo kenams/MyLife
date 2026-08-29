@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * QG du Crew (Phase D) — le lieu de vie de l'équipe : objectif commun de la
- * semaine + mur de souvenirs. Se branche sur `lib/crew-life.ts` qui dégrade
- * proprement tant que la migration `20260830000000_crew_life.sql` n'est pas
- * appliquée.
+ * QG du Crew — le lieu de vie de l'équipe : membres et rôles, objectif commun
+ * de la semaine, agenda de sortie, mur de souvenirs. Se branche sur
+ * `lib/crew-life.ts` / `lib/crew-outings.ts` qui dégradent proprement tant que
+ * les migrations `20260830000000` / `20260901000000` ne sont pas appliquées.
  */
 
 import { useCallback, useEffect, useState } from "react";
@@ -31,6 +31,7 @@ import {
   type CrewMemory,
 } from "@/lib/crew-life";
 import { deriveSocialRoles } from "@/lib/crew-life-logic";
+import { CrewAgenda } from "@/components/crew-agenda";
 import { hapticSuccess } from "@/lib/safe-haptics";
 
 const C = {
@@ -69,6 +70,10 @@ export default function CrewHqScreen() {
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const isOfficer = members.some(
+    (m) => m.player_name === playerName && (m.role === "founder" || m.role === "officer")
+  );
 
   const roles = (() => {
     const authored: Record<string, number> = {};
@@ -281,6 +286,9 @@ export default function CrewHqScreen() {
               </Text>
             )}
           </View>
+
+          {/* Agenda de sortie */}
+          <CrewAgenda crewId={crewId} isOfficer={isOfficer} />
 
           {/* Souvenirs */}
           <View style={{ paddingHorizontal: 16 }}>
