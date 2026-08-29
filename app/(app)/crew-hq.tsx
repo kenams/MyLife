@@ -21,7 +21,16 @@ import {
 import { router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useGameStore } from "@/stores/game-store";
-import { getMyCrewId, fetchCrewMembers, type CrewMember } from "@/lib/crews";
+import {
+  getMyCrewId,
+  fetchCrewMembers,
+  fetchTacticalItems,
+  fetchActiveTacticalEffects,
+  crewBuyTactical,
+  type CrewMember,
+  type TacticalItem,
+} from "@/lib/crews";
+import { fetchCrewWoryBalance } from "@/lib/wory";
 import {
   fetchWeeklyGoal,
   bumpWeeklyGoal,
@@ -69,6 +78,9 @@ export default function CrewHqScreen() {
   const [contest, setContest] = useState<ContestRow[]>([]);
   const [gages, setGages] = useState<CrewGage[]>([]);
   const [titles, setTitles] = useState<CrewTitle[]>([]);
+  const [tacItems, setTacItems] = useState<TacticalItem[]>([]);
+  const [tacEffects, setTacEffects] = useState<{ effect_kind: string; expires_at: string }[]>([]);
+  const [treasury, setTreasury] = useState<number | null>(null);
 
   const [modal, setModal] = useState(false);
   const [title, setTitle] = useState("");
@@ -101,13 +113,16 @@ export default function CrewHqScreen() {
       setLoading(false);
       return;
     }
-    const [m, g, mem, ct, gg, tt] = await Promise.all([
+    const [m, g, mem, ct, gg, tt, ti, te, tb] = await Promise.all([
       fetchCrewMembers(id),
       fetchWeeklyGoal(id),
       fetchCrewMemories(id),
       fetchContestSummary(),
       fetchActiveGages(id),
       fetchCrewTitles(id),
+      fetchTacticalItems(),
+      fetchActiveTacticalEffects(id),
+      fetchCrewWoryBalance(id),
     ]);
     setMembers(m);
     setGoal(g);
@@ -115,6 +130,9 @@ export default function CrewHqScreen() {
     setContest(ct);
     setGages(gg);
     setTitles(tt);
+    setTacItems(ti);
+    setTacEffects(te);
+    setTreasury(tb);
     setLoading(false);
   }, [playerName]);
 
@@ -358,6 +376,43 @@ export default function CrewHqScreen() {
               ))}
               <Text style={{ color: C.muted, fontSize: 10.5, marginTop: 8 }}>
                 Données agrégées et différées — MyLife ne révèle jamais qui conteste.
+              </Text>
+            </View>
+          )}
+
+          {/* Tactique (§3) — officiers */}
+          {isOfficer && tacItems.length > 0 && (
+            <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: C.card, borderRadius: 14, borderWidth: 1, borderColor: C.border, padding: 14 }}>
+              <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <Text style={{ color: C.muted, fontSize: 10, fontWeight: "900", letterSpacing: 2 }}>TACTIQUE</Text>
+                {treasury != null && <Text style={{ color: C.gold, fontSize: 11.5, fontWeight: "900" }}>🪙 {treasury}</Text>}
+              </View>
+              {tacEffects.length > 0 && (
+                <Text style={{ color: C.green, fontSize: 11, marginBottom: 8 }}>
+                  Actif : {tacEffects.map((e) => e.effect_kind).join(", ")}
+                </Text>
+              )}
+              {tacItems.map((it) => (
+                <Pressable
+                  key={it.code}
+                  onPress={async () => {
+                    const res = await crewBuyTactical(crewId!, it.code);
+                    if (res.ok) {
+                      hapticSuccess();
+                      load();
+                    }
+                  }}
+                  style={{ paddingVertical: 9, flexDirection: "row", alignItems: "center", gap: 8 }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: C.text, fontSize: 12.5, fontWeight: "800" }}>{it.label} · 🪙 {it.cost}</Text>
+                    <Text style={{ color: C.textSoft, fontSize: 10.5 }}>{it.description}</Text>
+                  </View>
+                  <Text style={{ color: C.gold, fontSize: 11, fontWeight: "900" }}>Acheter</Text>
+                </Pressable>
+              ))}
+              <Text style={{ color: C.muted, fontSize: 10, marginTop: 6 }}>
+                Ça modifie la stratégie — jamais n'achète de points ni de territoire.
               </Text>
             </View>
           )}

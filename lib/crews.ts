@@ -529,15 +529,43 @@ export async function declareSiege(
 export async function depositToTreasury(
   crewId: string,
   amount: number,
-): Promise<{ ok: boolean; newBalance: number }> {
+): Promise<{ ok: boolean; newBalance: number; error?: string }> {
   if (!supabase) return { ok: false, newBalance: 0 };
-  const { data: crew } = await supabase
-    .from("crews").select("treasury").eq("id", crewId).single();
-  const current = crew?.treasury ?? 0;
-  const newBalance = current + amount;
-  const { error } = await supabase
-    .from("crews").update({ treasury: newBalance }).eq("id", crewId);
-  return { ok: !error, newBalance };
+  // §3 : passe par le ledger Wory unifié (débite le joueur, crédite le crew).
+  const { data, error } = await supabase.rpc("crew_deposit_wory", { p_crew_id: crewId, p_amount: Math.round(amount) });
+  if (error) return { ok: false, newBalance: 0, error: error.message };
+  return { ok: true, newBalance: Number(data ?? 0) };
+}
+
+export interface TacticalItem {
+  code: string;
+  label: string;
+  cost: number;
+  effect_kind: string;
+  description: string;
+}
+
+export async function fetchTacticalItems(): Promise<TacticalItem[]> {
+  if (!supabase) return [];
+  const { data } = await supabase.from("crew_tactical_items").select("code, label, cost, effect_kind, description").order("cost");
+  return (data ?? []) as TacticalItem[];
+}
+
+export async function fetchActiveTacticalEffects(crewId: string): Promise<{ effect_kind: string; expires_at: string }[]> {
+  if (!supabase || !crewId) return [];
+  const { data } = await supabase
+    .from("crew_tactical_effects")
+    .select("effect_kind, expires_at")
+    .eq("crew_id", crewId)
+    .gt("expires_at", new Date().toISOString());
+  return (data ?? []) as { effect_kind: string; expires_at: string }[];
+}
+
+export async function crewBuyTactical(crewId: string, code: string): Promise<{ ok: boolean; error?: string }> {
+  if (!supabase) return { ok: false, error: "hors ligne" };
+  const { error } = await supabase.rpc("crew_buy_tactical", { p_crew_id: crewId, p_code: code });
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
 }
 
 export async function setVisitorReward(

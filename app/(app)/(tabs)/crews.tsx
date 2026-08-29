@@ -225,7 +225,7 @@ export default function CrewsScreen() {
     const reward = parseInt(rewardAmount, 10);
     if (isNaN(amount) || amount < 1) { showToast("Montant invalide"); return; }
     setDepositing(true);
-    const { ok, newBalance } = await depositToTreasury(myCrewId, amount);
+    const { ok, newBalance, error } = await depositToTreasury(myCrewId, amount);
     if (ok && !isNaN(reward)) await setVisitorReward(myCrewId, reward);
     setDepositing(false);
     if (ok) {
@@ -233,7 +233,7 @@ export default function CrewsScreen() {
       setTreasuryModal(false);
       fetchCrews().then(setCrews);
     } else {
-      showToast("Erreur lors du dépôt");
+      showToast(error && /insuffisant/i.test(error) ? "Pas assez de Wory" : "Erreur lors du dépôt");
     }
   }
 
