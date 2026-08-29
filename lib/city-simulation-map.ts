@@ -19,6 +19,14 @@ export type CitySimulationConfig = {
   districts: Record<string, { lat: number; lng: number; spreadLat: number; spreadLng: number }>;
 };
 
+export type CityActivityEstimate = {
+  referencePopulation: number;
+  awakePopulation: number;
+  mobilePopulation: number;
+  socialPopulation: number;
+  materializedAgents: number;
+};
+
 export const TOULOUSE_CITY: CitySimulationConfig = {
   id: "toulouse-fr",
   name: "Toulouse",
@@ -51,6 +59,83 @@ function hash(input: string): number {
 
 function unit(seed: string): number {
   return (hash(seed) % 10_000) / 10_000;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
+/**
+ * Estimate the real city rhythm without turning residents into individual
+ * objects. These numbers are background population signals, not map markers.
+ */
+export function estimateCityActivity(
+  at: Date = new Date(),
+  city: CitySimulationConfig = TOULOUSE_CITY,
+  zoom = 12,
+): CityActivityEstimate {
+  const hour = at.getHours() + at.getMinutes() / 60;
+  const weekend = at.getDay() === 0 || at.getDay() === 6;
+
+  let awakeShare = 0.92;
+  let mobileShare = 0.16;
+  let socialShare = weekend ? 0.14 : 0.09;
+
+  if (hour < 5) {
+    awakeShare = 0.12;
+    mobileShare = 0.025;
+    socialShare = 0.018;
+  } else if (hour < 7) {
+    awakeShare = 0.45;
+    mobileShare = 0.11;
+    socialShare = 0.025;
+  } else if (hour < 10) {
+    awakeShare = 0.93;
+    mobileShare = weekend ? 0.12 : 0.29;
+    socialShare = 0.035;
+  } else if (hour < 12) {
+    awakeShare = 0.97;
+    mobileShare = 0.13;
+    socialShare = weekend ? 0.11 : 0.055;
+  } else if (hour < 14) {
+    awakeShare = 0.98;
+    mobileShare = 0.23;
+    socialShare = 0.14;
+  } else if (hour < 17) {
+    awakeShare = 0.98;
+    mobileShare = 0.14;
+    socialShare = weekend ? 0.16 : 0.075;
+  } else if (hour < 20) {
+    awakeShare = 0.97;
+    mobileShare = 0.31;
+    socialShare = 0.19;
+  } else if (hour < 23) {
+    awakeShare = 0.84;
+    mobileShare = 0.18;
+    socialShare = weekend ? 0.25 : 0.18;
+  } else {
+    awakeShare = 0.48;
+    mobileShare = 0.08;
+    socialShare = weekend ? 0.14 : 0.075;
+  }
+
+  const awakePopulation = Math.round(city.referencePopulation * awakeShare);
+  const mobilePopulation = Math.round(city.referencePopulation * mobileShare);
+  const socialPopulation = Math.round(city.referencePopulation * socialShare);
+
+  // Materialisation is deliberately bounded. Zooming in increases individual
+  // detail; zooming out relies on clusters/aggregate city signals.
+  const zoomFactor = clamp((zoom - 9) / 8, 0, 1);
+  const rhythmFactor = clamp(mobileShare / 0.31, 0.25, 1);
+  const materializedAgents = Math.round(36 + zoomFactor * 84 + rhythmFactor * 40);
+
+  return {
+    referencePopulation: city.referencePopulation,
+    awakePopulation,
+    mobilePopulation,
+    socialPopulation,
+    materializedAgents: clamp(materializedAgents, 36, 160),
+  };
 }
 
 function actionLabel(npc: NpcState): string {
@@ -127,15 +212,38 @@ export function livingNpcToMapPlayer(
   };
 }
 
+export function selectMaterializedNpcs(
+  npcs: NpcState[],
+  at: Date = new Date(),
+  city: CitySimulationConfig = TOULOUSE_CITY,
+  zoom = 12,
+): NpcState[] {
+  const budget = estimateCityActivity(at, city, zoom).materializedAgents;
+  return npcs
+    .filter((npc) => npc.presenceOnline)
+    .sort((a, b) => hash(`${a.id}:${at.toDateString()}`) - hash(`${b.id}:${at.toDateString()}`))
+    .slice(0, budget);
+}
+
 export function livingNpcsToMapPlayers(
   npcs: NpcState[],
   city: CitySimulationConfig = TOULOUSE_CITY,
+  at: Date = new Date(),
+  zoom = 12,
 ): MapPlayer[] {
-  return npcs.filter((npc) => npc.presenceOnline).map((npc) => livingNpcToMapPlayer(npc, city));
+  return selectMaterializedNpcs(npcs, at, city, zoom).map((npc) => livingNpcToMapPlayer(npc, city));
 }
 
-export function cityActivitySummary(realPlayers: MapPlayer[], npcs: NpcState[]) {
+export function cityActivitySummary(realPlayers: MapPlayer[], npcs: NpcState[], at: Date = new Date()) {
   const real = realPlayers.filter((p) => !p.is_npc && p.status !== "ghost").length;
+  const simulation = estimateCityActivity(at);
   const simulated = npcs.filter((npc) => npc.presenceOnline).length;
-  return { real, simulated, total: real + simulated };
+  return {
+    real,
+    simulated,
+    materialized: Math.min(simulated, simulation.materializedAgents),
+    cityAwakeEstimate: simulation.awakePopulation,
+    cityMobileEstimate: simulation.mobilePopulation,
+    total: real + simulated,
+  };
 }
