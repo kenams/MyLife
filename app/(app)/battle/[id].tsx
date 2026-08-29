@@ -18,14 +18,15 @@ import {
   joinBattle,
   tickBattle,
   battleTap,
+  battleGetQuiz,
   battleSubmitQuiz,
   battleSyncHit,
   subscribeBattle,
   type TerritoryBattle,
   type BattleParticipant,
+  type QuizQ,
 } from "@/lib/territory-wars";
 import { liveScore } from "@/lib/battle-score";
-import { pickQuiz } from "@/lib/battle-quiz";
 import { wory } from "@/lib/branding";
 import { hapticImpact, hapticSuccess } from "@/lib/safe-haptics";
 
@@ -217,7 +218,7 @@ export default function BattleScreen() {
               />
             )}
             {battle.current_round === 2 && (
-              <RoundQuiz battleId={battleId} seed={battle.id} done={(mine?.r2_score ?? 0) > 0} />
+              <RoundQuiz battleId={battleId} done={(mine?.r2_score ?? 0) > 0} />
             )}
             {battle.current_round === 3 && (
               <RoundSync
@@ -319,14 +320,18 @@ function RoundInfluence({ battleId, taps, onTap }: { battleId: string; taps: num
   );
 }
 
-function RoundQuiz({ battleId, seed, done }: { battleId: string; seed: string; done: boolean }) {
+function RoundQuiz({ battleId, done }: { battleId: string; done: boolean }) {
   const [answers, setAnswers] = useState<Record<number, number>>({});
   const [submitted, setSubmitted] = useState(done);
-  const quiz = pickQuiz(seed, 3);
+  const [quiz, setQuiz] = useState<QuizQ[]>([]);
+
+  useEffect(() => {
+    battleGetQuiz(battleId).then(setQuiz);
+  }, [battleId]);
 
   async function submit() {
-    const correct = quiz.reduce((n, q, i) => n + (answers[i] === q.answer ? 1 : 0), 0);
-    await battleSubmitQuiz(battleId, correct);
+    const payload = quiz.map((_, i) => answers[i] ?? -1);
+    await battleSubmitQuiz(battleId, payload);
     hapticSuccess();
     setSubmitted(true);
   }
@@ -369,13 +374,13 @@ function RoundQuiz({ battleId, seed, done }: { battleId: string; seed: string; d
       ))}
       <Pressable
         onPress={submit}
-        disabled={Object.keys(answers).length < quiz.length}
+        disabled={(quiz.length === 0 || Object.keys(answers).length < quiz.length)}
         style={{
           backgroundColor: C.gold,
           borderRadius: 12,
           paddingVertical: 13,
           alignItems: "center",
-          opacity: Object.keys(answers).length < quiz.length ? 0.5 : 1,
+          opacity: (quiz.length === 0 || Object.keys(answers).length < quiz.length) ? 0.5 : 1,
         }}
       >
         <Text style={{ color: "#080808", fontWeight: "900", fontSize: 13.5 }}>Valider mes réponses</Text>

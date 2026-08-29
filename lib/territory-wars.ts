@@ -125,10 +125,20 @@ export async function battleTap(battleId: string): Promise<number | null> {
   return error ? null : (data as number);
 }
 
-export async function battleSubmitQuiz(battleId: string, correct: number): Promise<boolean> {
-  if (!supabase) return false;
-  const { error } = await supabase.rpc("battle_submit_quiz", { p_battle_id: battleId, p_correct: correct });
-  return !error;
+export type QuizQ = { q: string; choices: string[] };
+
+export async function battleGetQuiz(battleId: string): Promise<QuizQ[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc("battle_get_quiz", { p_battle_id: battleId });
+  if (error || !Array.isArray(data)) return [];
+  return data as QuizQ[];
+}
+
+/** Envoie les index de réponse choisis ; le serveur corrige et renvoie le score. */
+export async function battleSubmitQuiz(battleId: string, answers: number[]): Promise<number | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc("battle_submit_quiz", { p_battle_id: battleId, p_answers: answers });
+  return error ? null : (data as number);
 }
 
 export async function battleSyncHit(battleId: string): Promise<number | null> {
