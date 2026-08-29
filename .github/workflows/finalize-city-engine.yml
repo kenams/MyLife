@@ -1,0 +1,239 @@
+name: Finalize City Engine UX
+
+on:
+  push:
+    branches: [chatgpt-city-engine]
+    paths:
+      - ".github/workflows/finalize-city-engine.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt-city-engine
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Apply targeted City Engine UX fixes
+        shell: python
+        run: |
+          from pathlib import Path
+
+          # 1) Auth/onboarding flows enter MyLife through the Map.
+          auth_dir = Path("app/(auth)")
+          auth_changes = 0
+          for path in auth_dir.rglob("*.tsx"):
+              text = path.read_text(encoding="utf-8")
+              updated = text.replace("/(app)/(tabs)/home", "/(app)/(tabs)/map")
+              if updated != text:
+                  path.write_text(updated, encoding="utf-8")
+                  auth_changes += 1
+          if auth_changes == 0:
+              print("Auth redirects already aligned; no change needed.")
+
+          # 2) Remove old DEMO wording from both Map implementations.
+          map_changes = 0
+          replacements = {
+              "PNJ DÉMO": "HABITANT SIMULÉ",
+              "PNJ DEMO": "HABITANT SIMULÉ",
+              " DÉMO": " SIMULÉ",
+              " DEMO": " SIMULÉ",
+              "Les vrais joueurs sont en temps réel. Les PNJ SIMULÉ simulent une ville active.":
+                  "Les joueurs sont en temps réel. Les habitants simulés représentent l'activité de la ville.",
+              "Les vrais joueurs sont en temps réel. Les PNJ DÉMO simulent une ville active.":
+                  "Les joueurs sont en temps réel. Les habitants simulés représentent l'activité de la ville.",
+              "{visibleRealCount} en live · Toulouse": "{visibleRealCount} joueurs · Toulouse",
+          }
+          for path in [Path("app/(app)/(tabs)/map.tsx"), Path("app/(app)/(tabs)/map.web.tsx")]:
+              text = path.read_text(encoding="utf-8")
+              updated = text
+              for old, new in replacements.items():
+                  updated = updated.replace(old, new)
+              if updated != text:
+                  path.write_text(updated, encoding="utf-8")
+                  map_changes += 1
+          print(f"Map files updated: {map_changes}")
+
+          # 3) Toulouse Live must report real players separately from the bounded city simulation.
+          home = Path("app/(app)/(tabs)/home.tsx")
+          text = home.read_text(encoding="utf-8")
+          text = text.replace(
+              'import { requestAndGetLocation } from "@/lib/life-map";',
+              'import { fetchAllPlayers, requestAndGetLocation } from "@/lib/life-map";\nimport { cityActivitySummary } from "@/lib/city-simulation-map";',
+          )
+
+          start_marker = "function LiveToulouseWidget() {"
+          end_marker = "// ─── Daily Event Modal"
+          start = text.index(start_marker)
+          end = text.index(end_marker, start)
+
+          widget = '''function LiveToulouseWidget() {
+            const npcs = useGameStore((s) => s.npcs);
+            const [realCount, setRealCount] = useState(0);
+            const [simulatedCount, setSimulatedCount] = useState(0);
+            const [mobileEstimate, setMobileEstimate] = useState(0);
+            const [stories, setStories] = useState<NpcStory[]>([]);
+
+            useEffect(() => {
+              let cancelled = false;
+
+              const refreshCityCounts = async () => {
+                try {
+                  const players = await fetchAllPlayers();
+                  if (cancelled) return;
+                  const summary = cityActivitySummary(players, npcs ?? [], new Date());
+                  setRealCount(summary.real);
+                  setSimulatedCount(summary.materialized);
+                  setMobileEstimate(summary.cityMobileEstimate);
+                } catch {
+                  if (cancelled) return;
+                  const summary = cityActivitySummary([], npcs ?? [], new Date());
+                  setRealCount(0);
+                  setSimulatedCount(summary.materialized);
+                  setMobileEstimate(summary.cityMobileEstimate);
+                }
+              };
+
+              void refreshCityCounts();
+              const timer = setInterval(() => void refreshCityCounts(), 30_000);
+              return () => {
+                cancelled = true;
+                clearInterval(timer);
+              };
+            }, [npcs]);
+
+            useEffect(() => {
+              if (!supabase) return;
+              supabase.from("quartier_messages")
+                .select("display_name, avatar_emoji, body, quartier, is_star, created_at")
+                .eq("is_npc", true)
+                .order("created_at", { ascending: false })
+                .limit(6)
+                .then(({ data }) => {
+                  if (data && data.length > 0) {
+                    const seen = new Set<string>();
+                    const unique = data.filter((m) => {
+                      if (seen.has(m.display_name)) return false;
+                      seen.add(m.display_name);
+                      return true;
+                    });
+                    setStories(unique.map((m) => ({
+                      name: m.display_name, emoji: m.avatar_emoji,
+                      body: m.body, quartier: m.quartier,
+                      is_star: m.is_star, created_at: m.created_at,
+                    })));
+                  }
+                });
+            }, []);
+
+            const mobileK = Math.max(0, Math.round(mobileEstimate / 1000));
+
+            return (
+              <View style={{ marginHorizontal: 20, marginTop: 16, backgroundColor: L.card,
+                borderRadius: 18, borderWidth: 1, borderColor: L.border, overflow: "hidden" }}>
+
+                <View style={{ paddingHorizontal: 16, paddingTop: 14, paddingBottom: 10,
+                  borderBottomWidth: 1, borderBottomColor: L.border, gap: 10 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                      <LivePulse />
+                      <Text style={{ color: L.text, fontSize: 13, fontWeight: "900" }}>Toulouse en direct</Text>
+                    </View>
+                    <Pressable onPress={() => router.push("/(app)/(tabs)/map" as never)}
+                      style={{ backgroundColor: L.primaryBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+                        borderWidth: 1, borderColor: L.primary + "30" }}>
+                      <Text style={{ color: L.primary, fontSize: 10, fontWeight: "800" }}>MAP →</Text>
+                    </Pressable>
+                  </View>
+
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6 }}>
+                    <View style={{ backgroundColor: L.greenBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+                      borderWidth: 1, borderColor: L.green + "30" }}>
+                      <Text style={{ color: L.green, fontSize: 10, fontWeight: "800" }}>{realCount} joueurs réels</Text>
+                    </View>
+                    <View style={{ backgroundColor: L.blueBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+                      borderWidth: 1, borderColor: L.blue + "30" }}>
+                      <Text style={{ color: L.blue, fontSize: 10, fontWeight: "800" }}>{simulatedCount} habitants simulés</Text>
+                    </View>
+                    <View style={{ backgroundColor: L.cardAlt, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4,
+                      borderWidth: 1, borderColor: L.border }}>
+                      <Text style={{ color: L.textSoft, fontSize: 10 }}>~{mobileK}k en mouvement · estimation ville</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {stories.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={{ paddingHorizontal: 12, paddingVertical: 12, gap: 4 }}>
+                    {stories.map((story) => (
+                      <NpcStoryBubble key={story.name} story={story}
+                        onPress={() => router.push(`/(app)/live-chat?quartier=${story.quartier}` as never)} />
+                    ))}
+                    <Pressable onPress={() => router.push("/(app)/quartiers" as never)}
+                      style={{ width: 72, alignItems: "center", gap: 6 }}>
+                      <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: L.cardAlt,
+                        borderWidth: 2, borderColor: L.border, borderStyle: "dashed",
+                        alignItems: "center", justifyContent: "center" }}>
+                        <Text style={{ color: L.muted, fontSize: 22 }}>+</Text>
+                      </View>
+                      <Text style={{ color: L.muted, fontSize: 9, fontWeight: "700" }}>Quartiers</Text>
+                    </Pressable>
+                  </ScrollView>
+                )}
+
+                {stories.length === 0 && (
+                  <View style={{ padding: 16, alignItems: "center", gap: 6 }}>
+                    <Pressable onPress={() => router.push("/(app)/quartiers" as never)}
+                      style={{ flexDirection: "row", alignItems: "center", gap: 8,
+                        backgroundColor: L.tealBg, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10,
+                        borderWidth: 1, borderColor: L.teal + "30" }}>
+                      <Text style={{ fontSize: 14 }}>📡</Text>
+                      <Text style={{ color: L.teal, fontSize: 12, fontWeight: "800" }}>Rejoindre un quartier live</Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            );
+          }
+
+          '''
+
+          text = text[:start] + widget + text[end:]
+          home.write_text(text, encoding="utf-8")
+
+          # Guardrail: the old user-facing DEMO wording must be gone from map screens.
+          for path in [Path("app/(app)/(tabs)/map.tsx"), Path("app/(app)/(tabs)/map.web.tsx")]:
+              remaining = path.read_text(encoding="utf-8")
+              if "PNJ DÉMO" in remaining or "PNJ DEMO" in remaining:
+                  raise SystemExit(f"Old DEMO wording remains in {path}")
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      - name: Commit finalized wiring
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add app
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            exit 0
+          fi
+          git commit -m "fix(city): finish map entry and Toulouse live wiring"
+          git push origin HEAD:chatgpt-city-engine
