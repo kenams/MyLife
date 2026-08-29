@@ -29,7 +29,7 @@ export default function AvatarScreen() {
           submitLabel="Entrer sur la Life Map"
           onSubmit={(avatar) => {
             completeAvatar(avatar);
-            router.replace("/(app)/(tabs)/home");
+            router.replace("/(app)/(tabs)/map");
           }}
         />
       </ScrollView>
