@@ -3,6 +3,7 @@ import { router, Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 
+import { CityRuntime } from "@/components/city-runtime";
 import { DuskOverlay } from "@/components/dusk-overlay";
 import { useAuthListener } from "@/hooks/use-auth-listener";
 import { hasConsented } from "./(auth)/consent";
@@ -51,6 +52,7 @@ export default function RootLayout() {
     <QueryClientProvider client={queryClient}>
       <StatusBar style="light" />
       <AuthGate />
+      <CityRuntime />
       <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
       <DuskOverlay />
     </QueryClientProvider>
