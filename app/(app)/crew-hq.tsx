@@ -24,11 +24,13 @@ import { useGameStore } from "@/stores/game-store";
 import { getMyCrewId, fetchCrewMembers, type CrewMember } from "@/lib/crews";
 import {
   fetchWeeklyGoal,
+  bumpWeeklyGoal,
   fetchCrewMemories,
   addCrewMemory,
   type CrewWeeklyGoal,
   type CrewMemory,
 } from "@/lib/crew-life";
+import { deriveSocialRoles } from "@/lib/crew-life-logic";
 import { hapticSuccess } from "@/lib/safe-haptics";
 
 const C = {
@@ -67,6 +69,20 @@ export default function CrewHqScreen() {
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+
+  const roles = (() => {
+    const authored: Record<string, number> = {};
+    for (const mm of memories) authored[mm.author_id] = (authored[mm.author_id] ?? 0) + 1;
+    return deriveSocialRoles(
+      members.map((m) => ({
+        userId: m.user_id,
+        playerName: m.player_name,
+        joinedAt: m.joined_at,
+        role: m.role,
+        memoriesAuthored: m.user_id ? authored[m.user_id] ?? 0 : 0,
+      }))
+    );
+  })();
 
   const load = useCallback(async () => {
     const id = await getMyCrewId(playerName);
@@ -112,6 +128,10 @@ export default function CrewHqScreen() {
     setModal(false);
     const mem = await fetchCrewMemories(crewId);
     setMemories(mem);
+    if (goal && !goal.label.toLowerCase().includes("mission") && goal.label.toLowerCase().includes("souvenir")) {
+      await bumpWeeklyGoal(goal.id);
+      setGoal(await fetchWeeklyGoal(crewId));
+    }
   }
 
   return (
@@ -171,29 +191,47 @@ export default function CrewHqScreen() {
               MEMBRES ({members.length})
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {members.map((m) => (
-                <View
-                  key={m.user_id ?? m.player_name}
-                  style={{
-                    flexDirection: "row",
-                    alignItems: "center",
-                    gap: 6,
-                    backgroundColor: C.card,
-                    borderRadius: 9,
-                    paddingHorizontal: 10,
-                    paddingVertical: 6,
-                    borderWidth: 1,
-                    borderColor: C.border,
-                  }}
-                >
-                  <Text style={{ fontSize: 13 }}>{m.player_emoji ?? "🧢"}</Text>
-                  <Text style={{ color: C.text, fontSize: 12, fontWeight: "700" }}>{m.player_name}</Text>
-                  {m.role === "founder" && (
-                    <Text style={{ color: C.gold, fontSize: 10, fontWeight: "900" }}>★</Text>
-                  )}
-                </View>
-              ))}
+              {members.map((m) => {
+                const mr = roles[m.user_id ?? m.player_name] ?? [];
+                return (
+                  <View
+                    key={m.user_id ?? m.player_name}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      backgroundColor: C.card,
+                      borderRadius: 9,
+                      paddingHorizontal: 10,
+                      paddingVertical: 6,
+                      borderWidth: 1,
+                      borderColor: C.border,
+                    }}
+                  >
+                    <Text style={{ fontSize: 13 }}>{m.player_emoji ?? "🧢"}</Text>
+                    <Text style={{ color: C.text, fontSize: 12, fontWeight: "700" }}>{m.player_name}</Text>
+                    {mr.length > 0 && (
+                      <Text style={{ fontSize: 11 }}>{mr.map((r) => r.emoji).join("")}</Text>
+                    )}
+                  </View>
+                );
+              })}
             </View>
+            {Object.keys(roles).length > 0 && (
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 10 }}>
+                {[
+                  ...new Map(
+                    Object.values(roles)
+                      .flat()
+                      .map((r) => [r.label, r])
+                  ).values(),
+                ].map((r) => (
+                  <Text key={r.label} style={{ color: C.muted, fontSize: 10.5 }}>
+                    {r.emoji} {r.label} — {r.hint}
+                  </Text>
+                ))}
+              </View>
+            )}
           </View>
 
           {/* Objectif de la semaine */}

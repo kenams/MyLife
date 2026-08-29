@@ -1,5 +1,9 @@
 import { supabase } from "./supabase";
 
+export { currentWeekStart, deriveSocialRoles } from "./crew-life-logic";
+export type { SocialRole, RoleInput } from "./crew-life-logic";
+import { currentWeekStart } from "./crew-life-logic";
+
 /**
  * Crew Life (Phase D) — objectif hebdo commun + souvenirs du crew.
  * Toutes les fonctions dégradent proprement (tableau/valeur vide) si la
@@ -24,14 +28,6 @@ export type CrewMemory = {
   body: string;
   created_at: string;
 };
-
-/** Lundi de la semaine courante, en YYYY-MM-DD. */
-export function currentWeekStart(d = new Date()): string {
-  const x = new Date(d);
-  const day = (x.getDay() + 6) % 7; // 0 = lundi
-  x.setDate(x.getDate() - day);
-  return x.toISOString().slice(0, 10);
-}
 
 const WEEKLY_LABELS = [
   { label: "5 missions de saison validées par le crew", target: 5, reward_xp: 150 },
@@ -110,3 +106,4 @@ export async function deleteCrewMemory(id: string): Promise<boolean> {
   const { error } = await supabase.from("crew_memories").delete().eq("id", id);
   return !error;
 }
+
