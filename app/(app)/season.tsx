@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from "react-native";
 import { router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SeasonHub } from "@/components/season-hub";
+import { SeasonRecapCard } from "@/components/season-recap-card";
 
 const T = {
   bg: "#080808",
@@ -41,6 +42,7 @@ export default function SeasonScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+        <SeasonRecapCard />
         <SeasonHub />
       </ScrollView>
     </View>
