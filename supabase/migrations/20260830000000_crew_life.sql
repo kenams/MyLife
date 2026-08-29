@@ -1,6 +1,5 @@
 -- Crew Life (Phase D) — objectif hebdomadaire commun + souvenirs du crew.
--- RLS pragmatique alignée sur crews/crew_members (ouverte en écriture aux
--- authenticated ; le contrôle d'appartenance se fait côté app + RPC futurs).
+-- RLS : lecture/écriture réservées aux membres du crew ciblé (via crew_members).
 
 create table if not exists public.crew_weekly_goals (
   id          uuid primary key default gen_random_uuid(),
@@ -28,22 +27,44 @@ create index if not exists crew_memories_crew_idx on public.crew_memories (crew_
 alter table public.crew_weekly_goals enable row level security;
 alter table public.crew_memories enable row level security;
 
+-- Appartenance au crew ciblé par la ligne.
+create or replace function public.is_crew_member(target_crew uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.crew_members m
+    where m.crew_id = target_crew and m.user_id = auth.uid()
+  );
+$$;
+
 do $$ begin
-  create policy crew_weekly_goals_read on public.crew_weekly_goals for select to authenticated using (true);
+  create policy crew_weekly_goals_read on public.crew_weekly_goals
+    for select to authenticated using (public.is_crew_member(crew_id));
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create policy crew_weekly_goals_write on public.crew_weekly_goals for all to authenticated using (true) with check (true);
+  create policy crew_weekly_goals_write on public.crew_weekly_goals
+    for all to authenticated
+    using (public.is_crew_member(crew_id))
+    with check (public.is_crew_member(crew_id));
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create policy crew_memories_read on public.crew_memories for select to authenticated using (true);
+  create policy crew_memories_read on public.crew_memories
+    for select to authenticated using (public.is_crew_member(crew_id));
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create policy crew_memories_insert on public.crew_memories for insert to authenticated with check (author_id = auth.uid());
+  create policy crew_memories_insert on public.crew_memories
+    for insert to authenticated
+    with check (author_id = auth.uid() and public.is_crew_member(crew_id));
 exception when duplicate_object then null; end $$;
 
 do $$ begin
-  create policy crew_memories_delete on public.crew_memories for delete to authenticated using (author_id = auth.uid());
+  create policy crew_memories_delete on public.crew_memories
+    for delete to authenticated using (author_id = auth.uid());
 exception when duplicate_object then null; end $$;
