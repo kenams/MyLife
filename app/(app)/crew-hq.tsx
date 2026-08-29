@@ -32,6 +32,7 @@ import {
 } from "@/lib/crew-life";
 import { deriveSocialRoles } from "@/lib/crew-life-logic";
 import { CrewAgenda } from "@/components/crew-agenda";
+import { fetchContestSummary, type ContestRow } from "@/lib/territory-presence";
 import { hapticSuccess } from "@/lib/safe-haptics";
 
 const C = {
@@ -64,6 +65,7 @@ export default function CrewHqScreen() {
   const [members, setMembers] = useState<CrewMember[]>([]);
   const [goal, setGoal] = useState<CrewWeeklyGoal | null>(null);
   const [memories, setMemories] = useState<CrewMemory[]>([]);
+  const [contest, setContest] = useState<ContestRow[]>([]);
 
   const [modal, setModal] = useState(false);
   const [title, setTitle] = useState("");
@@ -96,14 +98,16 @@ export default function CrewHqScreen() {
       setLoading(false);
       return;
     }
-    const [m, g, mem] = await Promise.all([
+    const [m, g, mem, ct] = await Promise.all([
       fetchCrewMembers(id),
       fetchWeeklyGoal(id),
       fetchCrewMemories(id),
+      fetchContestSummary(),
     ]);
     setMembers(m);
     setGoal(g);
     setMemories(mem);
+    setContest(ct);
     setLoading(false);
   }, [playerName]);
 
@@ -286,6 +290,21 @@ export default function CrewHqScreen() {
               </Text>
             )}
           </View>
+
+          {/* Activité rivale (agrégée, J+1) */}
+          {contest.length > 0 && (
+            <View style={{ marginHorizontal: 16, marginBottom: 16, backgroundColor: "#1A0E0E", borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,59,59,0.4)", padding: 14 }}>
+              <Text style={{ color: "#FF3B3B", fontSize: 10, fontWeight: "900", letterSpacing: 1.5 }}>🚨 ACTIVITÉ RIVALE</Text>
+              {contest.map((c) => (
+                <Text key={c.district_id} style={{ color: C.textSoft, fontSize: 12.5, marginTop: 6 }}>
+                  {c.district_name} — influence contestée ({c.rival_crews} crew{c.rival_crews > 1 ? "s" : ""}, {c.total_activity} activités récentes)
+                </Text>
+              ))}
+              <Text style={{ color: C.muted, fontSize: 10.5, marginTop: 8 }}>
+                Données agrégées et différées — MyLife ne révèle jamais qui conteste.
+              </Text>
+            </View>
+          )}
 
           {/* Agenda de sortie */}
           <CrewAgenda crewId={crewId} isOfficer={isOfficer} />

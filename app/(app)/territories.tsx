@@ -19,6 +19,7 @@ import { fetchUpcomingBattles, createBattle, type TerritoryBattle } from "@/lib/
 import { nextBattleSlot, formatSlot } from "@/lib/battle-schedule";
 import { useGameStore } from "@/stores/game-store";
 import { getMyCrewId } from "@/lib/crews";
+import { TerritoryPresenceBanner } from "@/components/territory-presence-banner";
 
 const T = {
   bg: "#080808",
@@ -134,6 +135,8 @@ export default function TerritoriesScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.gold} />}
         >
+          <TerritoryPresenceBanner territories={items} myCrewId={myCrew} />
+
           {items.length === 0 && (
             <Text style={{ color: T.textSoft, fontSize: 12.5, lineHeight: 18 }}>
               Les territoires s'activeront à la prochaine synchro de la ville.
