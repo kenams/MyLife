@@ -33,6 +33,7 @@ import {
 import { deriveSocialRoles } from "@/lib/crew-life-logic";
 import { CrewAgenda } from "@/components/crew-agenda";
 import { fetchContestSummary, type ContestRow } from "@/lib/territory-presence";
+import { fetchActiveGages, fetchCrewTitles, type CrewGage, type CrewTitle } from "@/lib/battle-rewards";
 import { hapticSuccess } from "@/lib/safe-haptics";
 
 const C = {
@@ -66,6 +67,8 @@ export default function CrewHqScreen() {
   const [goal, setGoal] = useState<CrewWeeklyGoal | null>(null);
   const [memories, setMemories] = useState<CrewMemory[]>([]);
   const [contest, setContest] = useState<ContestRow[]>([]);
+  const [gages, setGages] = useState<CrewGage[]>([]);
+  const [titles, setTitles] = useState<CrewTitle[]>([]);
 
   const [modal, setModal] = useState(false);
   const [title, setTitle] = useState("");
@@ -98,16 +101,20 @@ export default function CrewHqScreen() {
       setLoading(false);
       return;
     }
-    const [m, g, mem, ct] = await Promise.all([
+    const [m, g, mem, ct, gg, tt] = await Promise.all([
       fetchCrewMembers(id),
       fetchWeeklyGoal(id),
       fetchCrewMemories(id),
       fetchContestSummary(),
+      fetchActiveGages(id),
+      fetchCrewTitles(id),
     ]);
     setMembers(m);
     setGoal(g);
     setMemories(mem);
     setContest(ct);
+    setGages(gg);
+    setTitles(tt);
     setLoading(false);
   }, [playerName]);
 
@@ -242,6 +249,55 @@ export default function CrewHqScreen() {
               </View>
             )}
           </View>
+
+          {/* Titres du crew (§10) */}
+          {titles.length > 0 && (
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, paddingHorizontal: 16, marginBottom: 4 }}>
+              {titles.map((t, i) => (
+                <View
+                  key={i}
+                  style={{
+                    backgroundColor: "rgba(255,214,0,0.12)",
+                    borderRadius: 9,
+                    paddingHorizontal: 10,
+                    paddingVertical: 6,
+                  }}
+                >
+                  <Text style={{ color: C.gold, fontSize: 11.5, fontWeight: "900" }}>
+                    👑 {t.title}
+                    {t.expires_at ? " ⏳" : ""}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Gage en cours (§9) — humiliation fun, 24 h */}
+          {gages.length > 0 && (
+            <View
+              style={{
+                marginHorizontal: 16,
+                marginBottom: 12,
+                backgroundColor: "#1A0E0E",
+                borderRadius: 14,
+                borderWidth: 1,
+                borderColor: "rgba(255,59,59,0.4)",
+                padding: 14,
+              }}
+            >
+              <Text style={{ color: "#FF3B3B", fontSize: 10, fontWeight: "900", letterSpacing: 1.5 }}>
+                GAGE EN COURS
+              </Text>
+              {gages.map((g, i) => (
+                <Text key={i} style={{ color: C.text, fontSize: 13, fontWeight: "800", marginTop: 5 }}>
+                  {g.emoji} {g.label}
+                </Text>
+              ))}
+              <Text style={{ color: C.muted, fontSize: 10.5, marginTop: 6 }}>
+                Perdu en Battle — ça s'efface tout seul dans 24 h.
+              </Text>
+            </View>
+          )}
 
           {/* Objectif de la semaine */}
           <View

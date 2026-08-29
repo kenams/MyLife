@@ -11,7 +11,14 @@ import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-nati
 import { router, Stack, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useGameStore } from "@/stores/game-store";
-import { getMyCrewId } from "@/lib/crews";
+import { getMyCrewId, fetchCrewMembers } from "@/lib/crews";
+import {
+  fetchBattleRewardSummary,
+  fetchGageOptions,
+  applyBattleGage,
+  type GageOption,
+  type BattleRewardSummary,
+} from "@/lib/battle-rewards";
 import {
   fetchBattle,
   fetchBattleParticipants,
@@ -58,6 +65,7 @@ export default function BattleScreen() {
   const [battle, setBattle] = useState<TerritoryBattle | null>(null);
   const [participants, setParticipants] = useState<BattleParticipant[]>([]);
   const [myCrew, setMyCrew] = useState<string | null>(null);
+  const [isOfficer, setIsOfficer] = useState(false);
   const [joined, setJoined] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [taps, setTaps] = useState(0);
@@ -70,7 +78,13 @@ export default function BattleScreen() {
   }, [battleId]);
 
   useEffect(() => {
-    getMyCrewId(playerName).then(setMyCrew);
+    getMyCrewId(playerName).then(async (cid) => {
+      setMyCrew(cid);
+      if (cid) {
+        const mem = await fetchCrewMembers(cid);
+        setIsOfficer(mem.some((m) => m.player_name === playerName && (m.role === "founder" || m.role === "officer")));
+      }
+    });
   }, [playerName]);
 
   useEffect(() => {
@@ -234,7 +248,7 @@ export default function BattleScreen() {
           </View>
         )}
 
-        {battle.status === "resolved" && <Result battle={battle} myCrew={myCrew} />}
+        {battle.status === "resolved" && <Result battle={battle} myCrew={myCrew} isOfficer={isOfficer} />}
       </ScrollView>
     </View>
   );
@@ -431,10 +445,40 @@ function RoundSync({
   );
 }
 
-function Result({ battle, myCrew }: { battle: TerritoryBattle; myCrew: string | null }) {
-  const won = myCrew && battle.winner_crew === myCrew;
+function Result({
+  battle,
+  myCrew,
+  isOfficer,
+}: {
+  battle: TerritoryBattle;
+  myCrew: string | null;
+  isOfficer: boolean;
+}) {
+  const won = !!myCrew && battle.winner_crew === myCrew;
   const winnerTag = battle.winner_crew === battle.attacker_crew ? battle.attacker_tag : battle.defender_tag;
   const winnerEmoji = battle.winner_crew === battle.attacker_crew ? battle.attacker_emoji : battle.defender_emoji;
+  const inBattle = !!myCrew && [battle.attacker_crew, battle.defender_crew].includes(myCrew);
+
+  const [gageOpts, setGageOpts] = useState<GageOption[]>([]);
+  const [summary, setSummary] = useState<BattleRewardSummary | null>(null);
+  const [gagePicked, setGagePicked] = useState(false);
+
+  useEffect(() => {
+    fetchBattleRewardSummary(battle.id).then(setSummary);
+    if (won && isOfficer) fetchGageOptions().then(setGageOpts);
+  }, [battle.id, won, isOfficer]);
+
+  const gageAlreadyChosen = (summary?.gages.length ?? 0) > 0 || gagePicked;
+
+  async function pickGage(code: string) {
+    const res = await applyBattleGage(battle.id, code);
+    if (res.ok) {
+      hapticSuccess();
+      setGagePicked(true);
+      fetchBattleRewardSummary(battle.id).then(setSummary);
+    }
+  }
+
   return (
     <View style={{ alignItems: "center", gap: 12, marginTop: 20 }}>
       <Text style={{ fontSize: 40 }}>{won ? "👑" : "🏁"}</Text>
@@ -444,13 +488,41 @@ function Result({ battle, myCrew }: { battle: TerritoryBattle; myCrew: string | 
       <Text style={{ color: C.textSoft, fontSize: 14, fontWeight: "800" }}>
         {battle.attacker_pct?.toFixed(1)} % / {battle.defender_pct?.toFixed(1)} %
       </Text>
-      {myCrew && [battle.attacker_crew, battle.defender_crew].includes(myCrew) && (
-        <View style={{ backgroundColor: C.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: C.border, marginTop: 6 }}>
+
+      {inBattle && (
+        <View style={{ backgroundColor: C.card, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: C.border, marginTop: 6, alignSelf: "stretch", gap: 6 }}>
           <Text style={{ color: won ? C.green : C.textSoft, fontWeight: "900", fontSize: 13 }}>
             {won ? `+${wory(250)} · +40 réputation · territoire pris` : `+${wory(60)} pour avoir défendu ton crew`}
           </Text>
+          {summary?.trophies.map((t, i) => (
+            <Text key={i} style={{ color: C.gold, fontSize: 12, fontWeight: "700" }}>🏆 {t.label}</Text>
+          ))}
+          {summary?.titles.map((t, i) => (
+            <Text key={i} style={{ color: C.gold, fontSize: 12, fontWeight: "700" }}>👑 {t.title}</Text>
+          ))}
+          {summary?.gages.map((g, i) => (
+            <Text key={i} style={{ color: C.red, fontSize: 12, fontWeight: "700" }}>Gage imposé : {g.label} (24 h)</Text>
+          ))}
         </View>
       )}
+
+      {won && isOfficer && !gageAlreadyChosen && gageOpts.length > 0 && (
+        <View style={{ alignSelf: "stretch", gap: 8, marginTop: 4 }}>
+          <Text style={{ color: C.textSoft, fontSize: 12, fontWeight: "800", textAlign: "center" }}>
+            Impose un gage (virtuel, 24 h) au crew perdant :
+          </Text>
+          {gageOpts.map((g) => (
+            <Pressable
+              key={g.code}
+              onPress={() => pickGage(g.code)}
+              style={{ backgroundColor: C.card, borderRadius: 10, paddingVertical: 11, alignItems: "center", borderWidth: 1, borderColor: C.border }}
+            >
+              <Text style={{ color: C.text, fontWeight: "800", fontSize: 13 }}>{g.emoji} {g.label}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
       <Pressable onPress={() => router.replace("/(app)/territories")} style={{ marginTop: 10 }}>
         <Text style={{ color: C.gold, fontWeight: "900" }}>Voir les territoires →</Text>
       </Pressable>

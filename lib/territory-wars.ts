@@ -29,6 +29,7 @@ export type TerritoryBattle = {
   winner_crew: string | null;
   attacker_pct: number | null;
   defender_pct: number | null;
+  resolved_at: string | null;
 };
 
 export type BattleParticipant = {
@@ -59,12 +60,13 @@ function mapBattle(r: Record<string, any>): TerritoryBattle {
     winner_crew: r.winner_crew ?? null,
     attacker_pct: r.attacker_pct != null ? Number(r.attacker_pct) : null,
     defender_pct: r.defender_pct != null ? Number(r.defender_pct) : null,
+    resolved_at: r.resolved_at ?? null,
   };
 }
 
 const SELECT =
   `id, district_id, attacker_crew, defender_crew, scheduled_at, status, current_round,
-   round_started_at, winner_crew, attacker_pct, defender_pct,
+   round_started_at, winner_crew, attacker_pct, defender_pct, resolved_at,
    districts:district_id ( name ),
    attacker:attacker_crew ( tag, emoji, color ),
    defender:defender_crew ( tag, emoji, color )`;
@@ -76,6 +78,21 @@ export async function fetchUpcomingBattles(): Promise<TerritoryBattle[]> {
     .select(SELECT)
     .in("status", ["scheduled", "live"])
     .order("scheduled_at", { ascending: true });
+  if (error || !data) return [];
+  return data.map(mapBattle);
+}
+
+/** Battles résolues dans les dernières 24 h impliquant `crewId` (pour le FOMO §8). */
+export async function fetchRecentResolvedForCrew(crewId: string): Promise<TerritoryBattle[]> {
+  if (!supabase || !crewId) return [];
+  const since = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const { data, error } = await supabase
+    .from("territory_battles")
+    .select(SELECT)
+    .eq("status", "resolved")
+    .gte("resolved_at", since)
+    .or(`attacker_crew.eq.${crewId},defender_crew.eq.${crewId}`)
+    .order("resolved_at", { ascending: false });
   if (error || !data) return [];
   return data.map(mapBattle);
 }

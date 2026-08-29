@@ -20,6 +20,7 @@ import { nextBattleSlot, formatSlot } from "@/lib/battle-schedule";
 import { useGameStore } from "@/stores/game-store";
 import { getMyCrewId } from "@/lib/crews";
 import { TerritoryPresenceBanner } from "@/components/territory-presence-banner";
+import { BattleFomo } from "@/components/battle-fomo";
 
 const T = {
   bg: "#080808",
@@ -136,6 +137,7 @@ export default function TerritoriesScreen() {
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.gold} />}
         >
           <TerritoryPresenceBanner territories={items} myCrewId={myCrew} />
+          <BattleFomo myCrewId={myCrew} />
 
           {items.length === 0 && (
             <Text style={{ color: T.textSoft, fontSize: 12.5, lineHeight: 18 }}>
