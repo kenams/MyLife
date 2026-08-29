@@ -9,9 +9,10 @@
 
 import { useMemo } from "react";
 import { Pressable, Text, View } from "react-native";
+import { useRouter } from "expo-router";
 import { useGameStore } from "@/stores/game-store";
 import { nextStreakMilestone } from "@/lib/game-engine";
-import { hapticSuccess } from "@/lib/safe-haptics";
+import { hapticImpact, hapticSuccess } from "@/lib/safe-haptics";
 
 const C = {
   card: "#111111",
@@ -23,6 +24,16 @@ const C = {
   primary: "#FFD600",
   green: "#39FF14",
   greenBg: "#091A03",
+  blue: "#00B4FF",
+  purple: "#BF5FFF",
+};
+
+const EVENT_ICON: Record<string, string> = {
+  opportunity: "✨",
+  windfall: "🎁",
+  encounter: "👤",
+  social: "🫂",
+  setback: "⚠️",
 };
 
 function isSameDay(iso: string | null | undefined, ref: Date) {
@@ -30,11 +41,15 @@ function isSameDay(iso: string | null | undefined, ref: Date) {
 }
 
 export function DailyHub() {
+  const router = useRouter();
   const streak = useGameStore((s) => s.stats.streak);
   const dailyGoals = useGameStore((s) => s.dailyGoals);
   const lastRewardAt = useGameStore((s) => s.lastRewardAt);
   const claimDailyReward = useGameStore((s) => s.claimDailyReward);
+  const dailyEvent = useGameStore((s) => s.dailyEvent);
+  const resolveDailyEvent = useGameStore((s) => s.resolveDailyEvent);
 
+  const openEvent = dailyEvent && !dailyEvent.resolved ? dailyEvent : null;
   const done = dailyGoals.filter((g) => g.completed).length;
   const total = dailyGoals.length || 1;
   const allDone = done >= total;
@@ -54,6 +69,70 @@ export function DailyHub() {
         overflow: "hidden",
       }}
     >
+      {/* Événement du jour — l'interaction d'arrivée */}
+      {openEvent && (
+        <View
+          style={{
+            paddingHorizontal: 16,
+            paddingTop: 14,
+            paddingBottom: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: C.border,
+            backgroundColor: "rgba(191,95,255,0.06)",
+          }}
+        >
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
+            <Text style={{ fontSize: 15 }}>{EVENT_ICON[openEvent.kind] ?? "✨"}</Text>
+            <Text style={{ color: C.purple, fontSize: 9, fontWeight: "900", letterSpacing: 1.6 }}>
+              ÉVÉNEMENT DU JOUR
+            </Text>
+          </View>
+          <Text style={{ color: C.text, fontWeight: "900", fontSize: 14.5 }}>{openEvent.title}</Text>
+          <Text style={{ color: C.textSoft, fontSize: 12.5, lineHeight: 18, marginTop: 3 }}>
+            {openEvent.body}
+          </Text>
+          <View style={{ flexDirection: "row", gap: 8, marginTop: 10 }}>
+            <Pressable
+              onPress={() => {
+                hapticSuccess();
+                resolveDailyEvent("accepted");
+              }}
+              style={{
+                flex: 1,
+                borderRadius: 9,
+                paddingVertical: 10,
+                alignItems: "center",
+                backgroundColor: C.primary,
+              }}
+            >
+              <Text style={{ color: "#080808", fontWeight: "900", fontSize: 12.5 }}>
+                {openEvent.actionLabel}
+              </Text>
+            </Pressable>
+            {openEvent.kind !== "windfall" && (
+              <Pressable
+                onPress={() => {
+                  hapticImpact("light");
+                  resolveDailyEvent("skipped");
+                }}
+                style={{
+                  borderRadius: 9,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  alignItems: "center",
+                  borderWidth: 1,
+                  borderColor: C.border,
+                }}
+              >
+                <Text style={{ color: C.textSoft, fontWeight: "800", fontSize: 12.5 }}>
+                  {openEvent.skipLabel}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        </View>
+      )}
+
       {/* Série */}
       <View
         style={{
@@ -219,6 +298,51 @@ export function DailyHub() {
               : `Termine tes ${total} tâches pour débloquer`}
         </Text>
       </Pressable>
+
+      {/* Et maintenant — où aller */}
+      <View
+        style={{
+          flexDirection: "row",
+          borderTopWidth: 1,
+          borderTopColor: C.border,
+        }}
+      >
+        <Pressable
+          onPress={() => {
+            hapticImpact("light");
+            router.push("/(app)/(tabs)/map");
+          }}
+          style={{
+            flex: 1,
+            paddingVertical: 12,
+            alignItems: "center",
+            flexDirection: "row",
+            justifyContent: "center",
+            gap: 7,
+          }}
+        >
+          <Text style={{ fontSize: 13 }}>🗺️</Text>
+          <Text style={{ color: C.blue, fontSize: 12, fontWeight: "800" }}>Ce qui bouge</Text>
+        </Pressable>
+        <View style={{ width: 1, backgroundColor: C.border }} />
+        <Pressable
+          onPress={() => {
+            hapticImpact("light");
+            router.push("/(app)/relations");
+          }}
+          style={{
+            flex: 1,
+            paddingVertical: 12,
+            alignItems: "center",
+            flexDirection: "row",
+            justifyContent: "center",
+            gap: 7,
+          }}
+        >
+          <Text style={{ fontSize: 13 }}>💬</Text>
+          <Text style={{ color: C.purple, fontSize: 12, fontWeight: "800" }}>Parler à quelqu'un</Text>
+        </Pressable>
+      </View>
     </View>
   );
 }

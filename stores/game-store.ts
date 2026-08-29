@@ -2272,10 +2272,13 @@ export const useGameStore = create<GameState>()(
           const effects = choice === "accepted" ? state.dailyEvent.effects : state.dailyEvent.skipEffects;
           const nextStats = applyEventEffects(state.stats, effects);
           const createdAt = nowIso();
+          const gMoney = Math.max(0, nextStats.money - state.stats.money);
+          const gRep = Math.max(0, nextStats.reputation - state.stats.reputation);
           return {
             dailyEvent: { ...state.dailyEvent, resolved: true, choice },
             stats: nextStats,
             advice: buildAdvice(nextStats),
+            lastGain: gMoney > 0 || gRep > 0 ? { xp: 0, money: gMoney, reputation: gRep, at: Date.now() } : state.lastGain,
             lifeFeed: appendFeed(state.lifeFeed, {
               id: `feed-event-${Date.now()}`,
               title: state.dailyEvent.title,
