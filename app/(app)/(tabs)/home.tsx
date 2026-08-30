@@ -460,7 +460,6 @@ export default function HomeScreen() {
   const housingTier      = useGameStore((s) => s.housingTier);
   const checkHousingRent = useGameStore((s) => s.checkHousingRent);
   const lifeFeed         = useGameStore((s) => s.lifeFeed ?? []);
-  const runLivingCityTick = useGameStore((s) => s.runLivingCityTick);
   const [liveEvents,     setLiveEvents]     = useState<FeedEvent[]>([]);
   const [flashEvents,    setFlashEvents]    = useState<FlashEvent[]>([]);
   const [joinedFlash,    setJoinedFlash]    = useState<Set<string>>(new Set());
@@ -540,18 +539,17 @@ export default function HomeScreen() {
     Animated.timing(fadeAnim, { toValue: 1, duration: 280, useNativeDriver: true }).start();
   }, []);
 
-  // ── Feed realtime + simulateur local ─────────────────────────────────────
+  // ── Feed realtime ────────────────────────────────────────────────────────
+  // La simulation de la Living City tourne sur un unique timer global
+  // (CityRuntime dans app/_layout.tsx). Ne pas lancer un second tick ici :
+  // cela doublait la cadence de la ville quand l'accueil était ouvert.
   useEffect(() => {
     fetchRecentFeedWithFallback(20).then((evts) => setLiveEvents(evts));
     const sub = subscribeToFeed((evt) =>
       setLiveEvents((prev) => [evt, ...prev].slice(0, 20))
     );
-    // Tick agregé: pas de heartbeat individuel par PNJ.
-    const localSim = setInterval(() => {
-      runLivingCityTick();
-    }, 25_000);
-    return () => { sub?.unsubscribe(); clearInterval(localSim); };
-  }, [runLivingCityTick]);
+    return () => { sub?.unsubscribe(); };
+  }, []);
 
   useEffect(() => {
     const mapped: FeedEvent[] = lifeFeed.slice(0, 8).map((item) => ({
