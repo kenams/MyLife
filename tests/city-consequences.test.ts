@@ -143,11 +143,12 @@ function lc(over: Partial<LivingCityState> = {}): LivingCityState {
 describe("applyCityConsequences (single bounded entry point)", () => {
   const socialEvents = [ev("SOCIAL", "Carmes"), ev("OUTING", "Carmes", 1), ev("FEELING", "Carmes", 2)];
 
-  it("is deterministic: same prev + same tick state → same output", () => {
+  it("is deterministic: same prev + same tick state + same clock → same output", () => {
     const prev = lc();
     const tick = lc({ events: socialEvents });
-    const a = applyCityConsequences(prev, tick, { playerDistrict: null, elapsedMs: 0, forced: false });
-    const b = applyCityConsequences(prev, tick, { playerDistrict: null, elapsedMs: 0, forced: false });
+    const now = new Date("2026-09-01T15:00:00Z");
+    const a = applyCityConsequences(prev, tick, { playerDistrict: null, elapsedMs: 0, forced: false, now });
+    const b = applyCityConsequences(prev, tick, { playerDistrict: null, elapsedMs: 0, forced: false, now });
     expect(a).toEqual(b);
   });
 

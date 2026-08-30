@@ -39,6 +39,9 @@ import {
   type SeasonMission, type District, type MissionParticipationStatus,
 } from "@/lib/season";
 import { joinFlashEvent, checkinFlashEvent } from "@/lib/flash-events";
+import { ACTIVE_CITY } from "@/lib/city-config";
+import { useWorldEnvironment } from "@/hooks/use-world-environment";
+import { mapCanvasFilter, weatherOverlay, environmentHudLabel, crewOverlayBoost } from "@/lib/world-environment";
 import { MoveMissionModal } from "@/components/move-mission-modal";
 import { MapFirstSessionHint, MapPrimarySuggestion } from "@/components/map-session-guidance";
 import { NpcInteraction } from "@/components/npc-interaction";
@@ -166,12 +169,21 @@ function injectMapStyles() {
     .mylife-map-container .maplibregl-map { background: #04040A !important; }
     .mylife-map-container .mylife-map-vignette {
       position: absolute; inset: 0; pointer-events: none; z-index: 2;
-      background: radial-gradient(120% 85% at 50% 45%, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
+      background: radial-gradient(130% 90% at 50% 42%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.42) 100%);
     }
-    .mylife-map-container .mylife-map-scanlines {
-      position: absolute; inset: 0; pointer-events: none; z-index: 3; opacity: .05;
-      background: repeating-linear-gradient(0deg, #fff 0px, #fff 1px, transparent 1px, transparent 3px);
+    .mylife-map-container .mylife-map-scanlines { display: none; }
+    .mylife-map-container .mylife-map-weather {
+      position: absolute; inset: 0; pointer-events: none; z-index: 3;
+      opacity: 0; transition: opacity 1600ms ease, background-color 1600ms ease;
+      mix-blend-mode: multiply;
     }
+    .mylife-map-container .mylife-map-weather.rain {
+      background-image: repeating-linear-gradient(74deg, rgba(255,255,255,0.10) 0px, rgba(255,255,255,0.10) 1px, transparent 1px, transparent 7px);
+      background-size: 100% 100%;
+    }
+    @keyframes mylifeRainDrift { to { background-position: 0 220px; } }
+    .mylife-map-container .mylife-map-weather.rain.animate { animation: mylifeRainDrift 1.1s linear infinite; }
+    .mylife-map-container .mylife-map-weather.haze { backdrop-filter: blur(1px); }
     .mylife-map-container .maplibregl-ctrl-group {
       border: 1px solid rgba(255,255,255,.08) !important;
       background: rgba(8,8,15,.92) !important;
@@ -251,6 +263,28 @@ interface LeafletMapProps {
   crewZones?: CrewZoneRich[];
   missions?: MissionMapFeatureSource[];
   onMissionClick?: (missionId: string) => void;
+  env?: MapEnv;
+  districts?: MapDistrict[];
+}
+
+type MapEnv = {
+  filter: string;
+  weatherKind: "haze" | "rain" | "storm" | null;
+  weatherColor: string;
+  weatherOpacity: number;
+  animate: boolean;
+};
+type MapDistrict = {
+  name: string; lat: number; lng: number; radius: number;
+  color: string; contested: boolean; opacity: number;
+};
+
+function applyWeatherEl(el: HTMLElement | null, env: MapEnv | undefined) {
+  if (!el) return;
+  const kind = env?.weatherKind ?? null;
+  el.className = "mylife-map-weather" + (kind ? ` ${kind}` : "") + (kind === "rain" && env?.animate ? " animate" : "");
+  el.style.backgroundColor = kind ? (env?.weatherColor ?? "transparent") : "transparent";
+  el.style.opacity = kind ? String(env?.weatherOpacity ?? 0) : "0";
 }
 
 function prefersReducedMotion(): boolean {
@@ -389,7 +423,7 @@ function syncPlayersSource(
   superclusterRef.current = new Supercluster<PlayerFeatureProps>({ radius, maxZoom }).load(geojson.features as any);
 }
 
-function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, onError, crewZones = [], missions = [], onMissionClick }: LeafletMapProps) {
+function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, onError, crewZones = [], missions = [], onMissionClick, env, districts = [] }: LeafletMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef        = useRef<unknown>(null);
   const glRef         = useRef<unknown>(null);
@@ -401,6 +435,11 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
   missionsRef.current = missions;
   const superclusterRef = useRef<Supercluster<PlayerFeatureProps> | null>(null);
   const missionSuperclusterRef = useRef<Supercluster<MissionFeatureProps> | null>(null);
+  const envRef = useRef<MapEnv | undefined>(env);
+  envRef.current = env;
+  const weatherElRef = useRef<HTMLElement | null>(null);
+  const districtsRef = useRef<MapDistrict[]>(districts);
+  districtsRef.current = districts;
   // Le click handler des layers est enregistré une seule fois (map.on("load"),
   // effet mount-only) : sans ref, il resterait figé sur la version
   // d'onPlayerClick capturée au tout premier rendu (souvent avec players=[]
@@ -460,8 +499,11 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
       map.on("load", async () => {
         const canvasContainer = map.getCanvasContainer?.() as HTMLElement | undefined;
         if (canvasContainer) {
+          // Grading naturel piloté par World Environment (jamais néon).
+          canvasContainer.style.transition = "filter 1600ms ease";
           canvasContainer.style.filter =
-            "invert(1) hue-rotate(255deg) brightness(1.35) contrast(0.95) saturate(2.2)";
+            envRef.current?.filter ??
+            "invert(1) hue-rotate(215deg) brightness(1.12) contrast(0.99) saturate(1.12) sepia(0)";
         }
 
         // Extrusion 3D des bâtiments si la source vectorielle les expose
@@ -501,9 +543,12 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
         const vignetteEl = document.createElement("div");
         vignetteEl.className = "mylife-map-vignette";
         mapEl.appendChild(vignetteEl);
-        const scanlinesEl = document.createElement("div");
-        scanlinesEl.className = "mylife-map-scanlines";
-        mapEl.appendChild(scanlinesEl);
+        const weatherEl = document.createElement("div");
+        weatherEl.className = "mylife-map-weather";
+        weatherEl.setAttribute("aria-hidden", "true");
+        mapEl.appendChild(weatherEl);
+        weatherElRef.current = weatherEl;
+        applyWeatherEl(weatherEl, envRef.current);
 
         // ── Zones crew (polygones GeoJSON — pas de géométrie "circle" native) ──
         const features = crewZones.map((zone) => {
@@ -833,6 +878,53 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
       myMarkerRef.current = null;
     };
   }, [myLat, myLng]);
+
+  // ── World Environment : grading du canvas + voile météo ──────────────
+  useEffect(() => {
+    const map = mapRef.current as any;
+    const canvasContainer = map?.getCanvasContainer?.() as HTMLElement | undefined;
+    if (canvasContainer && env?.filter) canvasContainer.style.filter = env.filter;
+    applyWeatherEl(weatherElRef.current, env);
+  }, [env?.filter, env?.weatherKind, env?.weatherOpacity, env?.weatherColor, env?.animate]);
+
+  // ── Territoires de crew au niveau quartier (fill + outline, opacité basse) ──
+  useEffect(() => {
+    const map = mapRef.current as any;
+    const gl = glRef.current as any;
+    if (!map || !gl) return;
+
+    const apply = () => {
+      if (!map.getStyle?.()) return;
+      const features = districtsRef.current.map((d) => ({
+        type: "Feature" as const,
+        properties: { color: d.color, fillOpacity: d.opacity, contested: d.contested ? 1 : 0 },
+        geometry: { type: "Polygon" as const, coordinates: [circlePolygon(d.lat, d.lng, d.radius)] },
+      }));
+      const data = { type: "FeatureCollection" as const, features };
+      const src = map.getSource("mylife-districts");
+      if (src) { src.setData(data); return; }
+      try {
+        map.addSource("mylife-districts", { type: "geojson", data });
+        const firstSymbol = (map.getStyle().layers ?? []).find((l: any) => l.type === "symbol")?.id;
+        map.addLayer({
+          id: "mylife-districts-fill", type: "fill", source: "mylife-districts",
+          paint: { "fill-color": ["get", "color"], "fill-opacity": ["get", "fillOpacity"] },
+        }, firstSymbol);
+        map.addLayer({
+          id: "mylife-districts-line", type: "line", source: "mylife-districts",
+          paint: {
+            "line-color": ["get", "color"],
+            "line-opacity": ["case", ["==", ["get", "contested"], 1], 0.9, 0.3],
+            "line-width": ["case", ["==", ["get", "contested"], 1], 2, 1],
+            "line-dasharray": ["case", ["==", ["get", "contested"], 1], ["literal", [2, 2]], ["literal", [1, 0]]],
+          },
+        }, firstSymbol);
+      } catch { /* style sans couche compatible : on ignore */ }
+    };
+
+    if (clusterReadyRef.current) apply();
+    else map.once?.("load", apply);
+  }, [districts]);
 
   return (
     <View
@@ -1238,6 +1330,7 @@ function MobileMapContextDrawer({
   visible,
   signals,
   districts,
+  hudLabel,
   takeoverAlert,
   roi,
   onClose,
@@ -1247,6 +1340,7 @@ function MobileMapContextDrawer({
 }: {
   visible: boolean;
   signals: CityPulseSignal[];
+  hudLabel: string;
   districts: DistrictCrewDominance[];
   takeoverAlert: TakeoverNotif | null;
   roi: RoiDeToulouse | null;
@@ -1335,7 +1429,7 @@ function MobileMapContextDrawer({
         }}>
           <View>
             <Text style={{ color: C.text, fontSize: 17, fontWeight: "900" }}>Autour de toi</Text>
-            <Text style={{ color: C.soft, fontSize: 11, marginTop: 2 }}>Toulouse en ce moment</Text>
+            <Text style={{ color: C.soft, fontSize: 11, marginTop: 2 }}>{hudLabel}</Text>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -1766,6 +1860,39 @@ export default function LifeMapScreen() {
   }, [crewZones, livingCity?.crews]);
   void presenceTick; // dépendance volontaire pour forcer le recalcul périodique
 
+  // ── World Environment (jour/nuit + météo) ───────────────────────────
+  const env = useWorldEnvironment();
+  const mapEnv = useMemo(() => {
+    const w = weatherOverlay(env);
+    return {
+      filter: mapCanvasFilter(env),
+      weatherKind: w.kind,
+      weatherColor: w.color,
+      weatherOpacity: w.opacity,
+      animate: env.ambientIntensity > 0.3 && (w.kind === "rain"),
+    };
+  }, [env]);
+
+  const hudLabel = useMemo(() => environmentHudLabel(env, ACTIVE_CITY.name), [env]);
+
+  const mapDistricts = useMemo(() => {
+    const moods = livingCity?.districtStates ?? {};
+    const contestedSet = new Set(crewDominance.filter((d) => d.state === "contested").map((d) => d.district));
+    return crewZones.map((zone) => {
+      const mood = moods[zone.name]?.mood;
+      const base = zone.is_bastion ? 0.07 : 0.045;
+      return {
+        name: zone.name,
+        lat: zone.lat,
+        lng: zone.lng,
+        radius: zone.radius * 1.4,
+        color: zone.crew?.color ?? "#FFD600",
+        contested: contestedSet.has(zone.name),
+        opacity: Math.min(0.16, base * crewOverlayBoost(env, mood)),
+      };
+    });
+  }, [crewZones, crewDominance, livingCity?.districtStates, env]);
+
   function handleCityPulsePress(signal: CityPulseSignal) {
     setShowMapContext(false);
     setPrimarySuggestionDismissed(true);
@@ -1953,6 +2080,8 @@ export default function LifeMapScreen() {
           crewZones={crewZones}
           missions={missionMapFeatures}
           onMissionClick={(id) => { hapticImpact("light"); setSelectedMissionId(id); setMissionError(null); }}
+          env={mapEnv}
+          districts={mapDistricts}
         />
       )}
 
@@ -2516,6 +2645,7 @@ export default function LifeMapScreen() {
       <MobileMapContextDrawer
         visible={isMobileWeb && showMapContext}
         signals={cityPulseSignals}
+        hudLabel={hudLabel}
         districts={crewDominance}
         takeoverAlert={takeoverAlert}
         roi={roi}

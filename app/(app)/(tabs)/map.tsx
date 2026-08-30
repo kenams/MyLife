@@ -23,6 +23,9 @@ import { blockUser } from "@/lib/safety";
 import { ReportModal } from "@/components/report-modal";
 import { MapFirstSessionHint, MapPrimarySuggestion } from "@/components/map-session-guidance";
 import { NpcInteraction } from "@/components/npc-interaction";
+import { useWorldEnvironment } from "@/hooks/use-world-environment";
+import { mapAmbientOverlay, weatherOverlay } from "@/lib/world-environment";
+import { ACTIVE_CITY } from "@/lib/city-config";
 import { useGameStore } from "@/stores/game-store";
 import {
   groupMapOpportunities,
@@ -533,6 +536,9 @@ export default function LifeMapScreen() {
   const hasHydrated       = useGameStore((s) => s.hasHydrated);
   const mapIntroDismissed = useGameStore((s) => s.mapIntroDismissed);
   const dismissMapIntro   = useGameStore((s) => s.dismissMapIntro);
+  const worldEnv          = useWorldEnvironment();
+  const mapAmbient        = mapAmbientOverlay(worldEnv);
+  const mapWeather        = weatherOverlay(worldEnv);
 
   const [players,       setPlayers]       = useState<MapPlayer[]>([]);
   const [myStatus,      setMyStatus]      = useState<MapStatus>("ghost");
@@ -553,6 +559,7 @@ export default function LifeMapScreen() {
   const [mapFeedback, setMapFeedback] = useState<string | null>(null);
 
   const mapRef = useRef<MapView>(null);
+  const districtMomentRef = useRef<{ name: string; at: number }>({ name: "", at: 0 });
 
   useEffect(() => {
     if (!mapFeedback) return;
@@ -723,6 +730,30 @@ export default function LifeMapScreen() {
       .slice(0, 3);
   }, [bastions, livingCity?.crews]);
 
+  // ── Moment d'entrée de quartier (P1) — cooldown + dedupe ──────────────
+  useEffect(() => {
+    if (!myLocation) return;
+    let nearest: { name: string; d: number } | null = null;
+    for (const q of ACTIVE_CITY.quartiers) {
+      const d = haversineMeters(myLocation, { lat: q.lat, lng: q.lng });
+      if (!nearest || d < nearest.d) nearest = { name: q.name, d };
+    }
+    if (!nearest || nearest.d > 900) return;
+    const prev = districtMomentRef.current;
+    if (nearest.name === prev.name || Date.now() - prev.at < 90_000) return;
+    districtMomentRef.current = { name: nearest.name, at: Date.now() };
+
+    const dom = crewDominance.find((c) => c.district === nearest!.name);
+    const mood = livingCity?.districtStates?.[nearest.name]?.mood;
+    let sub = "";
+    if (dom?.state === "contested") sub = " · District contesté";
+    else if (dom) sub = ` · [${dom.dominant.name}] domine ce quartier`;
+    else if (mood === "nocturne") sub = " · Ambiance nocturne";
+    else if (mood === "social") sub = " · Quartier animé";
+    else if (mood === "competitif") sub = " · Tensions de crews";
+    setMapFeedback(`${nearest.name.toUpperCase()}${sub}`);
+  }, [myLocation, crewDominance, livingCity?.districtStates]);
+
   function handleCityPulsePress(signal: CityPulseSignal) {
     setShowMapContext(false);
     setRecentPulseIds((ids) => [signal.id, ...ids.filter((id) => id !== signal.id)].slice(0, 12));
@@ -755,6 +786,24 @@ export default function LifeMapScreen() {
             onPress={() => { hapticImpact("light"); setSelected(p); }} />
         ))}
       </MapView>
+
+      {/* Ambiance World Environment (sous les contrôles) */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1,
+          backgroundColor: mapAmbient.color, opacity: mapAmbient.opacity,
+        }}
+      />
+      {mapWeather.kind && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1,
+            backgroundColor: mapWeather.color, opacity: mapWeather.opacity,
+          }}
+        />
+      )}
 
       {/* Filtre pills */}
       <FilterPills active={filter} onChange={setFilter} />

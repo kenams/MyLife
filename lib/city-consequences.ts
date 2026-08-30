@@ -211,9 +211,9 @@ export function buildCityDigest(
 export function applyCityConsequences(
   prev: LivingCityState,
   tickState: LivingCityState,
-  opts: { playerDistrict: string | null; elapsedMs: number; forced: boolean },
+  opts: { playerDistrict: string | null; elapsedMs: number; forced: boolean; now?: Date },
 ): Pick<LivingCityState, "events" | "districtStates" | "cityHistory" | "cityDigest" | "cityDigestAt"> {
-  const now = new Date();
+  const now = opts.now ?? new Date();
   const prevDS = (prev.districtStates ?? {}) as DistrictStateMap;
   const districtStates = deriveDistrictStates(tickState.events, prevDS, now);
   const dChanges = districtStateChanges(prevDS, districtStates);
