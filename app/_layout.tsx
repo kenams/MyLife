@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 
 import { CityRuntime } from "@/components/city-runtime";
+import { CityAbsenceSummary } from "@/components/city-absence-summary";
 import { DuskOverlay } from "@/components/dusk-overlay";
 import { useAuthListener } from "@/hooks/use-auth-listener";
 import { hasConsented } from "./(auth)/consent";
@@ -54,6 +55,7 @@ export default function RootLayout() {
       <AuthGate />
       <CityRuntime />
       <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
+      <CityAbsenceSummary />
       <DuskOverlay />
     </QueryClientProvider>
   );
