@@ -5,7 +5,11 @@ import { seedLivingCityNpcs } from "@/lib/living-city";
 import { clearLocalCityPlayers, publishLocalCityPlayers } from "@/lib/local-city-map-bridge";
 import { useGameStore } from "@/stores/game-store";
 
-const CITY_TICK_MS = 30_000;
+const CITY_TICK_MS = 18_000;
+// Repeint la Map plus souvent que la simulation : re-projette les PNJ existants
+// (les positions en trajet dépendent de l'horloge, pas d'un nouveau tick sim).
+// Aucun tick de simulation, aucun timer par PNJ — juste une projection.
+const REPAINT_MS = 3_000;
 const IMMEDIATE_TICK_STALE_MS = 45_000;
 
 /**
@@ -60,13 +64,15 @@ export function CityRuntime() {
     // Coarse simulation cadence. The engine derives elapsed time from its own
     // timestamp and remains bounded; background tabs therefore do not spawn
     // per-NPC timers or heartbeats.
-    const timer = setInterval(() => {
+    const simTimer = setInterval(() => {
       runLivingCityTick();
       publishMapSnapshot();
     }, CITY_TICK_MS);
+    const repaintTimer = setInterval(publishMapSnapshot, REPAINT_MS);
 
     return () => {
-      clearInterval(timer);
+      clearInterval(simTimer);
+      clearInterval(repaintTimer);
       clearLocalCityPlayers();
     };
   }, [hasHydrated, runLivingCityTick]);

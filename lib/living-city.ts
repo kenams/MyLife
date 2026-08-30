@@ -1,5 +1,6 @@
 import type { AvatarAction } from "@/lib/avatar-visual";
 import { chooseNpcAction, type NpcContext, type NpcIntent } from "@/lib/npc-brain-policy";
+import { isTraveling, planTrip } from "@/lib/npc-travel";
 import type { LifeFeedItem, NotificationItem, NpcState } from "@/lib/types";
 
 export type LivingCityPreset = "LOW" | "NORMAL" | "BUSY" | "CHAOS";
@@ -80,9 +81,9 @@ export type LivingCityTickResult = {
 };
 
 const PRESET_COUNTS: Record<LivingCityPreset, number> = {
-  LOW: 30,
-  NORMAL: 100,
-  BUSY: 250,
+  LOW: 40,
+  NORMAL: 200,
+  BUSY: 280,
   CHAOS: 500,
 };
 
@@ -287,6 +288,12 @@ export function seedLivingCityNpcs(preset: LivingCityPreset, now = new Date()): 
       personality: `${archetypeA}/${archetypeB}`,
       interests: [pick(INTERESTS, random), pick(INTERESTS, random)],
       homeDistrictSlug: district,
+      currentDistrictSlug: district,
+      originDistrictSlug: null,
+      destDistrictSlug: null,
+      travelMode: null,
+      travelStartedAt: null,
+      travelEndsAt: null,
       currentActivity: action,
       lifeRhythm: archetypeA === "noctambule" ? "night" : archetypeA === "travailleur" ? "work" : "balanced",
       sociability: Math.round(20 + random() * 80),
@@ -434,15 +441,63 @@ function updateNpc(npc: NpcState, minutes: number, now: Date, playerDistrict: st
   };
   const intent = chooseNpcAction(npc, npcContext, now);
   const action = avatarActionForIntent(intent.intent, routineAction);
-  const currentActivity = currentActivityForIntent(intent.intent, action);
-  const detailFactor = level === "NEAR_PLAYER" ? 1 : level === "ACTIVE_DISTRICT" ? 0.55 : 0.18;
+  const intentActivity = currentActivityForIntent(intent.intent, action);
+  const detailFactor = level === "NEAR_PLAYER" ? 1 : level === "ACTIVE_DISTRICT" ? 0.8 : 0.35;
   const delta = Math.min(8, Math.max(0.2, minutes / 10)) * detailFactor;
-  const locationSlug = locationFor(action, npc.homeDistrictSlug ?? playerDistrict, random);
+
+  // ── Déplacement coarse ──────────────────────────────────────────────────
+  // 1. Trajet en cours qui n'est pas fini → on le laisse courir.
+  // 2. Trajet terminé → on "arrive" : quartier courant = destination.
+  // 3. Sinon → on décide éventuellement d'un nouveau trajet cohérent avec
+  //    l'activité (domicile→travail, travail→resto, resto→sortie…).
+  let travel = {
+    currentDistrictSlug: npc.currentDistrictSlug ?? npc.homeDistrictSlug ?? playerDistrict,
+    originDistrictSlug: npc.originDistrictSlug ?? null,
+    destDistrictSlug: npc.destDistrictSlug ?? null,
+    travelMode: npc.travelMode ?? null,
+    travelStartedAt: npc.travelStartedAt ?? null,
+    travelEndsAt: npc.travelEndsAt ?? null,
+  };
+  let currentActivity = intentActivity;
+  const stillMoving = isTraveling(npc, now);
+
+  if (stillMoving) {
+    currentActivity = "commuting";
+  } else if (npc.destDistrictSlug) {
+    // arrivée
+    travel = {
+      currentDistrictSlug: npc.destDistrictSlug,
+      originDistrictSlug: null,
+      destDistrictSlug: null,
+      travelMode: null,
+      travelStartedAt: null,
+      travelEndsAt: null,
+    };
+  } else {
+    const wantsTrip =
+      action === "working" ||
+      action === "sleeping" ||
+      action === "eating" ||
+      ((action === "chatting" || action === "walking") && random() > 0.45);
+    if (wantsTrip) {
+      const planned = planTrip({ ...npc, currentDistrictSlug: travel.currentDistrictSlug }, action, now, random);
+      if (planned) {
+        travel = { currentDistrictSlug: travel.currentDistrictSlug, ...planned };
+        currentActivity = "commuting";
+      }
+    }
+  }
+
+  const locationSlug = stillMoving || currentActivity === "commuting"
+    ? "transit"
+    : locationFor(action, travel.currentDistrictSlug, random);
+
   return {
     ...npc,
     action,
     currentActivity,
     locationSlug,
+    ...travel,
     mood: Math.round(clamp(npc.mood + (action === "chatting" ? 3 : action === "sleeping" ? 1 : 0) * delta - 0.4)),
     energy: Math.round(clamp(npc.energy + (action === "sleeping" ? 8 : -1.3) * delta)),
     hunger: Math.round(clamp(npc.hunger + (action === "eating" ? -9 : 1.4) * delta)),
@@ -451,9 +506,9 @@ function updateNpc(npc: NpcState, minutes: number, now: Date, playerDistrict: st
     npcWory: Math.max(0, Math.round((npc.npcWory ?? npc.money) + (action === "working" ? 4 : action === "chatting" ? -1 : 0) * delta)),
     xp: npc.xp + Math.round((action === "working" ? 5 : action === "exercising" ? 4 : 2) * delta),
     level: Math.max(1, Math.floor((npc.xp + Math.round(delta * 4)) / 100) + 1),
-    posX: Math.round(clamp(npc.posX + (random() * 10 - 5) * detailFactor, 4, 96)),
-    posY: Math.round(clamp(npc.posY + (random() * 10 - 5) * detailFactor, 4, 96)),
-    presenceOnline: action !== "sleeping" && random() > (level === "OFFSCREEN" ? 0.62 : 0.28),
+    posX: Math.round(clamp(npc.posX + (random() * 8 - 4) * detailFactor, 4, 96)),
+    posY: Math.round(clamp(npc.posY + (random() * 8 - 4) * detailFactor, 4, 96)),
+    presenceOnline: action !== "sleeping" && random() > (level === "OFFSCREEN" ? 0.35 : 0.12),
     lastOnlineAt: action !== "sleeping" ? now.toISOString() : npc.lastOnlineAt,
     lastTickAt: now.toISOString(),
   };

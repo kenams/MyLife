@@ -22,6 +22,8 @@ import {
   type CrewZoneRich, type TakeoverNotif, type RoiDeToulouse,
 } from "@/lib/crews";
 import { startNpcMapEngine, stopNpcMapEngine } from "@/lib/npc-map-engine";
+import { useInterpolatedPlayers } from "@/hooks/use-interpolated-players";
+import { publishMylifeDebug } from "@/lib/mylife-debug";
 import { sendLocalNotification } from "@/lib/push-notifications";
 import { blockUser } from "@/lib/safety";
 import { requestFriend, blockRelation } from "@/lib/relationships";
@@ -1662,6 +1664,16 @@ export default function LifeMapScreen() {
   );
   const visibleRealCount = visible.filter((p) => !p.is_npc).length;
   const visibleNpcCount = visible.length - visibleRealCount;
+  // Lissage visuel global des positions PNJ (un seul timer, pas un par PNJ).
+  const animatedPlayers = useInterpolatedPlayers(visible);
+  useEffect(() => {
+    publishMylifeDebug({
+      players: animatedPlayers,
+      livingCity,
+      realCount: visibleRealCount,
+      npcCount: visibleNpcCount,
+    });
+  }, [animatedPlayers, livingCity, visibleRealCount, visibleNpcCount]);
   const cityPulseSignals = useMemo(() => {
     const livingSignals = livingCityEventsToCityPulse(livingCity?.events ?? []);
     const lookingFor = avatar?.lookingFor ?? [];
@@ -1873,7 +1885,7 @@ export default function LifeMapScreen() {
       {!mapFailed && (
         <LeafletMap
           key={mapRetryKey}
-          players={visible}
+          players={animatedPlayers}
           myLat={myLocation?.lat}
           myLng={myLocation?.lng}
           onPlayerClick={(id) => {
