@@ -267,7 +267,10 @@ const POINT_LAYER = "mylife-players-point";
  * voir plus bas pourquoi). Toute divergence entre les deux ferait diverger
  * les cluster_id et casserait le clic sur cluster. */
 function clusterOptions() {
-  return { radius: typeof window !== "undefined" && window.innerWidth < 480 ? 60 : 50, maxZoom: 15 };
+  // maxZoom 13 : au zoom centre-ville (≥13) on montre des habitants
+  // individuels qui se déplacent ; en dézoomant on repasse en clusters
+  // (perf mobile, jamais 200 marqueurs DOM).
+  return { radius: typeof window !== "undefined" && window.innerWidth < 480 ? 58 : 48, maxZoom: 13 };
 }
 
 // ── Couche missions — source GeoJSON séparée, clusterisée indépendamment
@@ -437,8 +440,10 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
       const map = new gl.Map({
         container: mapEl,
         style: "https://tiles.openfreemap.org/styles/liberty",
-        center: [1.4442, 43.6047], // Toulouse
-        zoom: 11,
+        center: [1.4442, 43.6047], // Toulouse — centre
+        // Démarre à l'échelle du centre-ville : on voit des habitants
+        // individuels bouger, pas seulement 4 méga-clusters métropolitains.
+        zoom: 13,
         pitch: 0,
         bearing: 0,
         attributionControl: { compact: true },

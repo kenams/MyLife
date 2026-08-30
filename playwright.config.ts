@@ -15,10 +15,14 @@ const PROD_URL = process.env.E2E_PROD_URL ?? "https://mylife-app-rho.vercel.app"
 const useProd = process.env.E2E_TARGET === "prod";
 const baseURL = useProd ? PROD_URL : `http://localhost:${PORT}`;
 
-const narrow = (width: number, height: number) => ({
+// Tous les projets tournent sur le moteur Chromium (émulation mobile) : c'est
+// la cible demandée et ça évite d'installer WebKit/Firefox en CI.
+const chromiumMobile = (width: number, height: number, extra: Record<string, unknown> = {}) => ({
   ...devices["Pixel 5"],
+  defaultBrowserType: "chromium" as const,
   viewport: { width, height },
   screen: { width, height },
+  ...extra,
 });
 
 export default defineConfig({
@@ -42,12 +46,12 @@ export default defineConfig({
   },
 
   projects: [
-    { name: "pixel5", use: { ...devices["Pixel 5"] } },
-    { name: "pixel7", use: { ...devices["Pixel 5"], viewport: { width: 412, height: 915 }, screen: { width: 412, height: 915 } } },
-    { name: "galaxy-s9", use: { ...devices["Galaxy S9+"] } },
-    { name: "narrow-320", use: narrow(320, 720) },
-    { name: "iphone-13", use: { ...devices["iPhone 13"] } },
-    { name: "iphone-se", use: { ...devices["iPhone SE"] } },
+    { name: "pixel5", use: chromiumMobile(393, 851) },
+    { name: "pixel7", use: chromiumMobile(412, 915) },
+    { name: "galaxy-s9", use: chromiumMobile(320, 658) },
+    { name: "narrow-320", use: chromiumMobile(320, 720) },
+    { name: "iphone-13", use: chromiumMobile(390, 844) },
+    { name: "iphone-se", use: chromiumMobile(375, 667) },
     { name: "desktop", use: { ...devices["Desktop Chrome"] } },
   ],
 
