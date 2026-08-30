@@ -150,7 +150,7 @@ function GiftCard({ gift, npcInterests, canAfford, tier, onSend }: {
           <Text style={{ color: L.muted, fontSize: 11, marginTop: 1 }}>{gift.desc}</Text>
         </View>
         <View style={{ alignItems: "flex-end", gap: 4 }}>
-          <Text style={{ color: L.gold, fontWeight: "900", fontSize: 13 }}>💰 {gift.price} cr</Text>
+          <Text style={{ color: L.gold, fontWeight: "900", fontSize: 13 }}>💰 {gift.price} Wory</Text>
           <Text style={{ color: isMatch ? L.pink : L.muted, fontSize: 11, fontWeight: "700" }}>
             +{bonus} rel {isMatch ? "💕" : ""}
           </Text>
@@ -626,7 +626,7 @@ export default function DatesScreen() {
                   Offrir un cadeau à {selected.name}
                 </Text>
                 <Text style={{ color: L.muted, fontSize: 11, marginTop: 2 }}>
-                  Budget : 💰 {Math.round(stats.money)} cr · Centres d'intérêt : {selected.interests?.join(", ")}
+                  Budget : 💰 {Math.round(stats.money)} Wory · Centres d'intérêt : {selected.interests?.join(", ")}
                 </Text>
               </View>
             </View>

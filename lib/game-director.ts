@@ -42,7 +42,7 @@ export function getGameDirectorPlan(stats: AvatarStats, goals: Pick<DailyGoal, "
   if (stats.money < 45) {
     return {
       title: "IA Directeur: economie propre",
-      body: "Ton budget est trop bas pour jouer confortablement. Fais rentrer des credits avant les achats.",
+      body: "Ton budget est trop bas pour jouer confortablement. Fais rentrer des Wory avant les achats.",
       action: "work-shift",
       actionLabel: "Travailler",
       tone: "focus",

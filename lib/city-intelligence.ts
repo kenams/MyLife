@@ -130,7 +130,7 @@ export function buildCityIntel(input: CityIntelInput): CityIntelPlan {
       "Budget a renforcer",
       "Un shift court remet de la marge avant les sorties, invitations et achats.",
       "Travailler",
-      "credits faibles"
+      "Wory faibles"
     );
   }
 

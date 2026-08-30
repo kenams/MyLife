@@ -324,7 +324,7 @@ function FilterPills({ active, onChange }: {
   ];
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}
-      style={{ position: "absolute", top: 58, left: 0, right: 0 }}
+      style={{ position: "absolute", top: 104, left: 0, right: 72 }}
       contentContainerStyle={{ paddingHorizontal: 16, gap: 8, flexDirection: "row" }}>
       {filters.map((f) => {
         const on = active === f.key;
@@ -346,60 +346,146 @@ function FilterPills({ active, onChange }: {
   );
 }
 
-function CityPulseStrip({ signals, onPress }: {
-  signals: CityPulseSignal[];
-  onPress: (signal: CityPulseSignal) => void;
-}) {
-  if (signals.length === 0) return null;
-  return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}
-      style={{ position: "absolute", top: 104, left: 0, right: 0 }}
-      contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
-      {signals.map((signal) => (
-        <Pressable key={signal.id} onPress={() => onPress(signal)}
-          style={{
-            width: 220, backgroundColor: L.card + "F0", borderRadius: 8,
-            paddingHorizontal: 12, paddingVertical: 9, borderWidth: 1,
-            borderColor: signal.kind === "CHALLENGE" ? L.red + "80" : signal.kind === "MISSION" ? L.primary + "80" : L.border,
-          }}>
-          <Text style={{ color: L.primary, fontSize: 10, fontWeight: "900" }} numberOfLines={1}>
-            {signal.district ? `${signal.kind} - ${signal.district}` : signal.kind}
-          </Text>
-          <Text style={{ color: L.text, fontSize: 12, fontWeight: "900", marginTop: 3 }} numberOfLines={1}>
-            {signal.title}
-          </Text>
-          <Text style={{ color: L.textSoft, fontSize: 11, marginTop: 2 }} numberOfLines={2}>
-            {signal.body}
-          </Text>
-        </Pressable>
-      ))}
-    </ScrollView>
-  );
+function pulseKindLabel(kind: CityPulseSignal["kind"]): string {
+  if (kind === "CHALLENGE") return "Challenge";
+  if (kind === "DATING") return "Dating";
+  if (kind === "CREW") return "Crew";
+  if (kind === "MISSION" || kind === "EXPLORATION") return "Mission";
+  if (kind === "SOCIAL" || kind === "EVENT") return "Sortie";
+  return "Ville";
 }
 
-function CrewDominanceStrip({ districts, onPress }: {
+function MapContextDrawer({
+  visible,
+  signals,
+  districts,
+  takeoverAlert,
+  onClose,
+  onPulsePress,
+  onCrewPress,
+}: {
+  visible: boolean;
+  signals: CityPulseSignal[];
   districts: DistrictCrewDominance[];
-  onPress: () => void;
+  takeoverAlert: TakeoverNotif | null;
+  onClose: () => void;
+  onPulsePress: (signal: CityPulseSignal) => void;
+  onCrewPress: () => void;
 }) {
-  if (districts.length === 0) return null;
+  const translateX = useRef(new Animated.Value(380)).current;
+
+  useEffect(() => {
+    if (!visible) return;
+    translateX.setValue(380);
+    Animated.timing(translateX, {
+      toValue: 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start();
+  }, [translateX, visible]);
+
+  function closeDrawer() {
+    Animated.timing(translateX, {
+      toValue: 380,
+      duration: 180,
+      useNativeDriver: true,
+    }).start(({ finished }) => {
+      if (finished) onClose();
+    });
+  }
+
   return (
-    <View style={{ position: "absolute", top: 178, left: 16, gap: 6, maxWidth: 220 }}>
-      {districts.slice(0, 3).map((item) => (
-        <Pressable key={`${item.district}:${item.dominant.id}`} onPress={onPress}
-          style={{
-            backgroundColor: item.state === "contested" ? L.red + "22" : L.card + "EE",
-            borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
-            borderWidth: 1, borderColor: item.state === "contested" ? L.red + "70" : L.border,
+    <Modal transparent visible={visible} animationType="none" onRequestClose={closeDrawer}>
+      <View style={{ flex: 1, flexDirection: "row", justifyContent: "flex-end" }}>
+        <Pressable
+          accessibilityLabel="Fermer les informations de la carte"
+          onPress={closeDrawer}
+          style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.45)" }}
+        />
+        <Animated.View style={{
+          width: "86%", maxWidth: 360, height: "100%",
+          backgroundColor: L.card, borderLeftWidth: 1, borderColor: L.border,
+          paddingTop: 52, paddingBottom: 28,
+          transform: [{ translateX }],
+        }}>
+          <View style={{
+            paddingHorizontal: 18, paddingBottom: 14,
+            flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+            borderBottomWidth: 1, borderColor: L.border,
           }}>
-          <Text style={{ color: item.state === "contested" ? L.red : L.primary, fontSize: 10, fontWeight: "900" }} numberOfLines={1}>
-            {item.state === "contested" ? "CONTESTE" : "DOMINANT"} - {item.district}
-          </Text>
-          <Text style={{ color: L.text, fontSize: 11, fontWeight: "800" }} numberOfLines={1}>
-            {item.dominant.name}{item.challenger ? ` vs ${item.challenger.name}` : ""} - {item.trend}
-          </Text>
-        </Pressable>
-      ))}
-    </View>
+            <View>
+              <Text style={{ color: L.text, fontSize: 17, fontWeight: "900" }}>Autour de toi</Text>
+              <Text style={{ color: L.textSoft, fontSize: 11, marginTop: 2 }}>Toulouse en ce moment</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Fermer"
+              onPress={closeDrawer}
+              hitSlop={10}
+              style={{ width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", backgroundColor: L.cardAlt }}>
+              <Text style={{ color: L.text, fontSize: 22 }}>×</Text>
+            </Pressable>
+          </View>
+
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 16, gap: 10 }}>
+            {takeoverAlert && (
+              <Pressable onPress={onCrewPress} style={{
+                backgroundColor: takeoverAlert.newCrewColor + "18", borderRadius: 8, padding: 12,
+                borderWidth: 1, borderColor: takeoverAlert.newCrewColor + "70",
+                flexDirection: "row", alignItems: "center", gap: 10,
+              }}>
+                <Text style={{ fontSize: 22 }}>{takeoverAlert.newCrewEmoji}</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: takeoverAlert.newCrewColor, fontSize: 10, fontWeight: "900" }}>CONQUÊTE</Text>
+                  <Text style={{ color: L.text, fontSize: 12, fontWeight: "800", marginTop: 2 }} numberOfLines={2}>
+                    [{takeoverAlert.newCrewTag}] a pris {takeoverAlert.bastionName}
+                  </Text>
+                </View>
+              </Pressable>
+            )}
+
+            {signals.map((signal) => (
+              <Pressable key={signal.id} onPress={() => onPulsePress(signal)} style={{
+                backgroundColor: L.cardAlt, borderRadius: 8, padding: 12,
+                borderWidth: 1,
+                borderColor: signal.kind === "CHALLENGE" ? L.red + "70" : signal.kind === "MISSION" ? L.primary + "70" : L.border,
+              }}>
+                <Text style={{ color: signal.kind === "CHALLENGE" ? L.red : L.primary, fontSize: 10, fontWeight: "900" }} numberOfLines={1}>
+                  {pulseKindLabel(signal.kind)}{signal.district ? ` · ${signal.district}` : ""}
+                </Text>
+                <Text style={{ color: L.text, fontSize: 13, fontWeight: "900", marginTop: 3 }} numberOfLines={2}>
+                  {signal.title}
+                </Text>
+                <Text style={{ color: L.textSoft, fontSize: 11, marginTop: 3 }} numberOfLines={3}>
+                  {signal.body}
+                </Text>
+              </Pressable>
+            ))}
+
+            {districts.map((item) => (
+              <Pressable key={`${item.district}:${item.dominant.id}`} onPress={onCrewPress} style={{
+                backgroundColor: item.state === "contested" ? L.red + "12" : L.cardAlt,
+                borderRadius: 8, padding: 12, borderWidth: 1,
+                borderColor: item.state === "contested" ? L.red + "60" : L.border,
+              }}>
+                <Text style={{ color: item.state === "contested" ? L.red : L.primary, fontSize: 10, fontWeight: "900" }}>
+                  {item.state === "contested" ? "CREW CONTESTÉ" : "CREW DOMINANT"} · {item.district}
+                </Text>
+                <Text style={{ color: L.text, fontSize: 12, fontWeight: "800", marginTop: 3 }} numberOfLines={2}>
+                  {item.dominant.name}{item.challenger ? ` vs ${item.challenger.name}` : ""} · {item.trend}
+                </Text>
+              </Pressable>
+            ))}
+
+            {!takeoverAlert && signals.length === 0 && districts.length === 0 && (
+              <Text style={{ color: L.muted, fontSize: 13, textAlign: "center", paddingVertical: 36 }}>
+                Rien de prioritaire autour de toi pour le moment.
+              </Text>
+            )}
+          </ScrollView>
+        </Animated.View>
+      </View>
+    </Modal>
   );
 }
 
@@ -423,6 +509,7 @@ export default function LifeMapScreen() {
   const [nearbyPlayers, setNearbyPlayers] = useState<MapPlayer[]>([]);
   const [takeoverAlert, setTakeoverAlert] = useState<TakeoverNotif | null>(null);
   const [recentPulseIds, setRecentPulseIds] = useState<string[]>([]);
+  const [showMapContext, setShowMapContext] = useState(false);
 
   const mapRef = useRef<MapView>(null);
 
@@ -579,11 +666,18 @@ export default function LifeMapScreen() {
   }, [bastions, livingCity?.crews]);
 
   function handleCityPulsePress(signal: CityPulseSignal) {
+    setShowMapContext(false);
     setRecentPulseIds((ids) => [signal.id, ...ids.filter((id) => id !== signal.id)].slice(0, 12));
     router.push(cityPulseRoute(signal) as never);
   }
 
+  function handleCrewContextPress() {
+    setShowMapContext(false);
+    router.push("/(app)/territories" as never);
+  }
+
   const cfg = STATUS_CONFIG[myStatus];
+  const mapContextCount = cityPulseSignals.length + crewDominance.length + (takeoverAlert ? 1 : 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: L.bg }}>
@@ -614,24 +708,22 @@ export default function LifeMapScreen() {
         flexDirection: "row", alignItems: "center", justifyContent: "space-between",
       }}>
         <View style={{
-          backgroundColor: L.card + "F0", borderRadius: 14,
-          paddingHorizontal: 14, paddingVertical: 8,
+          backgroundColor: L.card + "F0", borderRadius: 10,
+          paddingHorizontal: 10, paddingVertical: 6,
           borderWidth: 1, borderColor: L.border,
-          flex: 1, maxWidth: 240, gap: 2,
+          flex: 1, maxWidth: 176, gap: 1,
         }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4,
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <View style={{ width: 6, height: 6, borderRadius: 3,
               backgroundColor: L.green,
               shadowColor: L.green, shadowOpacity: 1, shadowRadius: 4 }} />
-            <Text style={{ color: L.text, fontSize: 13, fontWeight: "800" }} numberOfLines={1}>
+            <Text style={{ color: L.text, fontSize: 11, fontWeight: "800" }} numberOfLines={1}>
               {visiblePlayers.length} actifs · Toulouse
             </Text>
           </View>
-          {visibleNpcCount > 0 && (
-            <Text style={{ color: L.primary, fontSize: 10, fontWeight: "800" }} numberOfLines={1}>
-              {visibleRealCount} joueurs · {visibleNpcCount} habitants
-            </Text>
-          )}
+          <Text style={{ color: L.primary, fontSize: 9, fontWeight: "800" }} numberOfLines={1}>
+            {visibleRealCount} réels · {visibleNpcCount} simulés
+          </Text>
         </View>
 
         {/* Mon statut */}
@@ -649,8 +741,21 @@ export default function LifeMapScreen() {
         </Pressable>
       </View>
 
-      <CityPulseStrip signals={cityPulseSignals} onPress={handleCityPulsePress} />
-      <CrewDominanceStrip districts={crewDominance} onPress={() => router.push("/(app)/territories" as never)} />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${mapContextCount} informations autour de toi`}
+        onPress={() => setShowMapContext(true)}
+        style={{
+          position: "absolute", top: 103, right: 14,
+          minWidth: 48, height: 38, borderRadius: 19,
+          paddingHorizontal: 11, backgroundColor: L.card + "F2",
+          borderWidth: 1, borderColor: L.primary + "55",
+          flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
+          shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 6,
+        }}>
+        <Text style={{ color: L.text, fontSize: 16, fontWeight: "900" }}>☰</Text>
+        <Text style={{ color: L.primary, fontSize: 11, fontWeight: "900" }}>{mapContextCount}</Text>
+      </Pressable>
 
       {/* Bouton géoloc / activer */}
       {!myLocation && (
@@ -699,33 +804,6 @@ export default function LifeMapScreen() {
       )}
 
 
-      {/* Bastions overlay (liste en bas gauche) */}
-      {bastions.length > 0 && (
-        <View style={{
-          position: "absolute", bottom: myLocation ? 170 : 180, left: 16,
-          gap: 6, maxWidth: 180,
-        }}>
-          {bastions.slice(0, 3).map((b) => (
-            <View key={b.id} style={{
-              backgroundColor: b.crew.color + "22",
-              borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7,
-              borderWidth: 1, borderColor: b.crew.color + "50",
-              flexDirection: "row", alignItems: "center", gap: 6,
-            }}>
-              <Text style={{ fontSize: 14 }}>{b.crew.emoji}</Text>
-              <View>
-                <Text style={{ color: b.crew.color, fontSize: 10, fontWeight: "900" }}>
-                  [{b.crew.tag}]
-                </Text>
-                <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 9 }} numberOfLines={1}>
-                  {b.name}
-                </Text>
-              </View>
-            </View>
-          ))}
-        </View>
-      )}
-
       {/* Bouton À proximité */}
       {myLocation && (
         <Pressable onPress={handleShowNearby}
@@ -742,27 +820,15 @@ export default function LifeMapScreen() {
         </Pressable>
       )}
 
-      {/* Alerte takeover bastion */}
-      {takeoverAlert && (
-        <Pressable onPress={() => setTakeoverAlert(null)} style={{
-          position: "absolute", bottom: 110, left: 16, right: 16,
-          backgroundColor: takeoverAlert.newCrewColor + "22",
-          borderRadius: 14, padding: 14,
-          borderWidth: 2, borderColor: takeoverAlert.newCrewColor,
-          shadowColor: takeoverAlert.newCrewColor, shadowOpacity: 0.8, shadowRadius: 16,
-          flexDirection: "row", alignItems: "center", gap: 12,
-        }}>
-          <Text style={{ fontSize: 24 }}>{takeoverAlert.newCrewEmoji}</Text>
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: takeoverAlert.newCrewColor, fontSize: 13, fontWeight: "900" }}>
-              [{takeoverAlert.newCrewTag}] a pris {takeoverAlert.bastionName} !
-            </Text>
-            <Text style={{ color: "rgba(255,255,255,0.5)", fontSize: 11 }}>
-              🏴 Bastion conquis — appuie pour fermer
-            </Text>
-          </View>
-        </Pressable>
-      )}
+      <MapContextDrawer
+        visible={showMapContext}
+        signals={cityPulseSignals}
+        districts={crewDominance}
+        takeoverAlert={takeoverAlert}
+        onClose={() => setShowMapContext(false)}
+        onPulsePress={handleCityPulsePress}
+        onCrewPress={handleCrewContextPress}
+      />
 
       {/* Panel joueurs à proximité */}
       <Modal visible={showNearby} transparent animationType="slide">

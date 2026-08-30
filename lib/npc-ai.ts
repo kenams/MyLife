@@ -47,7 +47,7 @@ const NPC_MESSAGES: Record<string, MsgFn[]> = {
     (n, p) => `Bro, niveau ${n.level}, j'avance. Tu kiffes le grind aussi ${p} ?`,
     (n, p) => `J'ai bossé 2h d'affilée. Stats au max. Tu fais quoi toi ?`,
     (n, p) => `Les nuits en ville c'est un autre monde. T'as bossé aujourd'hui ${p} ?`,
-    (n, p) => `J'ai ${n.money} crédits en banque. Le game ça paie si t'es consistant.`,
+    (n, p) => `J'ai ${n.money} Wory en banque. Le game ça paie si t'es consistant.`,
     (n, p) => `Discipline = résultats. T'en es où toi ${p} ?`,
     (n, p) => `On devrait se motiver ensemble. Mon niveau monte, le tien aussi ?`,
     (n, p) => `J'observe les patterns. Ceux qui avancent ont une routine. T'as la tienne ?`,
@@ -81,7 +81,7 @@ const NPC_MESSAGES: Record<string, MsgFn[]> = {
     (n, p) => `Networking ce soir ? J'ai des contacts qui pourraient t'être utiles.`,
     (n, p) => `Réputation à ${n.reputation}. La mienne monte. La tienne ?`,
     (n, p) => `Je t'observe ${p}. T'as du potentiel. Faut juste être consistant.`,
-    (n, p) => `${n.money} crédits de revenue cette session. Le travail paie.`,
+    (n, p) => `${n.money} Wory de revenu cette session. Le travail paie.`,
   ],
   sana: [
     (n, p) => `Cardio intense ce matin. Je sens les progrès. Tu t'entraînes ${p} ?`,
@@ -258,7 +258,7 @@ export function getNpcStatusLine(npc: NpcState): string {
   if (npc.action === "chatting")   return `💬 Socialise (humeur ${npc.mood}%)`;
   if (npc.action === "exercising") return `💪 S'entraîne (énergie ${npc.energy}%)`;
   if (npc.action === "walking")    return `🚶 Se promène`;
-  if (npc.action === "working")    return `💼 Travaille (+cr)`;
+  if (npc.action === "working")    return `💼 Travaille (+Wory)`;
   return `💭 En pause (niv. ${npc.level})`;
 }
 

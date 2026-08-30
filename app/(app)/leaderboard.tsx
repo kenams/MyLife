@@ -181,7 +181,7 @@ function LeaderRow({ entry, index, sortKey }: { entry: LeaderEntry; index: numbe
         {/* Score principal */}
         <View style={{ alignItems: "flex-end", gap: 2 }}>
           <Text style={{ color: tierColor, fontWeight: "900", fontSize: 13 }}>{primaryValue}</Text>
-          <Text style={{ color: colors.muted, fontSize: 9 }}>💰 {entry.money.toLocaleString()} cr</Text>
+          <Text style={{ color: colors.muted, fontSize: 9 }}>💰 {entry.money.toLocaleString()} Wory</Text>
         </View>
       </View>
     </Animated.View>
@@ -324,7 +324,7 @@ export default function LeaderboardScreen() {
                   <Text style={{ color: colors.text, fontWeight: "800", fontSize: 14 }}>{myTier.name}</Text>
                 </View>
                 <Text style={{ color: colors.muted, fontSize: 11, marginTop: 2 }}>
-                  {(myEntry.wealthScore / 1000).toFixed(1)}k pts · {stats.money} cr · {stats.streak}j streak
+                  {(myEntry.wealthScore / 1000).toFixed(1)}k pts · {stats.money} Wory · {stats.streak}j streak
                 </Text>
               </View>
               <Pressable onPress={() => router.push("/(app)/housing" as never)}

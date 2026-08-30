@@ -97,7 +97,7 @@ function ItemCard({ item, qty, canBuy, onBuy, onUse }: {
           </Text>
         </View>
         <View style={{ alignItems: "flex-end" }}>
-          <Text style={{ color: D.gold, fontWeight: "900", fontSize: 15 }}>{item.price} cr</Text>
+          <Text style={{ color: D.gold, fontWeight: "900", fontSize: 15 }}>{item.price} Wory</Text>
           {qty > 0 && (
             <View style={{ backgroundColor: D.primary + "20", borderRadius: 8,
               paddingHorizontal: 7, paddingVertical: 2, marginTop: 4 }}>
@@ -211,7 +211,7 @@ export default function ShopScreen() {
           </Pressable>
           <Text style={{ color: "#fff", fontWeight: "900", fontSize: 26 }}>🛍️ Boutique</Text>
           <Text style={{ color: "rgba(255,255,255,0.65)", fontSize: 13, marginTop: 4 }}>
-            Lieu actuel : {currentLocation} · 💰 {stats.money} cr
+            Lieu actuel : {currentLocation} · 💰 {stats.money} Wory
           </Text>
           {inventoryCount > 0 && (
             <Text style={{ color: D.gold, fontSize: 13, fontWeight: "700", marginTop: 4 }}>

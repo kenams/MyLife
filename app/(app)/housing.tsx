@@ -81,7 +81,7 @@ function TierCard({ tier, current, canAfford, money, level, reputation, streak, 
           </View>
           {tier.rentPerDay > 0 && (
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={{ color: colors.gold, fontWeight: "900", fontSize: 14 }}>{tier.rentPerDay} cr</Text>
+              <Text style={{ color: colors.gold, fontWeight: "900", fontSize: 14 }}>{tier.rentPerDay} Wory</Text>
               <Text style={{ color: colors.muted, fontSize: 9 }}>/jour</Text>
             </View>
           )}
@@ -103,7 +103,7 @@ function TierCard({ tier, current, canAfford, money, level, reputation, streak, 
           <View style={{ gap: 6 }}>
             <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1 }}>CONDITIONS</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
-              {tier.minMoney > 0    && <ConditionBadge ok={money >= tier.minMoney}           label={`${tier.minMoney} cr`} />}
+              {tier.minMoney > 0    && <ConditionBadge ok={money >= tier.minMoney}           label={`${tier.minMoney} Wory`} />}
               {tier.minLevel > 1    && <ConditionBadge ok={level >= tier.minLevel}           label={`Niv.${tier.minLevel}`} />}
               {tier.minReputation > 0 && <ConditionBadge ok={reputation >= tier.minReputation} label={`${tier.minReputation} rep`} />}
               {tier.minStreak > 0   && <ConditionBadge ok={streak >= tier.minStreak}         label={`${tier.minStreak}j streak`} />}
@@ -118,7 +118,7 @@ function TierCard({ tier, current, canAfford, money, level, reputation, streak, 
               alignItems: "center", borderWidth: 1.5, borderColor: tier.color + "55",
               shadowColor: tier.color, shadowOpacity: 0.3, shadowRadius: 8 }}>
             <Text style={{ color: tier.color, fontWeight: "900", fontSize: 14 }}>
-              Emménager — {tier.rentPerDay > 0 ? `${tier.rentPerDay} cr/j` : "Gratuit"}
+              Emménager — {tier.rentPerDay > 0 ? `${tier.rentPerDay} Wory/j` : "Gratuit"}
             </Text>
           </Pressable>
         )}
@@ -193,7 +193,7 @@ export default function HousingScreen() {
             <View style={{ flex: 1 }}>
               <Text style={{ color: currentTier.color, fontWeight: "900", fontSize: 18 }}>{currentTier.name}</Text>
               <Text style={{ color: colors.muted, fontSize: 11 }}>
-                {currentTier.rentPerDay > 0 ? `${currentTier.rentPerDay} cr/jour` : "Gratuit"} · Score: {(wealthScore / 1000).toFixed(1)}k
+                {currentTier.rentPerDay > 0 ? `${currentTier.rentPerDay} Wory/jour` : "Gratuit"} · Score: {(wealthScore / 1000).toFixed(1)}k
               </Text>
               <Text style={{ color: currentDistrict.color, fontSize: 11, fontWeight: "800", marginTop: 2 }}>
                 {currentDistrict.label} - {currentDistrict.name}
@@ -220,7 +220,7 @@ export default function HousingScreen() {
                   Prochain : <Text style={{ fontWeight: "800" }}>{nextTier.name}</Text>
                 </Text>
                 <Text style={{ color: colors.muted, fontSize: 10 }}>
-                  {stats.money < nextTier.minMoney ? `+${nextTier.minMoney - stats.money} cr manquants` : ""}
+                  {stats.money < nextTier.minMoney ? `+${nextTier.minMoney - stats.money} Wory manquants` : ""}
                   {playerLevel < nextTier.minLevel ? ` · Niv.${nextTier.minLevel} requis` : ""}
                 </Text>
               </View>
@@ -244,7 +244,7 @@ export default function HousingScreen() {
         {/* Stats joueur */}
         <View style={{ flexDirection: "row", marginHorizontal: 20, marginTop: 16, gap: 10 }}>
           {[
-            { label: "Argent", value: `${stats.money} cr`, color: colors.gold },
+            { label: "Wory", value: `${stats.money} Wory`, color: colors.gold },
             { label: "Niveau",  value: `${playerLevel}`,   color: colors.purple },
             { label: "Réputation", value: `${stats.reputation}`, color: colors.accent },
             { label: "Streak",  value: `${stats.streak}j`, color: "#f87171" },

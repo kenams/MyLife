@@ -88,7 +88,7 @@ function getAriaResponse(
       `Humeur     ${statBar(stats.mood)}`,
       `Sociabilité ${statBar(stats.sociability)}`,
       `Discipline  ${statBar(stats.discipline)}`,
-      `Argent      ${stats.money ?? 0} crédits`,
+      `Wory       ${stats.money ?? 0}`,
       "",
       crits.length > 0
         ? `⚠️ Points critiques : ${crits.join(", ")}.`
@@ -142,12 +142,12 @@ function getAriaResponse(
       "",
       "Niveaux disponibles :",
       "• Home Suite (gratuit) — stats par défaut",
-      "• Résidence Confort (200 cr) — +5 énergie max, +5 discipline",
-      "• Appartement Stylé (500 cr) — +humeur au réveil, +réputation",
-      "• Penthouse Elite (2000 cr) — effets premium, bonus social max",
+      "• Résidence Confort (200 Wory) — +5 énergie max, +5 discipline",
+      "• Appartement Stylé (500 Wory) — +humeur au réveil, +réputation",
+      "• Penthouse Elite (2000 Wory) — effets premium, bonus social max",
       "",
       "Pour monter de niveau :",
-      "1. Accumule des crédits via shifts de travail",
+      "1. Accumule des Wory via shifts de travail",
       "2. Ouvre l'onglet Logement dans Profil → Upgrade",
       "",
       "IRL parallèle : ton environnement de vie affecte directement ton énergie quotidienne.",
@@ -177,14 +177,14 @@ function getAriaResponse(
   // ── Argent / finances ─────────────────────────────────────────────────────
   if (input.includes("argent") || input.includes("finances") || input.includes("fric") || input.includes("money") || input.includes("crédit")) {
     return [
-      `Finances : ${stats.money ?? 0} crédits actuellement.`,
+      `Finances : ${stats.money ?? 0} Wory actuellement.`,
       "",
       stats.money < 200
         ? "Situation précaire. Actions recommandées :"
         : "Situation stable. Pour croître :",
       "• Prendre des **shifts de travail** réguliers (+argent, +discipline)",
-      "• Éviter les achats impulsifs (shopping coûte 35 crédits)",
-      "• Objectif : atteindre 500 crédits pour accéder aux opportunités premium",
+      "• Éviter les achats impulsifs (shopping coûte 35 Wory)",
+      "• Objectif : atteindre 500 Wory pour accéder aux opportunités premium",
       "",
       "**Parallèle vraie vie** : l'argent dans le jeu simule la gestion budgétaire réelle.",
       "Dans ta vraie vie, est-ce que tu as :",

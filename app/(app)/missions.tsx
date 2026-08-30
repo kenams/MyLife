@@ -94,7 +94,7 @@ function MissionCard({ mission, progress, onClaim }: {
           <View style={{ flexDirection: "row", gap: 10 }}>
             <Text style={{ color: "#f6b94f", fontSize: 12, fontWeight: "700" }}>+{mission.xpReward} XP</Text>
             {mission.moneyReward > 0 && (
-              <Text style={{ color: "#38c793", fontSize: 12, fontWeight: "700" }}>+{mission.moneyReward} cr</Text>
+              <Text style={{ color: "#38c793", fontSize: 12, fontWeight: "700" }}>+{mission.moneyReward} Wory</Text>
             )}
           </View>
           {isCompleted && !isClaimed && (
