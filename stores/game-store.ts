@@ -282,6 +282,8 @@ type GameState = {
   resolveDailyEvent: (choice: "accepted" | "skipped") => void;
   tutorialDone: boolean;
   completeTutorial: () => void;
+  mapIntroDismissed: boolean;
+  dismissMapIntro: () => void;
   claimDailyReward: () => void;
   markNotificationRead: (notificationId: string) => void;
   markAllNotificationsRead: () => void;
@@ -454,6 +456,7 @@ function initialState() {
   return {
     hasHydrated: false,
     tutorialDone: false,
+    mapIntroDismissed: false,
     session: null as UserSession | null,
     livingCity: createLivingCityState("NORMAL") as LivingCityState,
     npcs: seedLivingCityNpcs("NORMAL") as NpcState[],
@@ -2307,6 +2310,7 @@ export const useGameStore = create<GameState>()(
           };
         }),
       completeTutorial: () => set({ tutorialDone: true }),
+      dismissMapIntro: () => set({ mapIntroDismissed: true }),
 
       claimDailyReward: () =>
         set((state) => {
@@ -3938,6 +3942,8 @@ export const useGameStore = create<GameState>()(
       name: "mylife-storage",
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
+        tutorialDone: state.tutorialDone,
+        mapIntroDismissed: state.mapIntroDismissed,
         session: state.session,
         avatar: state.avatar,
         stats: state.stats,

@@ -40,6 +40,14 @@ import {
 } from "@/lib/season";
 import { joinFlashEvent, checkinFlashEvent } from "@/lib/flash-events";
 import { MoveMissionModal } from "@/components/move-mission-modal";
+import { MapFirstSessionHint, MapPrimarySuggestion } from "@/components/map-session-guidance";
+import {
+  groupMapOpportunities,
+  MAP_OPPORTUNITY_SECTION_LABELS,
+  mapOpportunityKindLabel,
+  mapOpportunityIcon,
+  type MapOpportunitySection,
+} from "@/lib/map-opportunity-presentation";
 import {
   cityPulseRoute,
   crewDominanceByDistrict,
@@ -547,13 +555,6 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
           new gl.Marker({ element: el }).setLngLat([zone.lng, zone.lat]).setPopup(popup).addTo(map);
         });
 
-        // Ma position
-        if (myLat && myLng) {
-          const el = document.createElement("div");
-          el.style.cssText = "width:20px;height:20px;border-radius:10px;background:#FFD600;border:3px solid #04040A;box-shadow:0 0 16px #FFD600;";
-          myMarkerRef.current = new gl.Marker({ element: el }).setLngLat([myLng, myLat]).addTo(map);
-        }
-
         // ── Clustering natif joueurs+PNJ (source GeoJSON, MapLibre gère le
         // regroupement lui-même — pas de calcul de cluster côté React) ──────
         {
@@ -808,6 +809,30 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
     else map.once("load", applyMissions);
   }, [missions]);
 
+  useEffect(() => {
+    const map = mapRef.current as any;
+    const gl = glRef.current as any;
+    myMarkerRef.current?.remove();
+    myMarkerRef.current = null;
+    if (!map || !gl || myLat == null || myLng == null) return;
+
+    const addMarker = () => {
+      const el = document.createElement("div");
+      el.setAttribute("aria-label", "Ma position");
+      el.style.cssText = "display:flex;flex-direction:column;align-items:center;pointer-events:none;";
+      el.innerHTML = '<div style="width:28px;height:28px;border-radius:14px;background:#FFD600;border:3px solid #04040A;box-shadow:0 0 16px #FFD600;display:flex;align-items:center;justify-content:center;font-size:14px">🧢</div><div style="margin-top:2px;padding:1px 5px;border-radius:4px;background:#04040A;color:#FFD600;border:1px solid rgba(255,214,0,.55);font:900 9px system-ui,sans-serif">MOI</div>';
+      myMarkerRef.current = new gl.Marker({ element: el, anchor: "bottom" }).setLngLat([myLng, myLat]).addTo(map);
+    };
+
+    if (clusterReadyRef.current) addMarker();
+    else map.once("load", addMarker);
+
+    return () => {
+      myMarkerRef.current?.remove();
+      myMarkerRef.current = null;
+    };
+  }, [myLat, myLng]);
+
   return (
     <View
       ref={containerRef}
@@ -919,8 +944,10 @@ function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock, o
         <View style={{ backgroundColor: "#08080F", borderRadius: 14, padding: 14, gap: 10,
           borderWidth: 1, borderColor: C.border }}>
           {player.last_action && (
-            <View style={{ flexDirection: "row", gap: 10, alignItems: "center" }}>
-              <Text style={{ fontSize: 15 }}>🎮</Text>
+            <View style={{ gap: 3 }}>
+              <Text style={{ color: player.is_npc ? C.purple : C.muted, fontSize: 9, fontWeight: "900" }}>
+                {player.is_npc ? "ACTIVITÉ ACTUELLE" : "DERNIÈRE ACTIVITÉ"}
+              </Text>
               <Text style={{ color: C.soft, fontSize: 13 }}>{player.last_action}</Text>
             </View>
           )}
@@ -968,7 +995,7 @@ function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock, o
           </Pressable>
         )}
 
-        {player.status !== "ghost" && (
+        {!player.is_npc && player.status !== "ghost" && (
           <View style={{ gap: 10 }}>
             <View style={{ flexDirection: "row", gap: 10 }}>
               <Pressable
@@ -1009,28 +1036,26 @@ function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock, o
                 Proposer une activité publique
               </Text>
             </Pressable>
-            {!player.is_npc && (
-              <Pressable
-                onPress={handleAddFriend}
-                disabled={addState === "loading" || addState === "sent"}
-                style={{
-                  backgroundColor: addState === "sent" ? C.green + "18" : addState === "error" ? C.red + "18" : "#08080F",
-                  borderRadius: 14, paddingVertical: 13, alignItems: "center",
-                  borderWidth: 1,
-                  borderColor: addState === "sent" ? C.green + "50" : addState === "error" ? C.red + "50" : C.border,
-                }}>
-                <Text style={{
-                  color: addState === "sent" ? C.green : addState === "error" ? C.red : C.text,
-                  fontSize: 13, fontWeight: "900",
-                }}>
-                  {addState === "loading" ? "Envoi..."
-                    : addState === "sent" ? "✓ Demande envoyée"
-                    : addState === "error" ? "Erreur — réessayer"
-                    : "➕ Ajouter en ami"}
-                </Text>
-              </Pressable>
-            )}
-            {!player.is_npc && myCrewId && (
+            <Pressable
+              onPress={handleAddFriend}
+              disabled={addState === "loading" || addState === "sent"}
+              style={{
+                backgroundColor: addState === "sent" ? C.green + "18" : addState === "error" ? C.red + "18" : "#08080F",
+                borderRadius: 14, paddingVertical: 13, alignItems: "center",
+                borderWidth: 1,
+                borderColor: addState === "sent" ? C.green + "50" : addState === "error" ? C.red + "50" : C.border,
+              }}>
+              <Text style={{
+                color: addState === "sent" ? C.green : addState === "error" ? C.red : C.text,
+                fontSize: 13, fontWeight: "900",
+              }}>
+                {addState === "loading" ? "Envoi..."
+                  : addState === "sent" ? "✓ Demande envoyée"
+                  : addState === "error" ? "Erreur — réessayer"
+                  : "➕ Ajouter en ami"}
+              </Text>
+            </Pressable>
+            {myCrewId && (
               <Pressable
                 onPress={handleCrewInvite}
                 disabled={crewInviteState === "loading" || crewInviteState === "sent"}
@@ -1053,7 +1078,7 @@ function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock, o
             )}
           </View>
         )}
-        <View style={{ flexDirection: "row", gap: 10 }}>
+        {!player.is_npc && <View style={{ flexDirection: "row", gap: 10 }}>
           <Pressable onPress={() => { onReport(player); onClose(); }}
             style={{ flex: 1, paddingVertical: 12, alignItems: "center",
               backgroundColor: "#08080F", borderRadius: 10, borderWidth: 1, borderColor: C.border }}>
@@ -1065,7 +1090,7 @@ function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock, o
               borderWidth: 1, borderColor: C.red + "30" }}>
             <Text style={{ color: C.red, fontSize: 12, fontWeight: "700" }}>🚫 Bloquer</Text>
           </Pressable>
-        </View>
+        </View>}
       </Animated.View>
     </Modal>
   );
@@ -1205,15 +1230,6 @@ function CrewDominanceStrip({ districts, onPress }: {
   );
 }
 
-function pulseKindLabel(kind: CityPulseSignal["kind"]): string {
-  if (kind === "CHALLENGE") return "Challenge";
-  if (kind === "DATING") return "Dating";
-  if (kind === "CREW") return "Crew";
-  if (kind === "MISSION" || kind === "EXPLORATION") return "Mission";
-  if (kind === "SOCIAL" || kind === "EVENT") return "Sortie";
-  return "Ville";
-}
-
 function MobileMapContextDrawer({
   visible,
   signals,
@@ -1261,6 +1277,37 @@ function MobileMapContextDrawer({
 
   if (!visible) return null;
 
+  const groupedSignals = groupMapOpportunities(signals);
+  const renderSignalCard = (signal: CityPulseSignal) => (
+    <Pressable key={signal.id} onPress={() => onPulsePress(signal)} style={{
+      minHeight: 74, backgroundColor: "rgba(255,255,255,0.045)", borderRadius: 8, padding: 12,
+      borderWidth: 1,
+      borderColor: signal.kind === "CHALLENGE" ? C.red + "70" : signal.kind === "MISSION" ? C.gold + "70" : C.border,
+    }}>
+      <Text style={{ color: signal.kind === "CHALLENGE" ? C.red : C.gold, fontSize: 10, fontWeight: "900" }} numberOfLines={1}>
+        {mapOpportunityIcon(signal.kind)} {mapOpportunityKindLabel(signal.kind)}{signal.district ? ` · ${signal.district}` : ""}
+      </Text>
+      <Text style={{ color: C.text, fontSize: 13, fontWeight: "900", marginTop: 3 }} numberOfLines={2}>
+        {signal.title}
+      </Text>
+      <Text style={{ color: C.soft, fontSize: 11, marginTop: 3 }} numberOfLines={3}>
+        {signal.body}
+      </Text>
+    </Pressable>
+  );
+  const renderSignalSection = (section: MapOpportunitySection) => {
+    const items = groupedSignals[section];
+    if (items.length === 0) return null;
+    return (
+      <View key={section} style={{ gap: 8 }}>
+        <Text style={{ color: C.soft, fontSize: 10, fontWeight: "900", marginTop: 4 }}>
+          {MAP_OPPORTUNITY_SECTION_LABELS[section].toUpperCase()}
+        </Text>
+        {items.map(renderSignalCard)}
+      </View>
+    );
+  };
+
   return (
     <View
       accessibilityViewIsModal
@@ -1299,55 +1346,47 @@ function MobileMapContextDrawer({
           showsVerticalScrollIndicator={false}
           style={{ flex: 1 }}
           contentContainerStyle={{ padding: 14, paddingBottom: 28, gap: 10 }}>
-          {takeoverAlert && (
-            <Pressable onPress={onCrewPress} style={{
-              minHeight: 64, backgroundColor: takeoverAlert.newCrewColor + "18", borderRadius: 8, padding: 12,
-              borderWidth: 1, borderColor: takeoverAlert.newCrewColor + "70",
-              flexDirection: "row", alignItems: "center", gap: 10,
-            }}>
-              <Text style={{ fontSize: 22 }}>{takeoverAlert.newCrewEmoji}</Text>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: takeoverAlert.newCrewColor, fontSize: 10, fontWeight: "900" }}>CONQUÊTE</Text>
-                <Text style={{ color: C.text, fontSize: 12, fontWeight: "800", marginTop: 2 }} numberOfLines={2}>
-                  [{takeoverAlert.newCrewTag}] a pris {takeoverAlert.bastionName}
-                </Text>
-              </View>
-              <Text style={{ color: C.soft, fontSize: 16 }}>→</Text>
-            </Pressable>
+          {renderSignalSection("now")}
+          {renderSignalSection("nearby")}
+
+          {(takeoverAlert || districts.length > 0 || groupedSignals.crew.length > 0) && (
+            <View style={{ gap: 8 }}>
+              <Text style={{ color: C.soft, fontSize: 10, fontWeight: "900", marginTop: 4 }}>CREW / TERRITOIRES</Text>
+              {groupedSignals.crew.map(renderSignalCard)}
+              {takeoverAlert && (
+                <Pressable onPress={onCrewPress} style={{
+                  minHeight: 64, backgroundColor: takeoverAlert.newCrewColor + "18", borderRadius: 8, padding: 12,
+                  borderWidth: 1, borderColor: takeoverAlert.newCrewColor + "70",
+                  flexDirection: "row", alignItems: "center", gap: 10,
+                }}>
+                  <Text style={{ fontSize: 22 }}>{takeoverAlert.newCrewEmoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: takeoverAlert.newCrewColor, fontSize: 10, fontWeight: "900" }}>CONQUÊTE</Text>
+                    <Text style={{ color: C.text, fontSize: 12, fontWeight: "800", marginTop: 2 }} numberOfLines={2}>
+                      [{takeoverAlert.newCrewTag}] a pris {takeoverAlert.bastionName}
+                    </Text>
+                  </View>
+                  <Text style={{ color: C.soft, fontSize: 16 }}>→</Text>
+                </Pressable>
+              )}
+              {districts.map((item) => (
+                <Pressable key={`${item.district}:${item.dominant.id}`} onPress={onCrewPress} style={{
+                  minHeight: 62, backgroundColor: item.state === "contested" ? C.red + "12" : "rgba(255,255,255,0.045)",
+                  borderRadius: 8, padding: 12, borderWidth: 1,
+                  borderColor: item.state === "contested" ? C.red + "60" : C.border,
+                }}>
+                  <Text style={{ color: item.state === "contested" ? C.red : C.gold, fontSize: 10, fontWeight: "900" }}>
+                    {item.state === "contested" ? "DISTRICT CONTESTÉ" : "CREW DOMINANT"} · {item.district}
+                  </Text>
+                  <Text style={{ color: C.text, fontSize: 12, fontWeight: "800", marginTop: 3 }} numberOfLines={2}>
+                    {item.dominant.name}{item.challenger ? ` vs ${item.challenger.name}` : ""} · {item.trend}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
           )}
 
-          {signals.map((signal) => (
-            <Pressable key={signal.id} onPress={() => onPulsePress(signal)} style={{
-              minHeight: 74, backgroundColor: "rgba(255,255,255,0.045)", borderRadius: 8, padding: 12,
-              borderWidth: 1,
-              borderColor: signal.kind === "CHALLENGE" ? C.red + "70" : signal.kind === "MISSION" ? C.gold + "70" : C.border,
-            }}>
-              <Text style={{ color: signal.kind === "CHALLENGE" ? C.red : C.gold, fontSize: 10, fontWeight: "900" }} numberOfLines={1}>
-                {pulseKindLabel(signal.kind)}{signal.district ? ` · ${signal.district}` : ""}
-              </Text>
-              <Text style={{ color: C.text, fontSize: 13, fontWeight: "900", marginTop: 3 }} numberOfLines={2}>
-                {signal.title}
-              </Text>
-              <Text style={{ color: C.soft, fontSize: 11, marginTop: 3 }} numberOfLines={3}>
-                {signal.body}
-              </Text>
-            </Pressable>
-          ))}
-
-          {districts.map((item) => (
-            <Pressable key={`${item.district}:${item.dominant.id}`} onPress={onCrewPress} style={{
-              minHeight: 62, backgroundColor: item.state === "contested" ? C.red + "12" : "rgba(255,255,255,0.045)",
-              borderRadius: 8, padding: 12, borderWidth: 1,
-              borderColor: item.state === "contested" ? C.red + "60" : C.border,
-            }}>
-              <Text style={{ color: item.state === "contested" ? C.red : C.gold, fontSize: 10, fontWeight: "900" }}>
-                {item.state === "contested" ? "CREW CONTESTÉ" : "CREW DOMINANT"} · {item.district}
-              </Text>
-              <Text style={{ color: C.text, fontSize: 12, fontWeight: "800", marginTop: 3 }} numberOfLines={2}>
-                {item.dominant.name}{item.challenger ? ` vs ${item.challenger.name}` : ""} · {item.trend}
-              </Text>
-            </Pressable>
-          ))}
+          {renderSignalSection("city")}
 
           {roi && (
             <Pressable onPress={onRoiPress} style={{
@@ -1384,6 +1423,9 @@ export default function LifeMapScreen() {
   const playerLevel      = useGameStore((s) => s.playerLevel ?? 1);
   const markQuestAction  = useGameStore((s) => s.markQuestAction);
   const livingCity       = useGameStore((s) => s.livingCity);
+  const hasHydrated      = useGameStore((s) => s.hasHydrated);
+  const mapIntroDismissed = useGameStore((s) => s.mapIntroDismissed);
+  const dismissMapIntro  = useGameStore((s) => s.dismissMapIntro);
 
   const [myUserId,     setMyUserId]     = useState<string | null>(null);
   useEffect(() => {
@@ -1481,6 +1523,7 @@ export default function LifeMapScreen() {
         const res = await joinMission(selectedMission.id);
         if (!res.ok) { setMissionError(res.error ?? "Erreur"); return; }
         setMyMissionParticipations((p) => ({ ...p, [selectedMission.id]: "joined" }));
+        setMapFeedback("Mission commencée");
         return;
       }
       if (status === "joined" || status === "in_progress") {
@@ -1499,6 +1542,7 @@ export default function LifeMapScreen() {
           const res = await validateMission(selectedMission.id);
           if (!res.ok) { setMissionError(res.error ?? "Erreur"); return; }
           setMyMissionParticipations((p) => ({ ...p, [selectedMission.id]: "validated" }));
+          setMapFeedback("Mission validée · récompense prête");
           return;
         }
         const loc = await requestAndGetLocation();
@@ -1506,12 +1550,14 @@ export default function LifeMapScreen() {
         const res = await validateMission(selectedMission.id, loc.lat, loc.lng);
         if (!res.ok) { setMissionError(res.error ?? "Erreur"); return; }
         setMyMissionParticipations((p) => ({ ...p, [selectedMission.id]: "validated" }));
+        setMapFeedback("Mission validée · récompense prête");
         return;
       }
       if (status === "validated") {
         const res = await claimMissionReward(selectedMission.id);
         if (!res.ok) { setMissionError(res.error ?? "Erreur"); return; }
         setMyMissionParticipations((p) => ({ ...p, [selectedMission.id]: "rewarded" }));
+        setMapFeedback(`+${selectedMission.reward_xp} XP · +${selectedMission.reward_money} Wory`);
       }
     } finally {
       setMissionBusy(false);
@@ -1536,7 +1582,15 @@ export default function LifeMapScreen() {
   const [myCrewId,        setMyCrewId]        = useState<string | null>(null);
   const [recentPulseIds,  setRecentPulseIds]  = useState<string[]>([]);
   const [showMapContext,  setShowMapContext]  = useState(false);
+  const [primarySuggestionDismissed, setPrimarySuggestionDismissed] = useState(false);
+  const [mapFeedback, setMapFeedback] = useState<string | null>(null);
   const flyToRef = useRef<((lat: number, lng: number, zoom?: number, pitch?: number, bearing?: number) => void) | null>(null);
+
+  useEffect(() => {
+    if (!mapFeedback) return;
+    const timeout = setTimeout(() => setMapFeedback(null), 3500);
+    return () => clearTimeout(timeout);
+  }, [mapFeedback]);
 
   useEffect(() => {
     if (!isMobileWeb) setShowMapContext(false);
@@ -1702,6 +1756,7 @@ export default function LifeMapScreen() {
 
   function handleCityPulsePress(signal: CityPulseSignal) {
     setShowMapContext(false);
+    setPrimarySuggestionDismissed(true);
     setRecentPulseIds((ids) => [signal.id, ...ids.filter((id) => id !== signal.id)].slice(0, 12));
     router.push(cityPulseRoute(signal) as never);
   }
@@ -2071,6 +2126,36 @@ export default function LifeMapScreen() {
       )}
 
       {/* ── BASTION CHECK-IN ALERT ───────────────────────────────────────── */}
+      <MapFirstSessionHint
+        visible={hasHydrated && !mapIntroDismissed && !showMapContext}
+        onDismiss={dismissMapIntro}
+        bottom={isMobileWeb ? (myLocation ? 72 : 108) : 116}
+        palette={{ background: C.glass, border: C.gold + "70", text: C.text, muted: C.soft, accent: C.gold }}
+      />
+
+      <MapPrimarySuggestion
+        signal={cityPulseSignals[0] ?? null}
+        visible={hasHydrated && mapIntroDismissed && !primarySuggestionDismissed && !showMapContext && !bastionAlert}
+        onPress={handleCityPulsePress}
+        onDismiss={() => {
+          const id = cityPulseSignals[0]?.id;
+          if (id) setRecentPulseIds((ids) => [id, ...ids.filter((x) => x !== id)].slice(0, 12));
+          setPrimarySuggestionDismissed(true);
+        }}
+        bottom={isMobileWeb ? (myLocation ? 72 : 108) : 116}
+        palette={{ background: C.glass, border: C.gold + "55", text: C.text, muted: C.soft, accent: C.gold }}
+      />
+
+      {mapFeedback && (
+        <View pointerEvents="none" style={{
+          position: "absolute", bottom: isMobileWeb ? 76 : 118, alignSelf: "center", zIndex: 45,
+          backgroundColor: C.green + "E8", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10,
+          borderWidth: 1, borderColor: C.green,
+        }}>
+          <Text style={{ color: "#04040A", fontSize: 12, fontWeight: "900" }}>{mapFeedback}</Text>
+        </View>
+      )}
+
       {bastionAlert && !checkinDone && (
         <View style={{
           position: "absolute", top: isMobileWeb ? (seasonId ? 150 : 108) : 80,
@@ -2086,7 +2171,7 @@ export default function LifeMapScreen() {
               Tu es dans le bastion [{bastionAlert.zone.crew?.tag}]
             </Text>
             <Text style={{ color: C.soft, fontSize: 11, marginTop: 2 }}>
-              Check-in pour gagner {bastionAlert.reward} 🪙 · 1 fois par 24h
+              Influence du bastion +{bastionAlert.reward} · 1 fois par 24h
             </Text>
           </View>
           <View style={{ gap: 6 }}>
@@ -2095,8 +2180,13 @@ export default function LifeMapScreen() {
                 if (!avatar) return;
                 bastionCheckin(bastionAlert.zone.id, bastionAlert.zone.crew_id, avatar.displayName)
                   .then((r) => {
-                    setCheckinDone(true);
-                    setBastionAlert(null);
+                    if (r.ok) {
+                      setCheckinDone(true);
+                      setBastionAlert(null);
+                      setMapFeedback(r.blEarned > 0 ? `Check-in réussi · influence +${r.blEarned}` : "Check-in réussi");
+                    } else {
+                      setMapFeedback(r.error ?? "Check-in impossible");
+                    }
                     if (r.ok && r.blEarned > 0) {
                       markQuestAction("appear-on-map");
                     }
@@ -2274,9 +2364,15 @@ export default function LifeMapScreen() {
 
             <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={{ padding: 16, gap: 10 }}>
               {npcHistory.length === 0 && (
-                <Text style={{ color: C.muted, fontSize: 12, textAlign: "center", marginTop: 20 }}>
-                  Lance la conversation avec {npcChatTarget.display_name}
-                </Text>
+                <View style={{ alignItems: "center", gap: 5, marginTop: 14, marginBottom: 8 }}>
+                  <Text style={{ color: C.purple, fontSize: 10, fontWeight: "900" }}>EN CE MOMENT</Text>
+                  <Text style={{ color: C.text, fontSize: 12, textAlign: "center" }}>
+                    {npcChatTarget.last_action ?? `${npcChatTarget.display_name} se déplace dans Toulouse.`}
+                  </Text>
+                  <Text style={{ color: C.muted, fontSize: 11, textAlign: "center" }}>
+                    Sa réponse dépend de son activité, de sa personnalité et de votre relation.
+                  </Text>
+                </View>
               )}
               {npcHistory.map((turn, i) => (
                 <View key={i} style={{ alignSelf: turn.role === "me" ? "flex-end" : "flex-start", maxWidth: "80%" }}>
@@ -2369,12 +2465,13 @@ export default function LifeMapScreen() {
                     {expired && <Text style={{ color: C.red, fontSize: 11, fontWeight: "800" }}>Expirée</Text>}
                   </View>
                   <Text style={{ color: C.gold, fontSize: 12, fontWeight: "700" }}>
-                    +{selectedMission.reward_xp} XP · +{selectedMission.reward_money} 🪙 · +{selectedMission.reward_reputation} rép
+                    +{selectedMission.reward_xp} XP · +{selectedMission.reward_money} Wory · +{selectedMission.reward_reputation} rép
                   </Text>
                   <Text style={{ color: C.muted, fontSize: 10 }}>
                     🔒 Seule ta position approximative (arrondie) est utilisée pour valider — jamais partagée avec les autres joueurs.
                   </Text>
                   {missionError && <Text style={{ color: C.red, fontSize: 11 }}>{missionError}</Text>}
+                  {mapFeedback && <Text style={{ color: C.green, fontSize: 11, fontWeight: "800" }}>{mapFeedback}</Text>}
                   {status === "rewarded" ? (
                     <Text style={{ color: C.green, fontSize: 13, fontWeight: "800" }}>✓ Mission récompensée</Text>
                   ) : expired && !status ? null : actionLabel && (
