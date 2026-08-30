@@ -50,6 +50,8 @@ function ChatIcon({ color, focused }: { color: string; focused: boolean }) {
 
 export default function TabsLayout() {
   const T = useAppTheme();
+  const playerLevel = useGameStore((s) => s.playerLevel ?? 1);
+  const crewsUnlocked = playerLevel >= 2;
 
   return (
     <Tabs
@@ -100,6 +102,7 @@ export default function TabsLayout() {
       }} />
       <Tabs.Screen name="crews" options={{
         title: "Crews",
+        href: crewsUnlocked ? undefined : null,
         tabBarIcon: ({ color, focused }) => (
           <Ionicons name={focused ? "shield" : "shield-outline"} color={color} size={23} />
         ),
