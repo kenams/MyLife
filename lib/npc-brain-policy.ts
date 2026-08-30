@@ -1,6 +1,6 @@
 import type { NpcState } from "@/lib/types";
 
-export type NpcIntent = "REST" | "WORK" | "EAT" | "SOCIAL" | "CREW" | "DATE" | "SPORT" | "ROAM" | "IDLE";
+export type NpcIntent = "REST" | "WORK" | "EAT" | "SOCIAL" | "CREW" | "DATE" | "SPORT" | "ROAM" | "IDLE" | "DO_NOTHING";
 
 export type NpcContext = {
   hour: number;
@@ -68,4 +68,14 @@ export function canNpcInitiate(npc: NpcState, now: Date, cooldownMinutes = 120):
   if (!last) return true;
   const elapsed = now.getTime() - Date.parse(last);
   return Number.isFinite(elapsed) && elapsed >= cooldownMinutes * 60_000;
+}
+
+export function chooseNpcAction(npc: NpcState, context: NpcContext, now: Date): NpcIntentScore {
+  const intent = chooseNpcIntent(npc, context);
+  const needsInitiation = intent.intent === "SOCIAL" || intent.intent === "CREW" || intent.intent === "DATE";
+  if (needsInitiation && !canNpcInitiate(npc, now)) {
+    return { intent: "DO_NOTHING", score: 0, reason: "cooldown interaction" };
+  }
+  if (intent.score < 34) return { intent: "DO_NOTHING", score: intent.score, reason: "pas assez prioritaire" };
+  return intent;
 }

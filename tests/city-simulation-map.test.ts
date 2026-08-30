@@ -37,6 +37,22 @@ describe("city simulation map projection", () => {
     expect(first.lng).toBeLessThan(1.6);
   });
 
+  it("projects Living City activity into useful map labels and statuses", () => {
+    const npc = {
+      ...seedLivingCityNpcs("LOW", new Date("2026-08-29T12:00:00Z"))[0],
+      currentActivity: "mission",
+      crewId: null,
+      crewTag: null,
+      presenceOnline: true,
+    };
+
+    const player = livingNpcsToMapPlayers([npc], TOULOUSE_CITY, new Date("2026-08-29T12:00:00Z"), 16)[0];
+
+    expect(player.last_action).toContain("mission");
+    expect(player.status).toBe("free");
+    expect(player.avatar_emoji).toBe("🎯");
+  });
+
   it("materialises a bounded active subset for the MapLibre pipeline", () => {
     const at = new Date("2026-08-29T20:00:00");
     const npcs = seedLivingCityNpcs("CHAOS", at);

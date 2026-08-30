@@ -40,6 +40,14 @@ import {
 } from "@/lib/season";
 import { joinFlashEvent, checkinFlashEvent } from "@/lib/flash-events";
 import { MoveMissionModal } from "@/components/move-mission-modal";
+import {
+  cityPulseRoute,
+  crewDominanceByDistrict,
+  livingCityEventsToCityPulse,
+  selectCityPulseOpportunities,
+  type CityPulseSignal,
+  type DistrictCrewDominance,
+} from "@/lib/city-pulse";
 
 // ── Échappement HTML — tags/noms de crew et pseudos viennent de la DB (donc
 // potentiellement saisis par un joueur) et sont injectés dans des popups/SVG
@@ -1130,11 +1138,70 @@ function FilterPills({ active, onChange }: {
   );
 }
 
+function CityPulseStrip({ signals, onPress }: {
+  signals: CityPulseSignal[];
+  onPress: (signal: CityPulseSignal) => void;
+}) {
+  if (signals.length === 0) return null;
+  return (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}
+      style={{ position: "absolute", top: 188, left: 0, right: 0, zIndex: 5 }}
+      pointerEvents="box-none"
+      contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+      {signals.map((signal) => (
+        <Pressable key={signal.id} onPress={() => onPress(signal)}
+          style={{
+            width: 230, backgroundColor: "rgba(8,8,15,0.92)", borderRadius: 8,
+            paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1,
+            borderColor: signal.kind === "CHALLENGE" ? C.red + "80" : signal.kind === "MISSION" ? C.gold + "80" : C.border,
+          }}>
+          <Text style={{ color: C.gold, fontSize: 10, fontWeight: "900" }} numberOfLines={1}>
+            {signal.district ? `${signal.kind} - ${signal.district}` : signal.kind}
+          </Text>
+          <Text style={{ color: C.text, fontSize: 12, fontWeight: "900", marginTop: 3 }} numberOfLines={1}>
+            {signal.title}
+          </Text>
+          <Text style={{ color: C.soft, fontSize: 11, marginTop: 2 }} numberOfLines={2}>
+            {signal.body}
+          </Text>
+        </Pressable>
+      ))}
+    </ScrollView>
+  );
+}
+
+function CrewDominanceStrip({ districts, onPress }: {
+  districts: DistrictCrewDominance[];
+  onPress: () => void;
+}) {
+  if (districts.length === 0) return null;
+  return (
+    <View style={{ position: "absolute", top: 254, left: 16, zIndex: 5, gap: 6, maxWidth: 230 }}>
+      {districts.slice(0, 3).map((item) => (
+        <Pressable key={`${item.district}:${item.dominant.id}`} onPress={onPress}
+          style={{
+            backgroundColor: item.state === "contested" ? C.red + "22" : "rgba(8,8,15,0.88)",
+            borderRadius: 8, paddingHorizontal: 10, paddingVertical: 7,
+            borderWidth: 1, borderColor: item.state === "contested" ? C.red + "70" : C.border,
+          }}>
+          <Text style={{ color: item.state === "contested" ? C.red : C.gold, fontSize: 10, fontWeight: "900" }} numberOfLines={1}>
+            {item.state === "contested" ? "CONTESTE" : "DOMINANT"} - {item.district}
+          </Text>
+          <Text style={{ color: C.text, fontSize: 11, fontWeight: "800" }} numberOfLines={1}>
+            {item.dominant.name}{item.challenger ? ` vs ${item.challenger.name}` : ""} - {item.trend}
+          </Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function LifeMapScreen() {
   const avatar           = useGameStore((s) => s.avatar);
   const playerLevel      = useGameStore((s) => s.playerLevel ?? 1);
   const markQuestAction  = useGameStore((s) => s.markQuestAction);
+  const livingCity       = useGameStore((s) => s.livingCity);
 
   const [myUserId,     setMyUserId]     = useState<string | null>(null);
   useEffect(() => {
@@ -1285,6 +1352,7 @@ export default function LifeMapScreen() {
   const [takeoverAlert,   setTakeoverAlert]   = useState<TakeoverNotif | null>(null);
   const [roi,             setRoi]             = useState<RoiDeToulouse | null>(null);
   const [myCrewId,        setMyCrewId]        = useState<string | null>(null);
+  const [recentPulseIds,  setRecentPulseIds]  = useState<string[]>([]);
   const flyToRef = useRef<((lat: number, lng: number, zoom?: number, pitch?: number, bearing?: number) => void) | null>(null);
 
   useEffect(() => {
@@ -1407,7 +1475,46 @@ export default function LifeMapScreen() {
   );
   const visibleRealCount = visible.filter((p) => !p.is_npc).length;
   const visibleNpcCount = visible.length - visibleRealCount;
+  const cityPulseSignals = useMemo(() => {
+    const livingSignals = livingCityEventsToCityPulse(livingCity?.events ?? []);
+    return selectCityPulseOpportunities(livingSignals, {
+      district: avatar?.homeDistrict ?? "Capitole",
+      crewId: myCrewId,
+      wantsDating: true,
+      wantsSocial: true,
+      recentSignalIds: recentPulseIds,
+    });
+  }, [avatar?.homeDistrict, livingCity?.events, myCrewId, recentPulseIds]);
+  const crewDominance = useMemo(() => {
+    const inputs = crewZones.length > 0
+      ? crewZones.map((zone) => ({
+          id: zone.crew_id,
+          name: zone.crew.name,
+          district: zone.name,
+          reputation: zone.crew.reputation,
+          activity: Math.min(100, Math.max(0, zone.crew.member_count * 7)),
+          territoryCount: zone.is_bastion ? 2 : 1,
+          trend24h: zone.last_activity_at ? 2 : 0,
+        }))
+      : (livingCity?.crews ?? []).map((crew) => ({
+          id: crew.id,
+          name: crew.name,
+          district: crew.district,
+          reputation: crew.reputation,
+          activity: crew.activity,
+          territoryCount: 1,
+          trend24h: 0,
+        }));
+    return Object.values(crewDominanceByDistrict(inputs))
+      .sort((a, b) => (b.state === "contested" ? 1 : 0) - (a.state === "contested" ? 1 : 0) || b.dominant.score - a.dominant.score)
+      .slice(0, 3);
+  }, [crewZones, livingCity?.crews]);
   void presenceTick; // dépendance volontaire pour forcer le recalcul périodique
+
+  function handleCityPulsePress(signal: CityPulseSignal) {
+    setRecentPulseIds((ids) => [signal.id, ...ids.filter((id) => id !== signal.id)].slice(0, 12));
+    router.push(cityPulseRoute(signal) as never);
+  }
 
   // Zones crew + détection guerres
   useEffect(() => {
@@ -1628,16 +1735,18 @@ export default function LifeMapScreen() {
           backgroundColor: "rgba(8,8,15,0.88)", borderRadius: 14,
           paddingHorizontal: 14, paddingVertical: 10,
           borderWidth: 1, borderColor: C.border,
-          flexDirection: "row", alignItems: "center", gap: 8,
+          flex: 1, maxWidth: 460, gap: 2,
         }}>
-          <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.green,
-            shadowColor: C.green, shadowOpacity: 1, shadowRadius: 5 }} />
-          <Text style={{ color: C.text, fontSize: 13, fontWeight: "800" }}>
-            {visibleRealCount} joueurs · Toulouse
-          </Text>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.green,
+              shadowColor: C.green, shadowOpacity: 1, shadowRadius: 5 }} />
+            <Text style={{ color: C.text, fontSize: 13, fontWeight: "800" }} numberOfLines={1}>
+              {visible.length} actifs · Toulouse
+            </Text>
+          </View>
           {visibleNpcCount > 0 && (
-            <Text style={{ color: C.gold, fontSize: 10, fontWeight: "800" }}>
-              +{visibleNpcCount} SIMULÉ
+            <Text style={{ color: C.gold, fontSize: 10, fontWeight: "800" }} numberOfLines={1}>
+              {visibleRealCount} joueurs · {visibleNpcCount} habitants
             </Text>
           )}
         </View>
@@ -1688,6 +1797,9 @@ export default function LifeMapScreen() {
           ))}
         </ScrollView>
       )}
+
+      <CityPulseStrip signals={cityPulseSignals} onPress={handleCityPulsePress} />
+      <CrewDominanceStrip districts={crewDominance} onPress={() => router.push("/(app)/territories" as never)} />
 
       {/* ── GÉOLOC ────────────────────────────────────────────────────────── */}
       {!myLocation ? (

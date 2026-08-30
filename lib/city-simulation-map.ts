@@ -142,11 +142,26 @@ function actionLabel(npc: NpcState): string {
   const action = String(npc.currentActivity ?? npc.action ?? "idle");
   const labels: Record<string, string> = {
     working: "💼 Au travail",
-    eating: "🍽️ Mange",
+    work: "💼 Au travail",
+    study: "📚 Étudie",
+    eating: "🍽️ Mange en ville",
+    restaurant: "🍽️ Au restaurant",
+    cafe: "☕ Au café",
     chatting: "☕ Socialise",
+    outing: "🎉 En sortie",
+    date: "💫 En rencontre",
+    crew: "🤝 Avec son crew",
+    mission: "🎯 Sur une mission",
+    event: "🎉 Événement en ville",
     exercising: "🏋️ Fait du sport",
+    gym: "🏋️ Salle de sport",
+    park: "🌳 Au parc",
+    shopping: "🛍️ Shopping",
     walking: "🚶 Se déplace à pied",
+    car: "🚗 En voiture",
+    metro: "🚇 Dans le métro",
     sleeping: "💤 Dort",
+    sleep: "💤 Dort",
     idle: "🏠 Vie quotidienne",
     waving: "👋 Socialise",
   };
@@ -155,11 +170,25 @@ function actionLabel(npc: NpcState): string {
 
 function actionStatus(npc: NpcState): MapStatus {
   const action = String(npc.currentActivity ?? npc.action ?? "idle");
-  if (action === "chatting") return "vibe";
+  if (action === "chatting" || action === "outing" || action === "event" || action === "cafe") return "vibe";
+  if (action === "crew" || npc.crewId) return "taken";
+  if (action === "date") return "charo";
+  if (action === "mission") return "free";
   if ((npc.sociability ?? 0) >= 72 && npc.presenceOnline) return "charo";
   // Crew membership is a social affiliation, never a romantic relationship status.
   // Relationship-aware statuses can be projected here once NpcState exposes them explicitly.
   return "free";
+}
+
+function avatarFor(npc: NpcState): string {
+  const action = String(npc.currentActivity ?? npc.action ?? "idle");
+  if (npc.crewTag) return npc.crewTag.slice(0, 1).toUpperCase();
+  if (action === "working" || action === "work") return "💼";
+  if (action === "eating" || action === "restaurant" || action === "cafe") return "☕";
+  if (action === "exercising" || action === "gym") return "🏋️";
+  if (action === "chatting" || action === "outing" || action === "date") return "💬";
+  if (action === "mission") return "🎯";
+  return "🧑";
 }
 
 /** Stable, privacy-safe synthetic coordinates around a district centre.
@@ -170,6 +199,16 @@ export function projectNpcPosition(
   npc: NpcState,
   city: CitySimulationConfig = TOULOUSE_CITY,
 ): { lat: number; lng: number } {
+  const direct = npc as unknown as { lat?: unknown; lng?: unknown };
+  const directLat = typeof direct.lat === "number" ? direct.lat : null;
+  const directLng = typeof direct.lng === "number" ? direct.lng : null;
+  if (directLat != null && directLng != null) {
+    return {
+      lat: clamp(directLat, -90, 90),
+      lng: clamp(directLng, -180, 180),
+    };
+  }
+
   const districtName = npc.homeDistrictSlug ?? "Capitole";
   const district = city.districts[districtName] ?? {
     lat: city.center.lat,
@@ -197,7 +236,7 @@ export function livingNpcToMapPlayer(
     id: npc.id,
     user_id: npc.id,
     display_name: npc.name,
-    avatar_emoji: "🧑",
+    avatar_emoji: avatarFor(npc),
     status: actionStatus(npc),
     lat: pos.lat,
     lng: pos.lng,
