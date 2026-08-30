@@ -13,6 +13,8 @@ import {
   isPresenceFresh,
 } from "@/lib/life-map";
 import type { MapPlayer, MapStatus } from "@/lib/life-map";
+import { budgetForDevice } from "@/lib/city-map-projection";
+import { travelModeEmoji } from "@/lib/npc-travel";
 import {
   fetchBastions, subscribeToBastionTakeovers,
   type TakeoverNotif,
@@ -98,7 +100,9 @@ function PlayerMarker({ player, onPress }: { player: MapPlayer; onPress: () => v
           alignItems: "center", justifyContent: "center",
           shadowColor: cfg.color, shadowOpacity: 0.6, shadowRadius: 8,
         }}>
-          <Text style={{ fontSize: isStar ? 20 : 16 }}>{player.avatar_emoji}</Text>
+          <Text style={{ fontSize: isStar ? 20 : 16 }}>
+            {player.travel_mode ? travelModeEmoji(player.travel_mode) : player.avatar_emoji}
+          </Text>
         </View>
         {/* Bulle nom */}
         <View style={{
@@ -621,12 +625,22 @@ export default function LifeMapScreen() {
     setShowNearby(true);
   }
 
-  const visiblePlayers = players.filter((p) =>
-    p.status !== "ghost" &&
-    !blocked.includes(p.user_id) &&
-    (p.is_npc || isPresenceFresh(p.updated_at)) &&
-    (filter === "all" || p.status === filter)
-  );
+  // Budget natif : les <Marker> react-native-maps sont plus lourds que les
+  // cercles GeoJSON MapLibre → on matérialise moins d'habitants sur mobile
+  // natif (les vrais joueurs ne sont jamais coupés). Même moteur, même monde,
+  // seule la densité de rendu s'adapte à l'appareil.
+  const nativeCap = budgetForDevice("low");
+  const visiblePlayers = useMemo(() => {
+    const eligible = players.filter((p) =>
+      p.status !== "ghost" &&
+      !blocked.includes(p.user_id) &&
+      (p.is_npc || isPresenceFresh(p.updated_at)) &&
+      (filter === "all" || p.status === filter)
+    );
+    const real = eligible.filter((p) => !p.is_npc);
+    const npc = eligible.filter((p) => p.is_npc).slice(0, nativeCap);
+    return [...real, ...npc];
+  }, [players, blocked, filter, nativeCap]);
   const visibleRealCount = visiblePlayers.filter((p) => !p.is_npc).length;
   const visibleNpcCount = visiblePlayers.length - visibleRealCount;
   const cityPulseSignals = useMemo(() => {
