@@ -1,4 +1,5 @@
 import type { MapPlayer, MapStatus } from "@/lib/life-map";
+import { isTraveling, travelActivityLabel, travelModeEmoji, travelPosition } from "@/lib/npc-travel";
 import type { NpcState } from "@/lib/types";
 
 /**
@@ -127,18 +128,22 @@ export function estimateCityActivity(
   // detail; zooming out relies on clusters/aggregate city signals.
   const zoomFactor = clamp((zoom - 9) / 8, 0, 1);
   const rhythmFactor = clamp(mobileShare / 0.31, 0.25, 1);
-  const materializedAgents = Math.round(36 + zoomFactor * 84 + rhythmFactor * 40);
+  // Budget adaptatif : ville remplie au zoom ville, allégé au dézoom (clusters).
+  const materializedAgents = Math.round(110 + zoomFactor * 95 + rhythmFactor * 35);
 
   return {
     referencePopulation: city.referencePopulation,
     awakePopulation,
     mobilePopulation,
     socialPopulation,
-    materializedAgents: clamp(materializedAgents, 36, 160),
+    materializedAgents: clamp(materializedAgents, 80, 240),
   };
 }
 
-function actionLabel(npc: NpcState): string {
+function actionLabel(npc: NpcState, at: Date = new Date()): string {
+  if (isTraveling(npc, at) && npc.travelMode && npc.destDistrictSlug) {
+    return travelActivityLabel(npc.travelMode, npc.destDistrictSlug);
+  }
   const action = String(npc.currentActivity ?? npc.action ?? "idle");
   const labels: Record<string, string> = {
     working: "💼 Au travail",
@@ -180,7 +185,8 @@ function actionStatus(npc: NpcState): MapStatus {
   return "free";
 }
 
-function avatarFor(npc: NpcState): string {
+function avatarFor(npc: NpcState, at: Date = new Date()): string {
+  if (isTraveling(npc, at) && npc.travelMode) return travelModeEmoji(npc.travelMode);
   const action = String(npc.currentActivity ?? npc.action ?? "idle");
   if (npc.crewTag) return npc.crewTag.slice(0, 1).toUpperCase();
   if (action === "working" || action === "work") return "💼";
@@ -198,6 +204,7 @@ function avatarFor(npc: NpcState): string {
 export function projectNpcPosition(
   npc: NpcState,
   city: CitySimulationConfig = TOULOUSE_CITY,
+  at: Date = new Date(),
 ): { lat: number; lng: number } {
   const direct = npc as unknown as { lat?: unknown; lng?: unknown };
   const directLat = typeof direct.lat === "number" ? direct.lat : null;
@@ -209,7 +216,14 @@ export function projectNpcPosition(
     };
   }
 
-  const districtName = npc.homeDistrictSlug ?? "Capitole";
+  // PNJ en trajet : position interpolée entre les ancres origine/destination.
+  const traveling = travelPosition(npc, at);
+  if (traveling && isTraveling(npc, at)) {
+    return { lat: clamp(traveling.lat, -90, 90), lng: clamp(traveling.lng, -180, 180) };
+  }
+
+  // Sinon : autour du quartier courant (destination atteinte ou domicile).
+  const districtName = npc.currentDistrictSlug ?? npc.homeDistrictSlug ?? "Capitole";
   const district = city.districts[districtName] ?? {
     lat: city.center.lat,
     lng: city.center.lng,
@@ -230,19 +244,21 @@ export function projectNpcPosition(
 export function livingNpcToMapPlayer(
   npc: NpcState,
   city: CitySimulationConfig = TOULOUSE_CITY,
+  at: Date = new Date(),
 ): MapPlayer {
-  const pos = projectNpcPosition(npc, city);
+  const pos = projectNpcPosition(npc, city, at);
+  const moving = isTraveling(npc, at);
   return {
     id: npc.id,
     user_id: npc.id,
     display_name: npc.name,
-    avatar_emoji: avatarFor(npc),
+    avatar_emoji: avatarFor(npc, at),
     status: actionStatus(npc),
     lat: pos.lat,
     lng: pos.lng,
-    location_name: npc.homeDistrictSlug ?? city.name,
+    location_name: (moving ? npc.destDistrictSlug : npc.currentDistrictSlug) ?? npc.homeDistrictSlug ?? city.name,
     location_verified: false,
-    last_action: actionLabel(npc),
+    last_action: actionLabel(npc, at),
     is_star: false,
     is_npc: true,
     level: npc.level ?? 1,
@@ -259,9 +275,17 @@ export function selectMaterializedNpcs(
   zoom = 12,
 ): NpcState[] {
   const budget = estimateCityActivity(at, city, zoom).materializedAgents;
-  return npcs
-    .filter((npc) => npc.presenceOnline)
-    .sort((a, b) => hash(`${a.id}:${at.toDateString()}`) - hash(`${b.id}:${at.toDateString()}`))
+  // Ensemble STABLE tick après tick : tri par hash déterministe de l'id, sans
+  // la date ni presenceOnline (qui n'influencent que le statut affiché). Cela
+  // évite la valse ghost/add qui faisait "disparaître" la ville. Les PNJ
+  // endormis passent en fin de file pour privilégier une ville éveillée.
+  return [...npcs]
+    .sort((a, b) => {
+      const sleepA = a.action === "sleeping" ? 1 : 0;
+      const sleepB = b.action === "sleeping" ? 1 : 0;
+      if (sleepA !== sleepB) return sleepA - sleepB;
+      return hash(a.id) - hash(b.id);
+    })
     .slice(0, budget);
 }
 
@@ -271,7 +295,7 @@ export function livingNpcsToMapPlayers(
   at: Date = new Date(),
   zoom = 12,
 ): MapPlayer[] {
-  return selectMaterializedNpcs(npcs, at, city, zoom).map((npc) => livingNpcToMapPlayer(npc, city));
+  return selectMaterializedNpcs(npcs, at, city, zoom).map((npc) => livingNpcToMapPlayer(npc, city, at));
 }
 
 export function cityActivitySummary(realPlayers: MapPlayer[], npcs: NpcState[], at: Date = new Date()) {

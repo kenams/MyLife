@@ -9,3 +9,8 @@ workers/.dev.vars
 .claude/
 
 .vercel
+
+# Playwright
+e2e/.artifacts/
+playwright-report/
+test-results/

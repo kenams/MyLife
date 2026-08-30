@@ -10,12 +10,12 @@ import {
 
 describe("living city simulation", () => {
   it("seeds the QA population presets", () => {
-    expect(populationForPreset("LOW")).toBe(30);
-    expect(populationForPreset("NORMAL")).toBe(100);
-    expect(populationForPreset("BUSY")).toBe(250);
+    expect(populationForPreset("LOW")).toBe(40);
+    expect(populationForPreset("NORMAL")).toBe(200);
+    expect(populationForPreset("BUSY")).toBe(280);
 
     const busy = seedLivingCityNpcs("BUSY", new Date("2026-08-29T20:00:00Z"));
-    expect(busy).toHaveLength(250);
+    expect(busy).toHaveLength(280);
     expect(busy.every((npc) => npc.is_npc && npc.is_demo && !npc.is_qa)).toBe(true);
     expect(new Set(busy.map((npc) => npc.personality)).size).toBeGreaterThan(10);
   });
@@ -32,7 +32,7 @@ describe("living city simulation", () => {
       playerDistrict: "Capitole",
     });
 
-    expect(result.npcs).toHaveLength(250);
+    expect(result.npcs).toHaveLength(280);
     expect(result.feed.length).toBeGreaterThan(0);
     expect(result.notifications.length).toBeLessThanOrEqual(2);
     expect(result.state.notificationsLastMinute).toBe(result.notifications.length);

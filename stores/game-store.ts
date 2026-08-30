@@ -66,6 +66,7 @@ import {
   type LivingCitySpeed,
   type LivingCityState,
 } from "@/lib/living-city";
+import { pickSpontaneousNpcMoment } from "@/lib/npc-spontaneous";
 import { applyItemEffect, getItemById, SHOP_ITEMS } from "@/lib/inventory";
 import type { InventoryItem } from "@/lib/inventory";
 import type { NpcRelation } from "@/lib/types";
@@ -1035,6 +1036,12 @@ function createTestAccountState(preset: TestAccountPreset = "balanced") {
     dailyEvent: generateDailyEvent(detectLifePattern(stats)),
     lastKnownRank: getSocialRankLabel(stats.socialRankScore),
     lifeFeed,
+    // Compte DEV/QA : mi-parcours pour tester les fonctionnalités gâtées
+    // (Crews Nv2, missions IRL Nv3, rencontres Nv4, métier Nv5…). Le libellé
+    // du bouton de connexion rapide annonce déjà « Niv.8 ».
+    playerXp: preset === "burnout" ? 520 : 1500,
+    playerLevel: Math.max(1, Math.floor((preset === "burnout" ? 520 : 1500) / 200) + 1),
+    unlockedTalents: [] as string[],
     ...(preset === "live"
       ? {
           isPremium: true,
@@ -3025,7 +3032,43 @@ export const useGameStore = create<GameState>()(
         for (const item of result.notifications) notifications = appendNotification(notifications, item);
         let lifeFeed = s.lifeFeed;
         for (const item of result.feed) lifeFeed = appendFeed(lifeFeed, item);
-        return { livingCity: result.state, npcs: result.npcs, notifications, lifeFeed };
+
+        // Le monde vient vers le joueur : au plus une interaction spontanée
+        // toutes les SPONTANEOUS_COOLDOWN_MS, choisie par le NPC Brain via les
+        // événements du tick. Fonctionne aussi hors-ligne (rejeu au retour).
+        let livingCity = result.state;
+        const moment = pickSpontaneousNpcMoment(
+          result.state.events,
+          result.npcs,
+          {
+            playerDistrict: s.avatar?.homeDistrict ?? "Capitole",
+            playerLevel: s.playerLevel ?? 1,
+            lastMomentAt: result.state.lastSpontaneousAt ?? null,
+            recentMomentIds: result.state.recentSpontaneousIds ?? [],
+          },
+        );
+        if (moment) {
+          notifications = appendNotification(notifications, {
+            id: `notif-${moment.id}-${Date.now()}`,
+            kind: "social",
+            title: moment.title,
+            body: `${moment.body} · habitant simulé`,
+            createdAt: moment.createdAt,
+            read: false,
+          });
+          lifeFeed = appendFeed(lifeFeed, {
+            id: `feed-${moment.id}-${Date.now()}`,
+            title: moment.title,
+            body: `${moment.district} — ${moment.body}`,
+            createdAt: moment.createdAt,
+          });
+          livingCity = {
+            ...result.state,
+            lastSpontaneousAt: moment.createdAt,
+            recentSpontaneousIds: [moment.id, ...(result.state.recentSpontaneousIds ?? [])].slice(0, 8),
+          };
+        }
+        return { livingCity, npcs: result.npcs, notifications, lifeFeed };
       }),
 
       spawnLivingNpc: () => set((s) => {

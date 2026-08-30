@@ -436,6 +436,16 @@ export type NpcState = {
   crewTag?: string | null;
   relationMemory?: string[];
   npcWory?: number;
+  // ── Déplacement coarse (Living City) : un PNJ en trajet a un couple
+  // origine → destination + un mode + une fenêtre temporelle. La position
+  // visible est interpolée entre les deux ancres de quartier. Aucun timer par
+  // PNJ : ces champs sont lus par la simulation et la couche de présentation.
+  currentDistrictSlug?: string | null;
+  originDistrictSlug?: string | null;
+  destDistrictSlug?: string | null;
+  travelMode?: import("@/lib/npc-travel").TravelMode | null;
+  travelStartedAt?: string | null;
+  travelEndsAt?: string | null;
 };
 
 export type RoomInvite = {
