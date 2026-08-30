@@ -1570,10 +1570,6 @@ export default function LifeMapScreen() {
   const flyToRef = useRef<((lat: number, lng: number, zoom?: number, pitch?: number, bearing?: number) => void) | null>(null);
 
   useEffect(() => {
-    if (!isMobileWeb) setShowMapContext(false);
-  }, [isMobileWeb]);
-
-  useEffect(() => {
     getMyOfficerCrewId().then(setMyCrewId);
   }, []);
 
@@ -2061,25 +2057,26 @@ export default function LifeMapScreen() {
         </ScrollView>
       )}
 
+      {/* Bandeaux desktop : simple confort souris. Le MÊME contenu est
+          accessible partout via le tiroir ☰ (parité stricte web). */}
       {!isMobileWeb && <CityPulseStrip signals={cityPulseSignals} onPress={handleCityPulsePress} />}
       {!isMobileWeb && <CrewDominanceStrip districts={crewDominance} onPress={handleCrewContextPress} />}
 
-      {isMobileWeb && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${mapContextCount} informations autour de toi`}
-          onPress={() => setShowMapContext(true)}
-          style={{
-            position: "absolute", top: 63, right: 12, zIndex: 7,
-            minWidth: 48, height: 44, borderRadius: 22, paddingHorizontal: 10,
-            backgroundColor: "rgba(8,8,15,0.94)", borderWidth: 1, borderColor: C.gold + "55",
-            flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
-            shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 6,
-          }}>
-          <Text style={{ color: C.text, fontSize: 16, fontWeight: "900" }}>☰</Text>
-          <Text style={{ color: C.gold, fontSize: 11, fontWeight: "900" }}>{mapContextCount}</Text>
-        </Pressable>
-      )}
+      {/* Tiroir « Autour de toi » : disponible sur TOUS les viewports. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${mapContextCount} informations autour de toi`}
+        onPress={() => setShowMapContext(true)}
+        style={{
+          position: "absolute", top: isMobileWeb ? 63 : 108, right: isMobileWeb ? 12 : 16, zIndex: 7,
+          minWidth: 48, height: 44, borderRadius: 22, paddingHorizontal: 10,
+          backgroundColor: "rgba(8,8,15,0.94)", borderWidth: 1, borderColor: C.gold + "55",
+          flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
+          shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 6,
+        }}>
+        <Text style={{ color: C.text, fontSize: 16, fontWeight: "900" }}>☰</Text>
+        <Text style={{ color: C.gold, fontSize: 11, fontWeight: "900" }}>{mapContextCount}</Text>
+      </Pressable>
 
       {/* ── GÉOLOC ────────────────────────────────────────────────────────── */}
       {!myLocation ? (
@@ -2464,7 +2461,7 @@ export default function LifeMapScreen() {
       )}
 
       <MobileMapContextDrawer
-        visible={isMobileWeb && showMapContext}
+        visible={showMapContext}
         signals={cityPulseSignals}
         districts={crewDominance}
         takeoverAlert={takeoverAlert}
