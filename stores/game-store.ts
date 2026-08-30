@@ -66,6 +66,7 @@ import {
   type LivingCitySpeed,
   type LivingCityState,
 } from "@/lib/living-city";
+import { applyCityConsequences } from "@/lib/city-consequences";
 import { applyItemEffect, getItemById, SHOP_ITEMS } from "@/lib/inventory";
 import type { InventoryItem } from "@/lib/inventory";
 import type { NpcRelation } from "@/lib/types";
@@ -339,6 +340,7 @@ type GameState = {
   tickNpcs: () => void;
   configureLivingCity: (input: Partial<Pick<LivingCityState, "enabled" | "preset" | "speed">>) => void;
   runLivingCityTick: (minutes?: number) => void;
+  dismissCityDigest: () => void;
   spawnLivingNpc: () => void;
   createNpcCrew: () => void;
   triggerLivingCityEvent: (kind?: string) => void;
@@ -3019,8 +3021,9 @@ export const useGameStore = create<GameState>()(
       }),
 
       runLivingCityTick: (minutes) => set((s) => {
+        const prevLC = s.livingCity ?? createLivingCityState("NORMAL");
         const result = simulateLivingCityTick({
-          state: s.livingCity ?? createLivingCityState("NORMAL"),
+          state: prevLC,
           npcs: s.npcs ?? [],
           playerDistrict: s.avatar?.homeDistrict ?? "Capitole",
           forceMinutes: minutes,
@@ -3029,8 +3032,26 @@ export const useGameStore = create<GameState>()(
         for (const item of result.notifications) notifications = appendNotification(notifications, item);
         let lifeFeed = s.lifeFeed;
         for (const item of result.feed) lifeFeed = appendFeed(lifeFeed, item);
-        return { livingCity: result.state, npcs: result.npcs, notifications, lifeFeed };
+
+        // ── Conséquences autonomes bornées (pas de nouvelle simulation) ──
+        const prevSimAt = prevLC.lastSimulatedAt ? Date.parse(prevLC.lastSimulatedAt) : Date.now();
+        const consequences = applyCityConsequences(prevLC, result.state, {
+          playerDistrict: s.avatar?.homeDistrict ?? null,
+          elapsedMs: Date.now() - prevSimAt,
+          forced: minutes != null,
+        });
+
+        return {
+          livingCity: { ...result.state, ...consequences },
+          npcs: result.npcs,
+          notifications,
+          lifeFeed,
+        };
       }),
+
+      dismissCityDigest: () => set((s) => ({
+        livingCity: { ...(s.livingCity ?? createLivingCityState("NORMAL")), cityDigest: [], cityDigestAt: null },
+      })),
 
       spawnLivingNpc: () => set((s) => {
         const seeded = seedLivingCityNpcs("LOW");
@@ -4018,10 +4039,18 @@ export const useGameStore = create<GameState>()(
           (current, roomId) => current.includes(roomId) ? current : [...current, roomId],
           state.joinedRooms ?? []
         );
+        const prevLivingCity = state.livingCity ?? createLivingCityState("NORMAL");
         const livingResult = simulateLivingCityTick({
-          state: state.livingCity ?? createLivingCityState("NORMAL"),
+          state: prevLivingCity,
           npcs: state.npcs ?? seedLivingCityNpcs("NORMAL"),
           playerDistrict: state.avatar?.homeDistrict ?? "Capitole",
+        });
+        // Retour après absence : conséquences autonomes + résumé "pendant ton absence".
+        const rehydrateSimAt = prevLivingCity.lastSimulatedAt ? Date.parse(prevLivingCity.lastSimulatedAt) : Date.now();
+        const rehydrateConsequences = applyCityConsequences(prevLivingCity, livingResult.state, {
+          playerDistrict: state.avatar?.homeDistrict ?? null,
+          elapsedMs: Date.now() - rehydrateSimAt,
+          forced: false,
         });
         let notifications = buildAutomaticNotifications(stats, state.notifications);
         for (const item of livingResult.notifications) notifications = appendNotification(notifications, item);
@@ -4034,7 +4063,7 @@ export const useGameStore = create<GameState>()(
           advice: buildAdvice(stats),
           notifications,
           lifeFeed,
-          livingCity: livingResult.state,
+          livingCity: { ...livingResult.state, ...rehydrateConsequences },
           npcs: livingResult.npcs,
           rooms,
           joinedRooms,

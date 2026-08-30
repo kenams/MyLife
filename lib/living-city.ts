@@ -61,6 +61,11 @@ export type LivingCityState = {
   npcInteractionsLastTick: number;
   outingsLastTick: number;
   territorySignalsLastTick: number;
+  // Conséquences autonomes persistantes (voir lib/city-consequences.ts)
+  districtStates?: Record<string, { mood: string; score: number; at: string }>;
+  cityHistory?: { id: string; text: string; at: string }[];
+  cityDigest?: string[];
+  cityDigestAt?: string | null;
 };
 
 export type LivingCityTickInput = {
@@ -244,6 +249,10 @@ export function createLivingCityState(preset: LivingCityPreset = "NORMAL"): Livi
     npcInteractionsLastTick: 0,
     outingsLastTick: 0,
     territorySignalsLastTick: 0,
+    districtStates: {},
+    cityHistory: [],
+    cityDigest: [],
+    cityDigestAt: null,
   };
 }
 
