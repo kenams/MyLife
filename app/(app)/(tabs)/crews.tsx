@@ -692,6 +692,13 @@ export default function CrewsScreen() {
           <View style={{ alignItems: "center", paddingTop: 40 }}>
             <Text style={{ color: C.muted, fontSize: 13 }}>Chargement...</Text>
           </View>
+        ) : crews.length === 0 ? (
+          <View style={{ alignItems: "center", paddingVertical: 36, paddingHorizontal: 20, gap: 8 }}>
+            <Text style={{ color: C.text, fontSize: 14, fontWeight: "900", textAlign: "center" }}>Aucun crew joueur classé</Text>
+            <Text style={{ color: C.muted, fontSize: 12, lineHeight: 17, textAlign: "center" }}>
+              Le classement apparaîtra quand de vrais joueurs auront créé un crew.
+            </Text>
+          </View>
         ) : (
           crews.map((crew) => (
             <CrewCard
