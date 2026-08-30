@@ -166,7 +166,7 @@ const socialPulse: AppTheme = {
 };
 
 const quartierLife: AppTheme = {
-  id: "urban-premium",
+  id: "quartier-life",
   name: "Quartier Life",
   tagline: "Asphalte · Néon · Toulouse",
   emoji: "🏙️",
