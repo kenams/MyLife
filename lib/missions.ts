@@ -173,8 +173,20 @@ export function getActiveMissions(progresses: MissionProgress[], playerLevel: nu
   return MISSIONS.filter((m) => {
     if ((m.unlockLevel ?? 1) > playerLevel) return false;
     const prog = progresses.find((p) => p.missionId === m.id);
-    return !prog || prog.status === "active";
+    return !prog || prog.status === "active" || prog.status === "completed";
   }).slice(0, 6);
+}
+
+export function createInitialMissionProgresses(playerLevel: number, startedAt = new Date().toISOString()): MissionProgress[] {
+  return MISSIONS
+    .filter((mission) => (mission.unlockLevel ?? 1) <= playerLevel)
+    .slice(0, 6)
+    .map((mission) => ({
+      missionId: mission.id,
+      status: "active" as const,
+      requirements: mission.requirements.map((requirement) => ({ ...requirement, current: 0 })),
+      startedAt,
+    }));
 }
 
 export function applyActionToMissions(
@@ -232,7 +244,8 @@ export function claimMissionReward(
   missionId: string
 ): { updatedProgresses: MissionProgress[]; xp: number; money: number } {
   const mission = getMission(missionId);
-  if (!mission) return { updatedProgresses: progresses, xp: 0, money: 0 };
+  const claimable = progresses.some((progress) => progress.missionId === missionId && progress.status === "completed");
+  if (!mission || !claimable) return { updatedProgresses: progresses, xp: 0, money: 0 };
 
   const updatedProgresses = progresses.map((p) =>
     p.missionId === missionId && p.status === "completed"

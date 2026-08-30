@@ -27,6 +27,7 @@ import { useWorldEnvironment } from "@/hooks/use-world-environment";
 import { mapAmbientOverlay, weatherOverlay } from "@/lib/world-environment";
 import { ACTIVE_CITY } from "@/lib/city-config";
 import { useGameStore } from "@/stores/game-store";
+import { getNewPlayerMapStep, playableMapOpportunities } from "@/lib/new-player-loop";
 import {
   groupMapOpportunities,
   MAP_OPPORTUNITY_SECTION_LABELS,
@@ -536,6 +537,8 @@ export default function LifeMapScreen() {
   const hasHydrated       = useGameStore((s) => s.hasHydrated);
   const mapIntroDismissed = useGameStore((s) => s.mapIntroDismissed);
   const dismissMapIntro   = useGameStore((s) => s.dismissMapIntro);
+  const performAction     = useGameStore((s) => s.performAction);
+  const missionProgresses = useGameStore((s) => s.missionProgresses ?? []);
   const worldEnv          = useWorldEnvironment();
   const mapAmbient        = mapAmbientOverlay(worldEnv);
   const mapWeather        = weatherOverlay(worldEnv);
@@ -688,17 +691,25 @@ export default function LifeMapScreen() {
   const cityPulseSignals = useMemo(() => {
     const livingSignals = livingCityEventsToCityPulse(livingCity?.events ?? []);
     const lookingFor = avatar?.lookingFor ?? [];
-    return selectCityPulseOpportunities(livingSignals, {
+    const rankedSignals = selectCityPulseOpportunities(livingSignals, {
       district: avatar?.homeDistrict ?? "Capitole",
       // Respecte le choix fait à la création de l'avatar (pas de nouveau système).
       wantsDating: lookingFor.some((x) => /rencontre/i.test(x)),
       wantsSocial: lookingFor.some((x) => /ami|sortie|discussion|social/i.test(x)),
       recentSignalIds: recentPulseIds,
     });
-  }, [avatar?.homeDistrict, avatar?.lookingFor, livingCity?.events, recentPulseIds]);
+    return playableMapOpportunities(rankedSignals, playerLevel, missionProgresses);
+  }, [avatar?.homeDistrict, avatar?.lookingFor, livingCity?.events, missionProgresses, playerLevel, recentPulseIds]);
+  const newPlayerStep = useMemo(
+    () => getNewPlayerMapStep(playerLevel, missionProgresses),
+    [missionProgresses, playerLevel]
+  );
+  useEffect(() => {
+    if (newPlayerStep) setPrimarySuggestionDismissed(false);
+  }, [newPlayerStep?.signal.id]);
 
   const npcOpportunity = useMemo(() => {
-    const s = cityPulseSignals[0];
+    const s = cityPulseSignals.find((signal) => !signal.id.startsWith("new-player:"));
     if (!s) return null;
     return {
       label: s.district ? `Voir ${mapOpportunityKindLabel(s.kind)} · ${s.district}` : `Voir ${mapOpportunityKindLabel(s.kind)}`,
@@ -757,6 +768,21 @@ export default function LifeMapScreen() {
   function handleCityPulsePress(signal: CityPulseSignal) {
     setShowMapContext(false);
     setRecentPulseIds((ids) => [signal.id, ...ids.filter((id) => id !== signal.id)].slice(0, 12));
+    if (newPlayerStep?.signal.id === signal.id) {
+      if (newPlayerStep.intent === "explore") {
+        const xpBefore = useGameStore.getState().playerXp;
+        performAction("walk");
+        const xpEarned = useGameStore.getState().playerXp - xpBefore;
+        dismissMapIntro();
+        setMapFeedback(`Quartier exploré · +${xpEarned} XP`);
+        hapticImpact("medium");
+        return;
+      }
+      setPrimarySuggestionDismissed(true);
+      router.push(newPlayerStep.intent === "missions" ? "/(app)/missions" as never : "/(app)/(tabs)/home" as never);
+      return;
+    }
+    setPrimarySuggestionDismissed(true);
     router.push(cityPulseRoute(signal) as never);
   }
 

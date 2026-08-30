@@ -198,6 +198,12 @@ export function getTalentPoints(playerLevel: number): number {
   return Math.floor(playerLevel / 3);
 }
 
+export const PLAYER_XP_PER_LEVEL = 200;
+
+export function getPlayerLevelFromXp(playerXp: number): number {
+  return Math.max(1, Math.floor(Math.max(0, playerXp) / PLAYER_XP_PER_LEVEL) + 1);
+}
+
 // ── Paliers de ville : ce que la progression ouvre dans Toulouse ──
 export interface CityUnlock {
   id: string;
