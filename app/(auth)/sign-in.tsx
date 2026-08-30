@@ -451,11 +451,6 @@ export default function SignInScreen() {
     clear(); loadTestAccount(preset);
     router.replace("/(app)/(tabs)/map");
   }
-  async function demo() {
-    clear(); await signIn("demo@mylife.app", "");
-    router.replace("/(app)/(tabs)/map");
-  }
-
   async function quickTest() {
     clear(); setLoading(true);
     const r = await signIn("test@mylife.app", "test1234");
@@ -674,42 +669,33 @@ export default function SignInScreen() {
           </View>
         </Animated.View>
 
-        {/* ── ACCÈS RAPIDE ── */}
-        {tab === "signin" && (
+        {/* Raccourcis locaux : absents des builds et previews de production. */}
+        {__DEV__ && tab === "signin" && (
           <Animated.View style={{ opacity: mainOp, paddingHorizontal: 24 }}>
             <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 14 }}>
               <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
               <Text style={{ color: C.ghost, fontSize: 9, fontWeight: "900", letterSpacing: 2 }}>
-                SANS COMPTE
+                OUTILS LOCAUX
               </Text>
               <View style={{ flex: 1, height: 1, backgroundColor: C.border }} />
             </View>
             <View style={{ gap: 8 }}>
-              <AccessCard idx={0} emoji="⚡" color={C.green}
-                title="Démo instantanée"      sub="DÉMO locale · pas de compte, pas de présence réelle"
-                onPress={() => void demo()} />
+              <AccessCard idx={0} emoji="🧢" color={C.gold}
+                title="[DEV] Profil test — local, pas Supabase" sub="Équilibré · Niv.8"
+                onPress={() => enter("balanced")} />
+              <AccessCard idx={1} emoji="🔥" color={C.red}
+                title="[DEV] Mode pression" sub="Stats critiques · survie"
+                onPress={() => enter("burnout")} />
+              <AccessCard idx={2} emoji="💕" color={C.purple}
+                title="[DEV] Mode social" sub="Relations · dates · réseau"
+                onPress={() => enter("romantic")} />
+              <AccessCard idx={3} emoji="🌆" color={C.teal}
+                title="[DEV] Test live Supabase" sub="Tous modules · données réelles"
+                onPress={() => enter("live")} />
+              <AccessCard idx={4} emoji="⚡" color={C.gold}
+                title="[DEV] Connexion rapide" sub="test@mylife.app"
+                onPress={() => void quickTest()} />
             </View>
-
-            {/* Raccourcis QA — jamais visibles en build de production */}
-            {__DEV__ && (
-              <View style={{ gap: 8, marginTop: 8 }}>
-                <AccessCard idx={1} emoji="🧢" color={C.gold}
-                  title="[DEV] Profil test — local, pas Supabase"    sub="Équilibré · Niv.8"
-                  onPress={() => enter("balanced")} />
-                <AccessCard idx={2} emoji="🔥" color={C.red}
-                  title="[DEV] Mode pression"  sub="Stats critiques · survie"
-                  onPress={() => enter("burnout")} />
-                <AccessCard idx={3} emoji="💕" color={C.purple}
-                  title="[DEV] Mode social"    sub="Relations · dates · réseau"
-                  onPress={() => enter("romantic")} />
-                <AccessCard idx={4} emoji="🌆" color={C.teal}
-                  title="[DEV] Test live Supabase" sub="Tous modules · données réelles"
-                  onPress={() => enter("live")} />
-                <AccessCard idx={5} emoji="⚡" color={C.gold}
-                  title="[DEV] Connexion rapide" sub="test@mylife.app"
-                  onPress={() => void quickTest()} />
-              </View>
-            )}
           </Animated.View>
         )}
 

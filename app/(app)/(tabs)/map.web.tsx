@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated, Modal, Pressable, ScrollView,
-  Text, View, ActivityIndicator, TextInput,
+  Text, View, ActivityIndicator, TextInput, useWindowDimensions,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import Supercluster from "supercluster";
@@ -199,6 +199,11 @@ function injectMapStyles() {
     }
     .crew-zone-glow, .crew-zone-mega, .crew-zone-war {
       animation: crewGlowPulse 2.4s ease-in-out infinite;
+    }
+    @media (max-width: 640px) {
+      .mylife-map-container .maplibregl-ctrl-bottom-right .maplibregl-ctrl-group {
+        display: none !important;
+      }
     }
   `;
   document.head.appendChild(style);
@@ -1105,8 +1110,10 @@ function StatusPicker({ current, onChange, onClose }: {
 }
 
 // ── Filter Pills ──────────────────────────────────────────────────────────────
-function FilterPills({ active, onChange }: {
-  active: MapStatus | "all"; onChange: (f: MapStatus | "all") => void;
+function FilterPills({ active, onChange, compact = false }: {
+  active: MapStatus | "all";
+  onChange: (f: MapStatus | "all") => void;
+  compact?: boolean;
 }) {
   const pills: { key: MapStatus | "all"; label: string; color: string }[] = [
     { key: "all",   label: "Tous",    color: C.gold },
@@ -1117,16 +1124,18 @@ function FilterPills({ active, onChange }: {
   ];
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator={false}
-      style={{ position: "absolute", top: 108, left: 0, right: 0 }}
-      contentContainerStyle={{ paddingHorizontal: 16, gap: 8, flexDirection: "row" }}>
+      style={{ position: "absolute", top: compact ? 64 : 108, left: 0, right: compact ? 68 : 0 }}
+      contentContainerStyle={{ paddingHorizontal: compact ? 12 : 16, gap: compact ? 6 : 8, flexDirection: "row" }}>
       {pills.map((f) => {
         const on = active === f.key;
         return (
           <Pressable key={f.key} onPress={() => onChange(f.key)}
             style={{
-              paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20,
+              minHeight: compact ? 38 : undefined,
+              paddingHorizontal: compact ? 11 : 12, paddingVertical: compact ? 8 : 6, borderRadius: 20,
               backgroundColor: on ? f.color : "rgba(8,8,15,0.88)",
               borderWidth: 1, borderColor: on ? f.color : C.border,
+              justifyContent: "center",
             }}>
             <Text style={{ color: on ? "#04040A" : C.soft, fontSize: 11, fontWeight: "800" }}>
               {f.label}
@@ -1196,8 +1205,181 @@ function CrewDominanceStrip({ districts, onPress }: {
   );
 }
 
+function pulseKindLabel(kind: CityPulseSignal["kind"]): string {
+  if (kind === "CHALLENGE") return "Challenge";
+  if (kind === "DATING") return "Dating";
+  if (kind === "CREW") return "Crew";
+  if (kind === "MISSION" || kind === "EXPLORATION") return "Mission";
+  if (kind === "SOCIAL" || kind === "EVENT") return "Sortie";
+  return "Ville";
+}
+
+function MobileMapContextDrawer({
+  visible,
+  signals,
+  districts,
+  takeoverAlert,
+  roi,
+  onClose,
+  onPulsePress,
+  onCrewPress,
+  onRoiPress,
+}: {
+  visible: boolean;
+  signals: CityPulseSignal[];
+  districts: DistrictCrewDominance[];
+  takeoverAlert: TakeoverNotif | null;
+  roi: RoiDeToulouse | null;
+  onClose: () => void;
+  onPulsePress: (signal: CityPulseSignal) => void;
+  onCrewPress: () => void;
+  onRoiPress: () => void;
+}) {
+  const slide = useRef(new Animated.Value(380)).current;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    if (!visible) return;
+    slide.setValue(380);
+    Animated.timing(slide, { toValue: 0, duration: 210, useNativeDriver: true }).start();
+  }, [slide, visible]);
+
+  useEffect(() => {
+    if (!visible || typeof window === "undefined") return;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") onCloseRef.current();
+    };
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [visible]);
+
+  if (!visible) return null;
+
+  return (
+    <View
+      accessibilityViewIsModal
+      style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, zIndex: 100, flexDirection: "row", justifyContent: "flex-end" }}>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Fermer les informations de la carte"
+        onPress={onClose}
+        style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.5)" }}
+      />
+      <Animated.View style={{
+        width: "88%", maxWidth: 360, height: "100%",
+        backgroundColor: C.card, borderLeftWidth: 1, borderColor: C.border,
+        paddingTop: 12, paddingBottom: 12,
+        transform: [{ translateX: slide }],
+      }}>
+        <View style={{
+          minHeight: 56, paddingHorizontal: 16, paddingBottom: 10,
+          flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+          borderBottomWidth: 1, borderColor: C.border,
+        }}>
+          <View>
+            <Text style={{ color: C.text, fontSize: 17, fontWeight: "900" }}>Autour de toi</Text>
+            <Text style={{ color: C.soft, fontSize: 11, marginTop: 2 }}>Toulouse en ce moment</Text>
+          </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Fermer"
+            onPress={onClose}
+            style={{ width: 44, height: 44, borderRadius: 22, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(255,255,255,0.06)" }}>
+            <Text style={{ color: C.text, fontSize: 23 }}>×</Text>
+          </Pressable>
+        </View>
+
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          style={{ flex: 1 }}
+          contentContainerStyle={{ padding: 14, paddingBottom: 28, gap: 10 }}>
+          {takeoverAlert && (
+            <Pressable onPress={onCrewPress} style={{
+              minHeight: 64, backgroundColor: takeoverAlert.newCrewColor + "18", borderRadius: 8, padding: 12,
+              borderWidth: 1, borderColor: takeoverAlert.newCrewColor + "70",
+              flexDirection: "row", alignItems: "center", gap: 10,
+            }}>
+              <Text style={{ fontSize: 22 }}>{takeoverAlert.newCrewEmoji}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: takeoverAlert.newCrewColor, fontSize: 10, fontWeight: "900" }}>CONQUÊTE</Text>
+                <Text style={{ color: C.text, fontSize: 12, fontWeight: "800", marginTop: 2 }} numberOfLines={2}>
+                  [{takeoverAlert.newCrewTag}] a pris {takeoverAlert.bastionName}
+                </Text>
+              </View>
+              <Text style={{ color: C.soft, fontSize: 16 }}>→</Text>
+            </Pressable>
+          )}
+
+          {signals.map((signal) => (
+            <Pressable key={signal.id} onPress={() => onPulsePress(signal)} style={{
+              minHeight: 74, backgroundColor: "rgba(255,255,255,0.045)", borderRadius: 8, padding: 12,
+              borderWidth: 1,
+              borderColor: signal.kind === "CHALLENGE" ? C.red + "70" : signal.kind === "MISSION" ? C.gold + "70" : C.border,
+            }}>
+              <Text style={{ color: signal.kind === "CHALLENGE" ? C.red : C.gold, fontSize: 10, fontWeight: "900" }} numberOfLines={1}>
+                {pulseKindLabel(signal.kind)}{signal.district ? ` · ${signal.district}` : ""}
+              </Text>
+              <Text style={{ color: C.text, fontSize: 13, fontWeight: "900", marginTop: 3 }} numberOfLines={2}>
+                {signal.title}
+              </Text>
+              <Text style={{ color: C.soft, fontSize: 11, marginTop: 3 }} numberOfLines={3}>
+                {signal.body}
+              </Text>
+            </Pressable>
+          ))}
+
+          {districts.map((item) => (
+            <Pressable key={`${item.district}:${item.dominant.id}`} onPress={onCrewPress} style={{
+              minHeight: 62, backgroundColor: item.state === "contested" ? C.red + "12" : "rgba(255,255,255,0.045)",
+              borderRadius: 8, padding: 12, borderWidth: 1,
+              borderColor: item.state === "contested" ? C.red + "60" : C.border,
+            }}>
+              <Text style={{ color: item.state === "contested" ? C.red : C.gold, fontSize: 10, fontWeight: "900" }}>
+                {item.state === "contested" ? "CREW CONTESTÉ" : "CREW DOMINANT"} · {item.district}
+              </Text>
+              <Text style={{ color: C.text, fontSize: 12, fontWeight: "800", marginTop: 3 }} numberOfLines={2}>
+                {item.dominant.name}{item.challenger ? ` vs ${item.challenger.name}` : ""} · {item.trend}
+              </Text>
+            </Pressable>
+          ))}
+
+          {roi && (
+            <Pressable onPress={onRoiPress} style={{
+              minHeight: 62, backgroundColor: C.gold + "10", borderRadius: 8, padding: 12,
+              borderWidth: 1, borderColor: C.gold + "45", flexDirection: "row", alignItems: "center", gap: 10,
+            }}>
+              <Text style={{ fontSize: 22 }}>{roi.avatar_emoji}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: C.gold, fontSize: 10, fontWeight: "900" }}>ROI DE TOULOUSE</Text>
+                <Text style={{ color: C.text, fontSize: 12, fontWeight: "800", marginTop: 2 }} numberOfLines={1}>
+                  {roi.display_name}{roi.crew_tag ? ` · [${roi.crew_tag}]` : ""}
+                </Text>
+              </View>
+              <Text style={{ color: C.soft, fontSize: 16 }}>→</Text>
+            </Pressable>
+          )}
+
+          {!takeoverAlert && signals.length === 0 && districts.length === 0 && !roi && (
+            <Text style={{ color: C.muted, fontSize: 13, textAlign: "center", paddingVertical: 36 }}>
+              Rien de prioritaire autour de toi pour le moment.
+            </Text>
+          )}
+        </ScrollView>
+      </Animated.View>
+    </View>
+  );
+}
+
 // ── Screen ────────────────────────────────────────────────────────────────────
 export default function LifeMapScreen() {
+  const { width: viewportWidth } = useWindowDimensions();
+  const isMobileWeb = viewportWidth <= 640;
   const avatar           = useGameStore((s) => s.avatar);
   const playerLevel      = useGameStore((s) => s.playerLevel ?? 1);
   const markQuestAction  = useGameStore((s) => s.markQuestAction);
@@ -1353,7 +1535,12 @@ export default function LifeMapScreen() {
   const [roi,             setRoi]             = useState<RoiDeToulouse | null>(null);
   const [myCrewId,        setMyCrewId]        = useState<string | null>(null);
   const [recentPulseIds,  setRecentPulseIds]  = useState<string[]>([]);
+  const [showMapContext,  setShowMapContext]  = useState(false);
   const flyToRef = useRef<((lat: number, lng: number, zoom?: number, pitch?: number, bearing?: number) => void) | null>(null);
+
+  useEffect(() => {
+    if (!isMobileWeb) setShowMapContext(false);
+  }, [isMobileWeb]);
 
   useEffect(() => {
     getMyOfficerCrewId().then(setMyCrewId);
@@ -1514,8 +1701,19 @@ export default function LifeMapScreen() {
   void presenceTick; // dépendance volontaire pour forcer le recalcul périodique
 
   function handleCityPulsePress(signal: CityPulseSignal) {
+    setShowMapContext(false);
     setRecentPulseIds((ids) => [signal.id, ...ids.filter((id) => id !== signal.id)].slice(0, 12));
     router.push(cityPulseRoute(signal) as never);
+  }
+
+  function handleCrewContextPress() {
+    setShowMapContext(false);
+    router.push("/(app)/territories" as never);
+  }
+
+  function handleRoiPress() {
+    setShowMapContext(false);
+    router.push("/(app)/leaderboard" as never);
   }
 
   // Zones crew + détection guerres
@@ -1666,9 +1864,10 @@ export default function LifeMapScreen() {
   }
 
   const cfg = STATUS_CONFIG[myStatus];
+  const mapContextCount = cityPulseSignals.length + crewDominance.length + (takeoverAlert ? 1 : 0) + (roi ? 1 : 0);
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.void }}>
+    <View style={{ flex: 1, minHeight: 0, backgroundColor: C.void }}>
 
       {/* ── MAP LEAFLET (DOM direct) ──────────────────────────────────────── */}
       {!mapFailed && (
@@ -1728,42 +1927,43 @@ export default function LifeMapScreen() {
       )}
 
       {/* ── HEADER ────────────────────────────────────────────────────────── */}
-      <View style={{
+      <View pointerEvents="box-none" style={{
         position: "absolute", top: 0, left: 0, right: 0, zIndex: 5,
-        paddingTop: 54, paddingHorizontal: 16, paddingBottom: 10,
-        flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10,
+        paddingTop: isMobileWeb ? 10 : 54, paddingHorizontal: isMobileWeb ? 12 : 16, paddingBottom: isMobileWeb ? 6 : 10,
+        flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: isMobileWeb ? 6 : 10,
       }}>
         <View style={{
-          backgroundColor: "rgba(8,8,15,0.88)", borderRadius: 14,
-          paddingHorizontal: 14, paddingVertical: 10,
+          backgroundColor: "rgba(8,8,15,0.88)", borderRadius: isMobileWeb ? 10 : 14,
+          paddingHorizontal: isMobileWeb ? 9 : 14, paddingVertical: isMobileWeb ? 6 : 10,
           borderWidth: 1, borderColor: C.border,
-          flex: 1, maxWidth: 460, gap: 2,
+          flex: 1, maxWidth: isMobileWeb ? 178 : 460, gap: 1,
         }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-            <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: C.green,
+          <View style={{ flexDirection: "row", alignItems: "center", gap: isMobileWeb ? 6 : 8 }}>
+            <View style={{ width: isMobileWeb ? 6 : 7, height: isMobileWeb ? 6 : 7, borderRadius: 4, backgroundColor: C.green,
               shadowColor: C.green, shadowOpacity: 1, shadowRadius: 5 }} />
-            <Text style={{ color: C.text, fontSize: 13, fontWeight: "800" }} numberOfLines={1}>
+            <Text style={{ color: C.text, fontSize: isMobileWeb ? 11 : 13, fontWeight: "800" }} numberOfLines={1}>
               {visible.length} actifs · Toulouse
             </Text>
           </View>
-          {visibleNpcCount > 0 && (
-            <Text style={{ color: C.gold, fontSize: 10, fontWeight: "800" }} numberOfLines={1}>
-              {visibleRealCount} joueurs · {visibleNpcCount} habitants
-            </Text>
-          )}
+          <Text style={{ color: C.gold, fontSize: isMobileWeb ? 9 : 10, fontWeight: "800" }} numberOfLines={1}>
+            {visibleRealCount} réels · {visibleNpcCount} simulés
+          </Text>
         </View>
 
-        <Pressable onPress={() => setShowPicker(true)}
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`Statut actuel : ${cfg.label}. Modifier le statut`}
+          onPress={() => setShowPicker(true)}
           style={{
-            backgroundColor: "rgba(8,8,15,0.88)", borderRadius: 14,
-            paddingHorizontal: 12, paddingVertical: 10,
+            minHeight: 44, backgroundColor: "rgba(8,8,15,0.88)", borderRadius: isMobileWeb ? 12 : 14,
+            paddingHorizontal: isMobileWeb ? 10 : 12, paddingVertical: isMobileWeb ? 7 : 10,
             borderWidth: 1, borderColor: cfg.color + "50",
-            flexDirection: "row", alignItems: "center", gap: 6,
+            flexDirection: "row", alignItems: "center", gap: isMobileWeb ? 5 : 6,
           }}>
           <Text style={{ fontSize: 14 }}>{cfg.emoji}</Text>
           <View>
-            <Text style={{ color: C.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1 }}>STATUT</Text>
-            <Text style={{ color: cfg.color, fontSize: 12, fontWeight: "900" }}>{cfg.label}</Text>
+            {!isMobileWeb && <Text style={{ color: C.muted, fontSize: 9, fontWeight: "800", letterSpacing: 1 }}>STATUT</Text>}
+            <Text style={{ color: cfg.color, fontSize: isMobileWeb ? 11 : 12, fontWeight: "900" }} numberOfLines={1}>{cfg.label}</Text>
           </View>
         </Pressable>
       </View>
@@ -1777,22 +1977,22 @@ export default function LifeMapScreen() {
       laisse passer les clics sauf sur les enfants interactifs réels — même
       correctif appliqué au wrapper des filtres missions juste après. */}
       <View style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 5 }} pointerEvents="box-none">
-        <FilterPills active={filter} onChange={setFilter} />
+        <FilterPills active={filter} onChange={setFilter} compact={isMobileWeb} />
       </View>
 
       {/* ── FILTRES MISSIONS — indépendants des filtres joueurs ─────────────── */}
       {seasonId && (
         <ScrollView horizontal showsHorizontalScrollIndicator={false}
-          style={{ position: "absolute", top: 148, left: 0, right: 0, zIndex: 5 }}
+          style={{ position: "absolute", top: isMobileWeb ? 106 : 148, left: 0, right: 0, zIndex: 5 }}
           pointerEvents="box-none"
-          contentContainerStyle={{ paddingHorizontal: 16, gap: 8 }}>
+          contentContainerStyle={{ paddingHorizontal: isMobileWeb ? 12 : 16, gap: isMobileWeb ? 6 : 8 }}>
           {([
             ["all", "🌆 Missions"], ["explore", "Explorer"], ["move", "Bouger"], ["social", "Social"],
             ["available", "Disponibles"], ["in_progress", "En cours"], ["done", "Terminées"],
           ] as const).map(([key, label]) => (
             <Pressable key={key} onPress={() => setMissionFilter(key)}
               style={{ backgroundColor: missionFilter === key ? C.gold : "rgba(8,8,15,0.88)", borderRadius: 14,
-                paddingHorizontal: 12, paddingVertical: 7, borderWidth: 1,
+                minHeight: isMobileWeb ? 38 : undefined, paddingHorizontal: 12, paddingVertical: isMobileWeb ? 8 : 7, borderWidth: 1,
                 borderColor: missionFilter === key ? C.gold : C.border }}>
               <Text style={{ color: missionFilter === key ? "#04040A" : C.soft, fontSize: 11, fontWeight: "800" }}>{label}</Text>
             </Pressable>
@@ -1800,15 +2000,32 @@ export default function LifeMapScreen() {
         </ScrollView>
       )}
 
-      <CityPulseStrip signals={cityPulseSignals} onPress={handleCityPulsePress} />
-      <CrewDominanceStrip districts={crewDominance} onPress={() => router.push("/(app)/territories" as never)} />
+      {!isMobileWeb && <CityPulseStrip signals={cityPulseSignals} onPress={handleCityPulsePress} />}
+      {!isMobileWeb && <CrewDominanceStrip districts={crewDominance} onPress={handleCrewContextPress} />}
+
+      {isMobileWeb && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={`${mapContextCount} informations autour de toi`}
+          onPress={() => setShowMapContext(true)}
+          style={{
+            position: "absolute", top: 63, right: 12, zIndex: 7,
+            minWidth: 48, height: 44, borderRadius: 22, paddingHorizontal: 10,
+            backgroundColor: "rgba(8,8,15,0.94)", borderWidth: 1, borderColor: C.gold + "55",
+            flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
+            shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 6,
+          }}>
+          <Text style={{ color: C.text, fontSize: 16, fontWeight: "900" }}>☰</Text>
+          <Text style={{ color: C.gold, fontSize: 11, fontWeight: "900" }}>{mapContextCount}</Text>
+        </Pressable>
+      )}
 
       {/* ── GÉOLOC ────────────────────────────────────────────────────────── */}
       {!myLocation ? (
-        <View style={{ position: "absolute", bottom: 110, left: 20, right: 20, zIndex: 5 }}>
+        <View style={{ position: "absolute", bottom: isMobileWeb ? 14 : 110, left: isMobileWeb ? 12 : 20, right: isMobileWeb ? 12 : 20, zIndex: 5 }}>
           <Pressable onPress={() => void activateLocation()}
             style={{
-              backgroundColor: C.gold, borderRadius: 18, paddingVertical: 18,
+              minHeight: 48, backgroundColor: C.gold, borderRadius: isMobileWeb ? 14 : 18, paddingVertical: isMobileWeb ? 13 : 18,
               alignItems: "center", shadowColor: C.gold, shadowOpacity: 0.5, shadowRadius: 24,
               flexDirection: "row", justifyContent: "center", gap: 10,
             }}>
@@ -1816,7 +2033,7 @@ export default function LifeMapScreen() {
               ? <ActivityIndicator color="#04040A" />
               : <>
                   <Text style={{ fontSize: 20 }}>📍</Text>
-                  <Text style={{ color: "#04040A", fontSize: 16, fontWeight: "900" }}>
+                  <Text style={{ color: "#04040A", fontSize: isMobileWeb ? 14 : 16, fontWeight: "900" }}>
                     Apparaître sur la map
                   </Text>
                 </>
@@ -1827,7 +2044,7 @@ export default function LifeMapScreen() {
           </Text>
         </View>
       ) : (
-        <View style={{ position: "absolute", bottom: 100, right: 16, zIndex: 5, gap: 10 }}>
+        <View style={{ position: "absolute", bottom: isMobileWeb ? 14 : 100, right: isMobileWeb ? 12 : 16, zIndex: 5, gap: 8 }}>
           {/* Recentrer */}
           <Pressable
             onPress={() => zoomAnimTrigger(myLocation.lat, myLocation.lng)}
@@ -1856,13 +2073,14 @@ export default function LifeMapScreen() {
       {/* ── BASTION CHECK-IN ALERT ───────────────────────────────────────── */}
       {bastionAlert && !checkinDone && (
         <View style={{
-          position: "absolute", top: 80, left: 16, right: 16, zIndex: 20,
-          backgroundColor: C.card, borderRadius: 16, padding: 16,
+          position: "absolute", top: isMobileWeb ? (seasonId ? 150 : 108) : 80,
+          left: isMobileWeb ? 12 : 16, right: isMobileWeb ? 12 : 16, zIndex: 20,
+          backgroundColor: C.card, borderRadius: isMobileWeb ? 12 : 16, padding: isMobileWeb ? 12 : 16,
           borderWidth: 1.5, borderColor: C.gold + "60",
           shadowColor: C.gold, shadowOpacity: 0.3, shadowRadius: 16,
           flexDirection: "row", alignItems: "center", gap: 12,
         }}>
-          <Text style={{ fontSize: 28 }}>🏰</Text>
+          <Text style={{ fontSize: isMobileWeb ? 22 : 28 }}>🏰</Text>
           <View style={{ flex: 1 }}>
             <Text style={{ color: C.gold, fontSize: 13, fontWeight: "900" }}>
               Tu es dans le bastion [{bastionAlert.zone.crew?.tag}]
@@ -1903,7 +2121,8 @@ export default function LifeMapScreen() {
           <Pressable
             onPress={() => setShowMatchmaking((p) => !p)}
             style={{
-              position: "absolute", bottom: 100, left: 16, zIndex: 5,
+              position: "absolute", bottom: isMobileWeb ? 14 : 100, left: isMobileWeb ? 12 : 16, zIndex: 5,
+              minHeight: 46,
               backgroundColor: showMatchmaking ? C.purple + "25" : "rgba(8,8,15,0.92)",
               borderRadius: 13, paddingHorizontal: 12, paddingVertical: 10,
               borderWidth: 1.5, borderColor: showMatchmaking ? C.purple : C.border,
@@ -1929,8 +2148,9 @@ export default function LifeMapScreen() {
               .slice(0, 5);
             return (
               <View style={{
-                position: "absolute", bottom: 158, left: 16, zIndex: 10,
-                backgroundColor: C.card, borderRadius: 16, padding: 16, width: 240,
+                position: "absolute", bottom: isMobileWeb ? 68 : 158, left: isMobileWeb ? 12 : 16, zIndex: 10,
+                backgroundColor: C.card, borderRadius: 16, padding: 16,
+                width: isMobileWeb ? Math.min(280, viewportWidth - 24) : 240,
                 borderWidth: 1, borderColor: C.purple + "40",
                 shadowColor: C.purple, shadowOpacity: 0.3, shadowRadius: 20,
               }}>
@@ -2182,8 +2402,20 @@ export default function LifeMapScreen() {
         />
       )}
 
+      <MobileMapContextDrawer
+        visible={isMobileWeb && showMapContext}
+        signals={cityPulseSignals}
+        districts={crewDominance}
+        takeoverAlert={takeoverAlert}
+        roi={roi}
+        onClose={() => setShowMapContext(false)}
+        onPulsePress={handleCityPulsePress}
+        onCrewPress={handleCrewContextPress}
+        onRoiPress={handleRoiPress}
+      />
+
       {/* ── FEATURE VIRALE 1 — Alerte prise de bastion ──────────────────── */}
-      {takeoverAlert && (
+      {takeoverAlert && !isMobileWeb && (
         <View style={{
           position: "absolute", bottom: 160, left: 16, right: 16, zIndex: 30,
           backgroundColor: takeoverAlert.newCrewColor + "22",
@@ -2209,7 +2441,7 @@ export default function LifeMapScreen() {
       )}
 
       {/* ── FEATURE VIRALE 3 — Roi de Toulouse widget ───────────────────── */}
-      {roi && (
+      {roi && !isMobileWeb && (
         <View style={{
           position: "absolute", top: 156, right: 16, zIndex: 6,
           backgroundColor: "rgba(8,8,15,0.92)", borderRadius: 14,

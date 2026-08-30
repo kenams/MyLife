@@ -552,6 +552,7 @@ export default function ProfileScreen() {
             </Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {[
+                { label: "✨ Ma vie",       route: "/(app)/(tabs)/home",   color: L.orange  },
                 { label: "🏆 Classement",   route: "/(app)/leaderboard",    color: L.gold    },
                 { label: "⚡ Progression",   route: "/(app)/progression",    color: L.primary },
                 { label: "🎯 Missions",      route: "/(app)/missions",       color: L.red     },
