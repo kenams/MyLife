@@ -929,7 +929,7 @@ export default function LifeMapScreen() {
       <MapFirstSessionHint
         visible={hasHydrated && !mapIntroDismissed && !showMapContext && !selected}
         onDismiss={dismissMapIntro}
-        bottom={myLocation ? 116 : 200}
+        bottom={myLocation ? 220 : 200}
         palette={{ background: L.card + "F5", border: L.primary + "70", text: L.text, muted: L.muted, accent: L.primary }}
       />
 
@@ -942,13 +942,13 @@ export default function LifeMapScreen() {
           if (id) setRecentPulseIds((ids) => [id, ...ids.filter((x) => x !== id)].slice(0, 12));
           setPrimarySuggestionDismissed(true);
         }}
-        bottom={myLocation ? 116 : 200}
+        bottom={myLocation ? 220 : 200}
         palette={{ background: L.card + "F5", border: L.primary + "55", text: L.text, muted: L.textSoft, accent: L.primary }}
       />
 
       {mapFeedback && (
         <View pointerEvents="none" style={{
-          position: "absolute", bottom: myLocation ? 76 : 60, alignSelf: "center", zIndex: 45,
+          position: "absolute", bottom: 110, alignSelf: "center", zIndex: 45,
           backgroundColor: L.green + "E8", borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10,
           borderWidth: 1, borderColor: L.green,
         }}>
