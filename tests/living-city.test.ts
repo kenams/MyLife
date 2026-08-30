@@ -122,4 +122,42 @@ describe("living city simulation", () => {
     expect(result.state.npcInteractionsLastTick).toBe(1);
     expect(touched.every((npc) => (npc.relationMemory ?? []).some((line) => line.startsWith("OUTING:")))).toBe(true);
   });
+
+  it("applies mission, crew and social consequences without server rewards", () => {
+    const now = new Date("2026-08-29T20:00:00Z");
+    const baseNpcs = seedLivingCityNpcs("NORMAL", now);
+
+    const mission = simulateLivingCityTick({
+      state: createLivingCityState("NORMAL"),
+      npcs: baseNpcs,
+      now: new Date("2026-08-29T20:15:00Z"),
+      forceKind: "MISSION",
+    });
+    const missionActorId = mission.state.events[0]?.actorNpcIds[0];
+    const beforeMissionActor = baseNpcs.find((npc) => npc.id === missionActorId);
+    const afterMissionActor = mission.npcs.find((npc) => npc.id === missionActorId);
+    expect(afterMissionActor?.xp ?? 0).toBeGreaterThan(beforeMissionActor?.xp ?? 0);
+    expect(afterMissionActor?.npcWory ?? 0).toBeGreaterThanOrEqual(beforeMissionActor?.npcWory ?? 0);
+
+    const crew = simulateLivingCityTick({
+      state: createLivingCityState("NORMAL"),
+      npcs: baseNpcs.map((npc) => ({ ...npc, crewId: null, crewName: null, crewTag: null })),
+      now: new Date("2026-08-29T20:20:00Z"),
+      forceKind: "CREW",
+    });
+    const crewActor = crew.npcs.find((npc) => npc.id === crew.state.events[0]?.actorNpcIds[0]);
+    expect(crewActor?.crewId).toBeTruthy();
+    expect(crewActor?.relationMemory?.some((line) => line.startsWith("CREW:"))).toBe(true);
+
+    const social = simulateLivingCityTick({
+      state: createLivingCityState("NORMAL"),
+      npcs: baseNpcs,
+      now: new Date("2026-08-29T20:25:00Z"),
+      forceKind: "FEELING",
+    });
+    const socialEvent = social.state.events[0];
+    const touched = social.npcs.filter((npc) => socialEvent?.actorNpcIds.includes(npc.id));
+    expect(touched).toHaveLength(2);
+    expect(touched.every((npc) => (npc.relationMemory ?? []).some((line) => line.startsWith("FEELING:")))).toBe(true);
+  });
 });

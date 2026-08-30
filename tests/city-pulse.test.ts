@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  cityPulseRoute,
+  crewDominanceByDistrict,
   dominantCrewByDistrict,
+  livingCityEventsToCityPulse,
   rankCrewDominance,
   safePublicCitySignal,
   selectCityPulseOpportunities,
@@ -18,10 +21,15 @@ describe("city pulse", () => {
 
     const ranked = rankCrewDominance(crews);
     const byDistrict = dominantCrewByDistrict(crews);
+    const districts = crewDominanceByDistrict(crews);
 
     expect(ranked[0].rank).toBe(1);
     expect(byDistrict.Capitole.id).toBe("a");
     expect(byDistrict.Compans.id).toBe("c");
+    expect(districts.Capitole.dominant.id).toBe("a");
+    expect(districts.Capitole.challenger?.id).toBe("b");
+    expect(districts.Capitole).not.toHaveProperty("lat");
+    expect(districts.Capitole).not.toHaveProperty("lng");
   });
 
   it("selects at most three relevant opportunities and favors the player's district", () => {
@@ -70,5 +78,56 @@ describe("city pulse", () => {
 
     expect(signal?.source).toBe("PUBLIC");
     expect(signal?.actionable).toBe(false);
+  });
+
+  it("deduplicates opportunities and applies recent signal cooldown", () => {
+    const signals: CityPulseSignal[] = [
+      { id: "same", kind: "MISSION", title: "Mission", body: "Va a Capitole", district: "Capitole", priority: 90, source: "GAME" },
+      { id: "same", kind: "MISSION", title: "Mission", body: "Va a Capitole", district: "Capitole", priority: 90, source: "GAME" },
+      { id: "fresh", kind: "SOCIAL", title: "Social", body: "Sortie", district: "Capitole", priority: 55, source: "GAME" },
+    ];
+
+    const selected = selectCityPulseOpportunities(signals, { recentSignalIds: ["same"] });
+
+    expect(selected.map((signal) => signal.id)).toEqual(["fresh"]);
+  });
+
+  it("converts Living City events into actionable routes", () => {
+    const signals = livingCityEventsToCityPulse([
+      {
+        id: "evt-1",
+        kind: "MISSION",
+        title: "Missions",
+        body: "Lina termine une mission.",
+        district: "Capitole",
+        at: "2026-08-29T20:00:00Z",
+        priority: 80,
+        crewIds: ["crew-a"],
+      },
+      {
+        id: "evt-2",
+        kind: "BATTLE",
+        title: "Battle",
+        body: "Battle de territoire.",
+        district: "Compans",
+        at: "2026-08-29T20:00:00Z",
+        priority: 82,
+        crewIds: ["crew-a", "crew-b"],
+      },
+      {
+        id: "evt-3",
+        kind: "FEELING",
+        title: "Feeling",
+        body: "Un feeling arrive.",
+        district: "Carmes",
+        at: "2026-08-29T20:00:00Z",
+        priority: 78,
+      },
+    ]);
+
+    expect(signals.map((signal) => signal.kind)).toEqual(["MISSION", "CHALLENGE", "DATING"]);
+    expect(cityPulseRoute(signals[0])).toBe("/(app)/missions");
+    expect(cityPulseRoute(signals[1])).toBe("/(app)/territories");
+    expect(cityPulseRoute(signals[2])).toBe("/(app)/rencontres");
   });
 });

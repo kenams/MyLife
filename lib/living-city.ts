@@ -1,4 +1,5 @@
 import type { AvatarAction } from "@/lib/avatar-visual";
+import { chooseNpcAction, type NpcContext, type NpcIntent } from "@/lib/npc-brain-policy";
 import type { LifeFeedItem, NotificationItem, NpcState } from "@/lib/types";
 
 export type LivingCityPreset = "LOW" | "NORMAL" | "BUSY" | "CHAOS";
@@ -206,6 +207,24 @@ function locationFor(action: AvatarAction, district: string, random: () => numbe
   return district.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "cafe";
 }
 
+function avatarActionForIntent(intent: NpcIntent, fallback: AvatarAction): AvatarAction {
+  if (intent === "REST") return "sleeping";
+  if (intent === "WORK") return "working";
+  if (intent === "EAT") return "eating";
+  if (intent === "SPORT") return "exercising";
+  if (intent === "SOCIAL" || intent === "CREW" || intent === "DATE") return "chatting";
+  if (intent === "ROAM") return "walking";
+  if (intent === "DO_NOTHING" || intent === "IDLE") return "idle";
+  return fallback;
+}
+
+function currentActivityForIntent(intent: NpcIntent, action: AvatarAction): string {
+  if (intent === "CREW") return "crew";
+  if (intent === "DATE") return "date";
+  if (intent === "DO_NOTHING") return "idle";
+  return action;
+}
+
 export function populationForPreset(preset: LivingCityPreset): number {
   return PRESET_COUNTS[preset];
 }
@@ -404,14 +423,25 @@ function updateNpc(npc: NpcState, minutes: number, now: Date, playerDistrict: st
   const level: LivingCityLevel =
     npc.homeDistrictSlug === playerDistrict ? "NEAR_PLAYER" :
     random() > 0.6 ? "ACTIVE_DISTRICT" : "OFFSCREEN";
-  const action = activityFor(hourPhase(now.getHours()), archetypes, random);
+  const routineAction = activityFor(hourPhase(now.getHours()), archetypes, random);
+  const npcContext: NpcContext = {
+    hour: now.getHours(),
+    districtActivity: level === "NEAR_PLAYER" ? 82 : level === "ACTIVE_DISTRICT" ? 58 : 24,
+    nearbyPeople: level === "NEAR_PLAYER" ? 3 : level === "ACTIVE_DISTRICT" ? 1 : 0,
+    hasCrewOpportunity: Boolean(npc.crewId) && level !== "OFFSCREEN",
+    hasDatingOpportunity: level === "NEAR_PLAYER" && random() > 0.45,
+    hasSocialOpportunity: level !== "OFFSCREEN",
+  };
+  const intent = chooseNpcAction(npc, npcContext, now);
+  const action = avatarActionForIntent(intent.intent, routineAction);
+  const currentActivity = currentActivityForIntent(intent.intent, action);
   const detailFactor = level === "NEAR_PLAYER" ? 1 : level === "ACTIVE_DISTRICT" ? 0.55 : 0.18;
   const delta = Math.min(8, Math.max(0.2, minutes / 10)) * detailFactor;
   const locationSlug = locationFor(action, npc.homeDistrictSlug ?? playerDistrict, random);
   return {
     ...npc,
     action,
-    currentActivity: action,
+    currentActivity,
     locationSlug,
     mood: Math.round(clamp(npc.mood + (action === "chatting" ? 3 : action === "sleeping" ? 1 : 0) * delta - 0.4)),
     energy: Math.round(clamp(npc.energy + (action === "sleeping" ? 8 : -1.3) * delta)),

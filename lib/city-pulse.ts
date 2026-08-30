@@ -3,6 +3,7 @@ export type CityPulseKind =
   | "SOCIAL"
   | "DATING"
   | "CREW"
+  | "MISSION"
   | "EXPLORATION"
   | "EVENT"
   | "CITY";
@@ -40,6 +41,14 @@ export type CrewDominance = CrewDominanceInput & {
   rank: number;
 };
 
+export type DistrictCrewDominance = {
+  district: string;
+  dominant: CrewDominance;
+  challenger: CrewDominance | null;
+  state: "dominant" | "contested" | "open";
+  trend: "rising" | "stable" | "falling";
+};
+
 export type PlayerPulseContext = {
   district?: string | null;
   crewId?: string | null;
@@ -64,6 +73,7 @@ const KIND_WEIGHT: Record<CityPulseKind, number> = {
   SOCIAL: 22,
   DATING: 20,
   CREW: 18,
+  MISSION: 24,
   EXPLORATION: 14,
   EVENT: 16,
   CITY: 10,
@@ -99,6 +109,33 @@ export function dominantCrewByDistrict(crews: CrewDominanceInput[]): Record<stri
   return result;
 }
 
+export function crewDominanceByDistrict(crews: CrewDominanceInput[]): Record<string, DistrictCrewDominance> {
+  const ranked = rankCrewDominance(crews);
+  const groups = new Map<string, CrewDominance[]>();
+  for (const crew of ranked) {
+    const list = groups.get(crew.district) ?? [];
+    list.push(crew);
+    groups.set(crew.district, list);
+  }
+
+  const result: Record<string, DistrictCrewDominance> = {};
+  for (const [district, list] of groups) {
+    const ordered = list.sort((a, b) => b.score - a.score || a.rank - b.rank);
+    const dominant = ordered[0];
+    if (!dominant) continue;
+    const challenger = ordered[1] ?? null;
+    const gap = challenger ? dominant.score - challenger.score : 100;
+    result[district] = {
+      district,
+      dominant,
+      challenger,
+      state: challenger && gap <= 8 ? "contested" : "dominant",
+      trend: (dominant.trend24h ?? 0) > 1 ? "rising" : (dominant.trend24h ?? 0) < -1 ? "falling" : "stable",
+    };
+  }
+  return result;
+}
+
 export function safePublicCitySignal(input: PublicCitySignalInput): CityPulseSignal | null {
   if (!input.isOfficialOrPublic) return null;
 
@@ -124,16 +161,37 @@ export function safePublicCitySignal(input: PublicCitySignalInput): CityPulseSig
 }
 
 function contextualScore(signal: CityPulseSignal, context: PlayerPulseContext): number {
+  if (context.recentSignalIds?.includes(signal.id)) return -1000;
+
   let score = clamp(signal.priority) + KIND_WEIGHT[signal.kind];
 
   if (context.district && signal.district === context.district) score += 22;
   if (context.crewId && signal.crewId === context.crewId) score += 18;
   if (signal.kind === "DATING" && context.wantsDating === false) score -= 60;
   if (signal.kind === "SOCIAL" && context.wantsSocial === false) score -= 35;
-  if (context.recentSignalIds?.includes(signal.id)) score -= 80;
   if (signal.actionable === false) score -= 4;
 
   return score;
+}
+
+function isCurrent(signal: CityPulseSignal, now: number): boolean {
+  const starts = signal.startsAt ? Date.parse(signal.startsAt) : null;
+  const ends = signal.endsAt ? Date.parse(signal.endsAt) : null;
+  if (starts && Number.isFinite(starts) && starts > now) return false;
+  if (ends && Number.isFinite(ends) && ends < now) return false;
+  return true;
+}
+
+function dedupeSignals(signals: CityPulseSignal[]): CityPulseSignal[] {
+  const seen = new Set<string>();
+  const out: CityPulseSignal[] = [];
+  for (const signal of signals) {
+    const key = signal.id || `${signal.kind}:${signal.district ?? ""}:${signal.title}:${signal.body}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(signal);
+  }
+  return out;
 }
 
 export function selectCityPulseOpportunities(
@@ -144,17 +202,56 @@ export function selectCityPulseOpportunities(
   if (limit <= 0) return [];
 
   const now = Date.now();
-  return signals
-    .filter((signal) => {
-      const starts = signal.startsAt ? Date.parse(signal.startsAt) : null;
-      const ends = signal.endsAt ? Date.parse(signal.endsAt) : null;
-      if (starts && Number.isFinite(starts) && starts > now) return false;
-      if (ends && Number.isFinite(ends) && ends < now) return false;
-      return true;
-    })
+  return dedupeSignals(signals)
+    .filter((signal) => isCurrent(signal, now))
     .map((signal) => ({ signal, score: contextualScore(signal, context) }))
     .filter(({ score }) => score > 0)
-    .sort((a, b) => b.score - a.score || b.signal.priority - a.signal.priority)
+    .sort((a, b) => b.score - a.score || b.signal.priority - a.signal.priority || a.signal.id.localeCompare(b.signal.id))
     .slice(0, Math.min(3, limit))
     .map(({ signal }) => signal);
+}
+
+export type LivingCityEventLike = {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  district: string;
+  at: string;
+  priority: number;
+  crewIds?: string[];
+};
+
+function pulseKindForLivingEvent(kind: string): CityPulseKind {
+  if (kind === "BATTLE" || kind === "TERRITORY") return "CHALLENGE";
+  if (kind === "CREW") return "CREW";
+  if (kind === "MISSION") return "MISSION";
+  if (kind === "FEELING" || kind === "MATCH") return "DATING";
+  if (kind === "OUTING" || kind === "RELATIONSHIP" || kind === "SOCIAL") return "SOCIAL";
+  if (kind === "EVENT") return "EVENT";
+  return "CITY";
+}
+
+export function livingCityEventsToCityPulse(events: LivingCityEventLike[]): CityPulseSignal[] {
+  return events.map((event) => ({
+    id: `living:${event.id}`,
+    kind: pulseKindForLivingEvent(event.kind),
+    title: event.title,
+    body: event.body,
+    district: event.district,
+    startsAt: event.at,
+    priority: clamp(event.priority),
+    source: "GAME",
+    crewId: event.crewIds?.[0] ?? null,
+    actionable: event.kind !== "CITY" && event.kind !== "WORY",
+  }));
+}
+
+export function cityPulseRoute(signal: CityPulseSignal): string {
+  if (signal.kind === "MISSION" || signal.kind === "EXPLORATION") return "/(app)/missions";
+  if (signal.kind === "CHALLENGE") return "/(app)/territories";
+  if (signal.kind === "CREW") return "/(app)/(tabs)/crews";
+  if (signal.kind === "DATING") return "/(app)/rencontres";
+  if (signal.kind === "SOCIAL" || signal.kind === "EVENT") return "/(app)/outings";
+  return "/(app)/(tabs)/map";
 }

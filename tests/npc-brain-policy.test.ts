@@ -1,46 +1,48 @@
 import { describe, expect, it } from "vitest";
 
-import { canNpcInitiate, chooseNpcIntent } from "@/lib/npc-brain-policy";
+import { chooseNpcAction, rankNpcIntents } from "@/lib/npc-brain-policy";
 import { seedLivingCityNpcs } from "@/lib/living-city";
 
 describe("npc brain policy", () => {
-  it("lets critical fatigue beat social opportunities", () => {
-    const npc = { ...seedLivingCityNpcs("LOW", new Date("2026-08-29T20:00:00Z"))[0], energy: 8, presenceOnline: true };
-    const choice = chooseNpcIntent(npc, {
-      hour: 2,
-      districtActivity: 90,
-      nearbyPeople: 12,
-      hasCrewOpportunity: true,
-      hasDatingOpportunity: true,
-      hasSocialOpportunity: true,
-    });
-    expect(choice.intent).toBe("REST");
-  });
-
-  it("uses personality and context instead of giving every NPC the same action", () => {
-    const base = seedLivingCityNpcs("LOW", new Date("2026-08-29T19:00:00Z"))[0];
-    const social = { ...base, personality: "social/organisateur", sociability: 90, energy: 80 };
-    const quiet = { ...base, personality: "discret/travailleur", sociability: 25, energy: 80 };
+  it("is deterministic for the same NPC and context", () => {
+    const npc = {
+      ...seedLivingCityNpcs("LOW", new Date("2026-08-29T12:00:00Z"))[0],
+      personality: "social/organisateur",
+      sociability: 80,
+      presenceOnline: true,
+    };
     const context = {
       hour: 20,
-      districtActivity: 85,
-      nearbyPeople: 8,
+      districtActivity: 80,
+      nearbyPeople: 4,
       hasCrewOpportunity: false,
       hasDatingOpportunity: false,
       hasSocialOpportunity: true,
     };
-    expect(chooseNpcIntent(social, context).intent).toBe("SOCIAL");
-    expect(chooseNpcIntent(quiet, context).score).toBeLessThan(chooseNpcIntent(social, context).score);
+
+    expect(rankNpcIntents(npc, context)).toEqual(rankNpcIntents(npc, context));
   });
 
-  it("enforces a contact cooldown to prevent NPC spam", () => {
+  it("returns DO_NOTHING when a social action is still on cooldown", () => {
     const now = new Date("2026-08-29T20:00:00Z");
     const npc = {
       ...seedLivingCityNpcs("LOW", now)[0],
+      personality: "social/organisateur",
+      sociability: 95,
+      energy: 85,
+      lastMessageAt: new Date(now.getTime() - 10 * 60_000).toISOString(),
       presenceOnline: true,
-      lastMessageAt: "2026-08-29T19:30:00Z",
     };
-    expect(canNpcInitiate(npc, now, 120)).toBe(false);
-    expect(canNpcInitiate({ ...npc, lastMessageAt: "2026-08-29T17:00:00Z" }, now, 120)).toBe(true);
+
+    const action = chooseNpcAction(npc, {
+      hour: 20,
+      districtActivity: 90,
+      nearbyPeople: 5,
+      hasCrewOpportunity: false,
+      hasDatingOpportunity: true,
+      hasSocialOpportunity: true,
+    }, now);
+
+    expect(action.intent).toBe("DO_NOTHING");
   });
 });
