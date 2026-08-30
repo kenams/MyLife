@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 
 import { livingNpcsToMapPlayers } from "@/lib/city-simulation-map";
+import { seedLivingCityNpcs } from "@/lib/living-city";
 import { clearLocalCityPlayers, publishLocalCityPlayers } from "@/lib/local-city-map-bridge";
 import { useGameStore } from "@/stores/game-store";
 
@@ -24,6 +25,23 @@ export function CityRuntime() {
 
   useEffect(() => {
     if (!hasHydrated) return;
+
+    // Older persisted stores can contain the pre-Living-City NPC sample
+    // (for example ~20 residents). Repair that state in place without wiping
+    // the player's existing NPC history/relations: keep every resident we
+    // already know, then append only the missing deterministic city residents
+    // for the current preset.
+    const hydrated = useGameStore.getState();
+    const preset = hydrated.livingCity?.preset ?? "NORMAL";
+    const expectedResidents = seedLivingCityNpcs(preset);
+    if ((hydrated.npcs?.length ?? 0) < expectedResidents.length) {
+      const existingIds = new Set((hydrated.npcs ?? []).map((npc) => npc.id));
+      const repaired = [
+        ...(hydrated.npcs ?? []),
+        ...expectedResidents.filter((npc) => !existingIds.has(npc.id)),
+      ].slice(0, expectedResidents.length);
+      useGameStore.setState({ npcs: repaired });
+    }
 
     const publishMapSnapshot = () => {
       const state = useGameStore.getState();
