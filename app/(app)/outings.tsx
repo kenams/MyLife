@@ -174,7 +174,7 @@ export default function OutingsScreen() {
                 { label: `+${preview.moodGain} humeur`, positive: preview.moodGain >= 0 },
                 { label: `+${preview.sociabilityGain} social`, positive: preview.sociabilityGain >= 0 },
                 { label: `-${preview.energyCost} énergie`, positive: preview.energyCost <= 10 },
-                { label: `-${preview.budgetCost} cr`, positive: preview.budgetCost <= 15 },
+                { label: `-${preview.budgetCost} Wory`, positive: preview.budgetCost <= 15 },
                 { label: `${preview.stressDelta >= 0 ? "+" : ""}${preview.stressDelta} stress`, positive: preview.stressDelta <= 0 },
                 { label: `${preview.disciplineDelta >= 0 ? "+" : ""}${preview.disciplineDelta} disc`, positive: preview.disciplineDelta >= 0 },
               ].map((badge) => {
@@ -202,7 +202,7 @@ export default function OutingsScreen() {
                 🌃 Partir — {outingActivities.find((a) => a.slug === selectedSlug)?.name}
               </Text>
               <Text style={{ color: colors.muted, fontSize: 11, marginTop: 3 }}>
-                Coût : {preview.budgetCost} cr · -{preview.energyCost} énergie
+                Coût : {preview.budgetCost} Wory · -{preview.energyCost} énergie
               </Text>
             </Pressable>
           </View>

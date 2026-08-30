@@ -96,7 +96,7 @@ function ShiftRow({ record }: { record: ShiftRecord }) {
         </Text>
       </View>
       <View style={{ alignItems: "flex-end" }}>
-        <Text style={{ color: L.green, fontWeight: "800", fontSize: 14 }}>+{record.earnedCoins} cr</Text>
+        <Text style={{ color: L.green, fontWeight: "800", fontSize: 14 }}>+{record.earnedCoins} Wory</Text>
         <Text style={{ color: L.gold, fontSize: 11 }}>+{record.earnedXp} XP</Text>
       </View>
     </View>
@@ -187,7 +187,7 @@ export default function WorkScreen() {
               </View>
               <Text style={{ color: "#fff", fontWeight: "900", fontSize: 22 }}>{currentJob.name}</Text>
               <Text style={{ color: "rgba(255,255,255,0.8)", fontSize: 13, fontWeight: "700", marginTop: 2 }}>
-                ~{projectedEarnings} cr / shift · Niveau {jobLevel}
+                ~{projectedEarnings} Wory / shift · Niveau {jobLevel}
               </Text>
             </View>
           </View>
@@ -208,7 +208,7 @@ export default function WorkScreen() {
           {/* Stats rapides */}
           <View style={{ flexDirection: "row", gap: 8, marginTop: 14 }}>
             {[
-              { label: "Crédits",    value: `${stats.money} cr`,   color: "#fff", bg: "rgba(255,255,255,0.15)" },
+              { label: "Wory",       value: `${stats.money} Wory`, color: "#fff", bg: "rgba(255,255,255,0.15)" },
               { label: "Discipline", value: `${stats.discipline}`, color: "#fff", bg: "rgba(255,255,255,0.15)" },
               { label: "Énergie",    value: `${stats.energy}/100`, color: stats.energy < 20 ? "#fca5a5" : "#fff", bg: "rgba(255,255,255,0.15)" },
               { label: "Rép.",       value: `${stats.reputation}`, color: "#fbbf24", bg: "rgba(255,255,255,0.15)" },
@@ -299,7 +299,7 @@ export default function WorkScreen() {
                   Lancer un shift
                 </Text>
                 <Text style={{ color: energyTooLow ? L.muted : "rgba(255,255,255,0.8)", fontSize: 12 }}>
-                  ~{projectedEarnings} cr · -{currentJob.energyCost} énergie
+                  ~{projectedEarnings} Wory · -{currentJob.energyCost} énergie
                 </Text>
               </Pressable>
             </View>
@@ -326,7 +326,7 @@ export default function WorkScreen() {
                 onDone={() => { hapticSuccess(); completeWorkShift(); }}
               />
               <View style={{ flexDirection: "row", gap: 20 }}>
-                <Text style={{ color: L.green, fontWeight: "700", fontSize: 13 }}>+{workSession.earnedCoins} cr</Text>
+                <Text style={{ color: L.green, fontWeight: "700", fontSize: 13 }}>+{workSession.earnedCoins} Wory</Text>
                 <Text style={{ color: L.gold, fontWeight: "700", fontSize: 13 }}>+{workSession.earnedXp} XP</Text>
                 <Text style={{ color: L.blue, fontWeight: "700", fontSize: 13 }}>+{workSession.earnedDiscipline} disc</Text>
               </View>
@@ -348,7 +348,7 @@ export default function WorkScreen() {
               <View style={{ flexDirection: "row", gap: 24 }}>
                 <View style={{ alignItems: "center" }}>
                   <Text style={{ color: L.green, fontWeight: "900", fontSize: 22 }}>+{workSession.earnedCoins}</Text>
-                  <Text style={{ color: L.muted, fontSize: 11 }}>crédits</Text>
+                  <Text style={{ color: L.muted, fontSize: 11 }}>Wory</Text>
                 </View>
                 <View style={{ alignItems: "center" }}>
                   <Text style={{ color: L.gold, fontWeight: "900", fontSize: 22 }}>+{workSession.earnedXp}</Text>
@@ -405,7 +405,7 @@ export default function WorkScreen() {
                         <View>
                           <Text style={{ color: L.text, fontWeight: "800", fontSize: 14 }}>{job.name}</Text>
                           <Text style={{ color: L.muted, fontSize: 11 }}>
-                            +{job.rewardCoins} cr · disc +{job.disciplineReward} · rep +{job.reputationReward}
+                            +{job.rewardCoins} Wory · disc +{job.disciplineReward} · rep +{job.reputationReward}
                           </Text>
                         </View>
                       </View>

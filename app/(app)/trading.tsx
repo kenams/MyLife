@@ -54,10 +54,10 @@ function TradeCard({ offer, onAccept, canAccept }: {
   canAccept: boolean;
 }) {
   const offerLabel = offer.offerType === "credits"
-    ? `${offer.offerValue} crédits`
+    ? `${offer.offerValue} Wory`
     : CosmeticName(offer.offerValue as string);
   const wantLabel = offer.wantType === "credits"
-    ? `${offer.wantValue} crédits`
+    ? `${offer.wantValue} Wory`
     : CosmeticName(offer.wantValue as string);
 
   return (
@@ -138,7 +138,7 @@ export default function TradingScreen() {
       return;
     }
     if (offerNum > stats.money) {
-      Alert.alert("Crédits insuffisants", `Tu as ${stats.money} crédits.`);
+      Alert.alert("Wory insuffisants", `Tu as ${stats.money} Wory.`);
       return;
     }
     const newOffer: TradeOffer = {
@@ -165,12 +165,12 @@ export default function TradingScreen() {
           </Pressable>
           <Text style={{ color: colors.text, fontWeight: "900", fontSize: 26 }}>💱 Trading</Text>
           <Text style={{ color: colors.muted, fontSize: 12, marginTop: 4 }}>
-            Échange crédits & cosmétiques avec d'autres joueurs
+            Échange Wory & cosmétiques avec d'autres joueurs
           </Text>
           <View style={{ flexDirection: "row", gap: 10, marginTop: 12 }}>
             <View style={{ backgroundColor: "#f6b94f15", borderRadius: 12, padding: 10, flex: 1, alignItems: "center" }}>
               <Text style={{ color: "#f6b94f", fontWeight: "900", fontSize: 18 }}>{stats.money}</Text>
-              <Text style={{ color: colors.muted, fontSize: 10 }}>crédits</Text>
+              <Text style={{ color: colors.muted, fontSize: 10 }}>Wory</Text>
             </View>
             <View style={{ backgroundColor: "#c084fc15", borderRadius: 12, padding: 10, flex: 1, alignItems: "center" }}>
               <Text style={{ color: "#c084fc", fontWeight: "900", fontSize: 18 }}>{equippedCosmetics.length}</Text>
@@ -230,7 +230,7 @@ export default function TradingScreen() {
               </Text>
 
               <View style={{ gap: 8 }}>
-                <Text style={{ color: colors.muted, fontSize: 12 }}>Tu offres (crédits)</Text>
+                <Text style={{ color: colors.muted, fontSize: 12 }}>Tu offres (Wory)</Text>
                 <TextInput
                   value={offerAmt}
                   onChangeText={setOfferAmt}
@@ -245,7 +245,7 @@ export default function TradingScreen() {
               </View>
 
               <View style={{ gap: 8 }}>
-                <Text style={{ color: colors.muted, fontSize: 12 }}>Tu veux recevoir (crédits)</Text>
+                <Text style={{ color: colors.muted, fontSize: 12 }}>Tu veux recevoir (Wory)</Text>
                 <TextInput
                   value={wantAmt}
                   onChangeText={setWantAmt}
@@ -264,7 +264,7 @@ export default function TradingScreen() {
                   borderRadius: 12, padding: 12, borderWidth: 1,
                   borderColor: parseInt(wantAmt || "0") > parseInt(offerAmt || "0") ? "#38c79330" : "#f6b94f30" }}>
                   <Text style={{ color: colors.muted, fontSize: 12 }}>
-                    Ratio : tu offres {offerAmt} cr pour en recevoir {wantAmt} cr{" "}
+                    Ratio : tu offres {offerAmt} Wory pour en recevoir {wantAmt} Wory{" "}
                     {parseInt(wantAmt || "0") > parseInt(offerAmt || "0")
                       ? "✅ (gain potentiel)"
                       : "⚠️ (perte potentielle)"}

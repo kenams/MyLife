@@ -108,7 +108,7 @@ function QuestCard({ quest, onClaim }: { quest: DailyQuest; onClaim: () => void 
         <View style={{ alignItems: "flex-end", gap: 4 }}>
           <Text style={{ color: D.gold, fontSize: 12, fontWeight: "800" }}>+{quest.xpReward} XP</Text>
           {quest.moneyReward > 0 && (
-            <Text style={{ color: D.green, fontSize: 11, fontWeight: "700" }}>+{quest.moneyReward} cr</Text>
+            <Text style={{ color: D.green, fontSize: 11, fontWeight: "700" }}>+{quest.moneyReward} Wory</Text>
           )}
           {quest.completed && !quest.claimed && (
             <View style={{ backgroundColor: color, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 4 }}>
@@ -282,7 +282,7 @@ export default function QuestsScreen() {
                   </Text>
                   <View style={{ flexDirection: "row", gap: 10, marginTop: 8 }}>
                     <Text style={{ color: D.gold, fontSize: 11, fontWeight: "700" }}>+{worldEvent.xpReward} XP</Text>
-                    <Text style={{ color: D.green, fontSize: 11, fontWeight: "700" }}>+{worldEvent.moneyReward} cr</Text>
+                    <Text style={{ color: D.green, fontSize: 11, fontWeight: "700" }}>+{worldEvent.moneyReward} Wory</Text>
                     <Text style={{ color: D.purple, fontSize: 11, fontWeight: "700" }}>+{worldEvent.moodBonus} humeur</Text>
                     <Text style={{ color: D.textSoft, fontSize: 11 }}>👥 {worldEvent.participantCount}</Text>
                   </View>

@@ -74,7 +74,7 @@ export default function EconomyScreen() {
     if (!result.ok) {
       setSendError(result.error ?? "Erreur.");
     } else {
-      setSendSuccess(`${amountNum} cr envoyés à ${resident.name} ✓`);
+      setSendSuccess(`${amountNum} Wory envoyés à ${resident.name} ✓`);
       setSelectedResident(null); setAmount("20");
       setTimeout(() => setSendSuccess(""), 4000);
     }
@@ -98,36 +98,36 @@ export default function EconomyScreen() {
                 <Text style={{ color: colors.muted, fontSize: 13 }}>← Retour</Text>
               </Pressable>
               <Text style={{ color: colors.text, fontWeight: "900", fontSize: 26 }}>💰 Économie</Text>
-              <Text style={{ color: colors.muted, fontSize: 12, marginTop: 3 }}>Gère tes crédits et transferts</Text>
+              <Text style={{ color: colors.muted, fontSize: 12, marginTop: 3 }}>Gère tes Wory et transferts</Text>
 
               {/* Solde + stats */}
               <View style={{ marginTop: 16, backgroundColor: "#38c79314", borderRadius: 18, padding: 16,
                 borderWidth: 1.5, borderColor: "#38c79330", gap: 10 }}>
                 <Text style={{ color: colors.muted, fontSize: 11, fontWeight: "700", letterSpacing: 1 }}>SOLDE ACTUEL</Text>
-                <Text style={{ color: "#38c793", fontWeight: "900", fontSize: 36 }}>{money} <Text style={{ fontSize: 18 }}>cr</Text></Text>
+                <Text style={{ color: "#38c793", fontWeight: "900", fontSize: 36 }}>{money} <Text style={{ fontSize: 18 }}>Wory</Text></Text>
                 <View style={{ flexDirection: "row", gap: 10 }}>
                   <View style={{ flex: 1, backgroundColor: "#f8717115", borderRadius: 10, padding: 10,
                     borderWidth: 1, borderColor: "#f8717130" }}>
                     <Text style={{ color: "#f87171", fontWeight: "800", fontSize: 16 }}>{totalSent}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 10 }}>cr envoyés</Text>
+                    <Text style={{ color: colors.muted, fontSize: 10 }}>Wory envoyés</Text>
                   </View>
                   <View style={{ flex: 1, backgroundColor: "#fbbf2415", borderRadius: 10, padding: 10,
                     borderWidth: 1, borderColor: "#fbbf2430" }}>
                     <Text style={{ color: "#fbbf24", fontWeight: "800", fontSize: 16 }}>{totalSpent}</Text>
-                    <Text style={{ color: colors.muted, fontSize: 10 }}>cr dépensés</Text>
+                    <Text style={{ color: colors.muted, fontSize: 10 }}>Wory dépensés</Text>
                   </View>
                 </View>
               </View>
             </View>
 
-            {/* Envoyer des crédits */}
+            {/* Envoyer des Wory */}
             <View style={{ margin: 20, backgroundColor: "rgba(255,255,255,0.04)", borderRadius: 18, padding: 16,
               gap: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
               <Text style={{ color: colors.muted, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 }}>
-                ENVOYER DES CRÉDITS
+                ENVOYER DES WORY
               </Text>
               <Text style={{ color: colors.muted, fontSize: 12 }}>
-                Renforce un lien en offrant des crédits à un résident connecté.
+                Renforce un lien en offrant des Wory à un résident connecté.
               </Text>
 
               {connectedResidents.length === 0 ? (

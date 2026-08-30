@@ -249,7 +249,7 @@ export default function PremiumScreen() {
                       }}
                       style={{ backgroundColor: "#f6b94f25", borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8,
                         borderWidth: 1, borderColor: "#f6b94f50" }}>
-                      <Text style={{ color: "#f6b94f", fontWeight: "800", fontSize: 13 }}>{boost.price} cr</Text>
+                      <Text style={{ color: "#f6b94f", fontWeight: "800", fontSize: 13 }}>{boost.price} Wory</Text>
                     </Pressable>
                   )}
                 </View>
@@ -295,7 +295,7 @@ export default function PremiumScreen() {
                       <Text style={{ color: cosm.color, fontSize: 10, fontWeight: "700" }}>✓ Possédé</Text>
                     ) : (
                       <Text style={{ color: "#f6b94f", fontWeight: "700", fontSize: 12 }}>
-                        {cosm.price === 0 ? "Gratuit" : `${cosm.price} cr`}
+                        {cosm.price === 0 ? "Gratuit" : `${cosm.price} Wory`}
                       </Text>
                     )}
                   </Pressable>

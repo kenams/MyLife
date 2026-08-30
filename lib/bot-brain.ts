@@ -118,7 +118,7 @@ const PERSONAS: Record<string, BotPersona> = {
     ],
     money: [
       "Argent = résultat de discipline appliquée dans le temps. Rien d'autre.",
-      "Dépense stratégiquement. Chaque crédit doit soit augmenter ton efficacité, soit ton réseau.",
+      "Dépense stratégiquement. Chaque Wory doit soit augmenter ton efficacité, soit ton réseau.",
       "Budget : 60% actif, 30% sécurité, 10% social de qualité. Tout le reste c'est du bruit."
     ],
     lowEnergy: [
@@ -171,7 +171,7 @@ const PERSONAS: Record<string, BotPersona> = {
     ],
     money: [
       "Dépense sur des expériences. Les objets deviennent invisibles. Les souvenirs restent.",
-      "Quelques crédits bien placés dans une bonne sortie valent mieux qu'une centaine mal stockés.",
+      "Quelques Wory bien placés dans une bonne sortie valent mieux qu'une centaine mal stockés.",
     ],
     lowEnergy: [
       "T'as besoin d'une pause créative {player}. Sieste ou musique, fais le vide.",

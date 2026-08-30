@@ -402,7 +402,7 @@ export default function NotificationsScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={{ color: L.text, fontWeight: "700", fontSize: 14 }}>{mission.title}</Text>
                         <Text style={{ color: catColor, fontSize: 12, marginTop: 2 }}>
-                          +{mission.xpReward} XP · +{mission.moneyReward} crédits
+                          +{mission.xpReward} XP · +{mission.moneyReward} Wory
                         </Text>
                       </View>
                       <Pressable onPress={() => claimMission(prog.missionId)}

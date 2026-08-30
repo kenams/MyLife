@@ -176,7 +176,7 @@ const QUEST_POOL: QuestTemplate[] = [
     category: "progression",
     emoji: "💼",
     title: "Session de travail",
-    description: "Complète un shift pour gagner des crédits.",
+    description: "Complète un shift pour gagner des Wory.",
     actionId: "work-shift",
     xpReward: 30,
     moneyReward: 0,

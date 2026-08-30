@@ -1704,11 +1704,11 @@ export const useGameStore = create<GameState>()(
               penaltyNotif = appendNotification(penaltyNotif, {
                 id: `penalty-meal-${today}`,
                 kind: "needs",
-                title: `🍽️ Tu n'as pas mangé — −${penalty} cr`,
-                body: "Chaque heure sans repas te coûte des crédits. Mange !",
+                title: `🍽️ Tu n'as pas mangé — −${penalty} Wory`,
+                body: "Chaque heure sans repas te coûte des Wory. Mange !",
                 createdAt: nowIso(), read: false,
               });
-              void sendLocalNotification("🍽️ Mange maintenant !", `−${penalty} cr de pénalité.`).catch(() => {});
+              void sendLocalNotification("🍽️ Mange maintenant !", `−${penalty} Wory de pénalité.`).catch(() => {});
             }
           }
 
@@ -1855,7 +1855,7 @@ export const useGameStore = create<GameState>()(
               id: `travel-${Date.now()}`,
               kind: "social",
               title: `Tu es maintenant a ${location.name}`,
-              body: `${options?.modeLabel ? `Trajet en ${options.modeLabel}. ` : ""}${transportCost > 0 ? `Transport -${transportCost} cr. ` : ""}${location.summary}`,
+              body: `${options?.modeLabel ? `Trajet en ${options.modeLabel}. ` : ""}${transportCost > 0 ? `Transport -${transportCost} Wory. ` : ""}${location.summary}`,
               createdAt: nowIso(),
               read: false
             }),
@@ -2333,7 +2333,7 @@ export const useGameStore = create<GameState>()(
             id: `daily-${Date.now()}`,
             kind: "reward",
             title: "Reward quotidienne recuperee",
-            body: `Tu prends ${rewardCoins} credits et tu prolonges ta serie a ${streak} jour(s).`,
+            body: `Tu prends ${rewardCoins} Wory et tu prolonges ta serie a ${streak} jour(s).`,
             createdAt,
             read: false
           });
@@ -2444,7 +2444,7 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const boost = BOOSTS.find((b: BoostItem) => b.id === boostId);
         if (!boost) return { ok: false, error: "Boost introuvable." };
-        if (state.stats.money < boost.price) return { ok: false, error: "Pas assez de crédits." };
+        if (state.stats.money < boost.price) return { ok: false, error: "Pas assez de Wory." };
         const activeUntil = new Date(Date.now() + boost.durationHours * 60 * 60 * 1000).toISOString();
         set((s) => ({
           stats: { ...s.stats, money: s.stats.money - boost.price },
@@ -2481,7 +2481,7 @@ export const useGameStore = create<GameState>()(
         const cosmetic = COSMETICS.find((c: CosmeticItem) => c.id === cosmeticId);
         if (!cosmetic) return { ok: false, error: "Cosmétique introuvable." };
         if (cosmetic.requiresPremium && !state.isPremium) return { ok: false, error: "Réservé aux membres Premium." };
-        if (cosmetic.price > 0 && state.stats.money < cosmetic.price) return { ok: false, error: "Pas assez de crédits." };
+        if (cosmetic.price > 0 && state.stats.money < cosmetic.price) return { ok: false, error: "Pas assez de Wory." };
         if (state.equippedCosmetics.includes(cosmeticId)) return { ok: false, error: "Déjà équipé." };
         set((s) => ({
           stats: cosmetic.price > 0 ? { ...s.stats, money: s.stats.money - cosmetic.price } : s.stats,
@@ -2506,7 +2506,7 @@ export const useGameStore = create<GameState>()(
       upgradeHousing: (tierId) => {
         const state = get();
         const tier  = getHousingTier(tierId);
-        if (state.stats.money < tier.minMoney)        return { ok: false, error: `Il te faut ${tier.minMoney} crédits minimum.` };
+        if (state.stats.money < tier.minMoney)        return { ok: false, error: `Il te faut ${tier.minMoney} Wory minimum.` };
         if (state.playerLevel < tier.minLevel)         return { ok: false, error: `Niveau ${tier.minLevel} requis.` };
         if (state.stats.reputation < tier.minReputation) return { ok: false, error: `Réputation ${tier.minReputation} requise.` };
         if (state.stats.streak < tier.minStreak)       return { ok: false, error: `Streak ${tier.minStreak} jours requis.` };
@@ -2566,7 +2566,7 @@ export const useGameStore = create<GameState>()(
             : s.housingTier === "loft" ? "appartement"
             : s.housingTier === "appartement" ? "studio"
             : "squat";
-          void sendLocalNotification("⬇️ Loyer impayé", `Tu n'avais pas assez de crédits — rétrogradé en ${newTier}.`).catch(() => {});
+          void sendLocalNotification("⬇️ Loyer impayé", `Tu n'avais pas assez de Wory — rétrogradé en ${newTier}.`).catch(() => {});
           return {
             housingTier: newTier,
             housingLastPaidAt: new Date(now).toISOString(),
@@ -2593,7 +2593,7 @@ export const useGameStore = create<GameState>()(
         const state = get();
         if (amount <= 0) return { ok: false, error: "Montant invalide." };
         if (amount > state.stats.money) return { ok: false, error: "Solde insuffisant." };
-        if (amount > 200) return { ok: false, error: "Maximum 200 crédits par transfert." };
+        if (amount > 200) return { ok: false, error: "Maximum 200 Wory par transfert." };
         const resident = starterResidents.find((r) => r.id === residentId);
         if (!resident) return { ok: false, error: "Résident introuvable." };
         const createdAt = nowIso();
@@ -2615,15 +2615,15 @@ export const useGameStore = create<GameState>()(
           notifications: appendNotification(s.notifications, {
             id: `transfer-notif-${Date.now()}`,
             kind: "social",
-            title: `${amount} crédits envoyés`,
-            body: `${residentName} a reçu ${amount} crédits. Le lien se renforce.`,
+            title: `${amount} Wory envoyés`,
+            body: `${residentName} a reçu ${amount} Wory. Le lien se renforce.`,
             createdAt,
             read: false
           }),
           lifeFeed: appendFeed(s.lifeFeed, {
             id: `feed-transfer-${Date.now()}`,
             title: "Transfert social",
-            body: `Tu as envoyé ${amount} crédits à ${residentName}. Partager est un signal fort.`,
+            body: `Tu as envoyé ${amount} Wory à ${residentName}. Partager est un signal fort.`,
             createdAt
           })
         }));
@@ -2704,14 +2704,14 @@ export const useGameStore = create<GameState>()(
             title: leveledUp ? `Niveau ${newLevel} atteint !` : "Shift terminé",
             body: leveledUp
               ? `Tu passes au niveau ${newLevel} — +5% revenus par shift.`
-              : `+${workSession.earnedCoins} crédits · +${workSession.earnedXp} XP · ${job.name}`,
+              : `+${workSession.earnedCoins} Wory · +${workSession.earnedXp} XP · ${job.name}`,
             createdAt,
             read: false,
           }),
           lifeFeed: appendFeed(s.lifeFeed, {
             id: `feed-work-${Date.now()}`,
             title: "Session de travail terminée",
-            body: `${job.name} — ${workSession.earnedCoins} crédits gagnés. Discipline renforcée.`,
+            body: `${job.name} — ${workSession.earnedCoins} Wory gagnés. Discipline renforcée.`,
             createdAt,
           }),
           moneyTransfers: [
@@ -2889,7 +2889,7 @@ export const useGameStore = create<GameState>()(
             lifeFeed = appendFeed(lifeFeed, {
               id:        `feed-npc-act-${Date.now()}-${event.npcId}`,
               title:     `${event.npcName} a ${event.activityLabel}`,
-              body:      `+${event.xpGained} XP${event.moneyGained ? ` · +${event.moneyGained} cr` : ""}`,
+              body:      `+${event.xpGained} XP${event.moneyGained ? ` · +${event.moneyGained} Wory` : ""}`,
               createdAt: nowIso(),
             });
           }
@@ -3673,7 +3673,7 @@ export const useGameStore = create<GameState>()(
         const feed = appendFeed(s.lifeFeed, {
           id: `feed-quest-${Date.now()}`,
           title: `✅ Quête accomplie : ${quest.title}`,
-          body: `+${quest.xpReward} XP · +${quest.moneyReward} cr`,
+          body: `+${quest.xpReward} XP · +${quest.moneyReward} Wory`,
           createdAt: nowIso(),
         });
         return {
@@ -3706,7 +3706,7 @@ export const useGameStore = create<GameState>()(
         const feed = appendFeed(s.lifeFeed, {
           id: `feed-world-event-${Date.now()}`,
           title: `🌍 ${event.title} — ${event.city.name}`,
-          body: `+${event.xpReward} XP · +${event.moneyReward} cr · +${event.moodBonus} humeur`,
+          body: `+${event.xpReward} XP · +${event.moneyReward} Wory · +${event.moodBonus} humeur`,
           createdAt: nowIso(),
         });
         const updatedQuests = checkQuestCompletion(s.dailyQuests ?? [], "join-world-event");
@@ -3733,7 +3733,7 @@ export const useGameStore = create<GameState>()(
         const state = get();
         const item = getItemById(itemId);
         if (!item) return { ok: false, error: "Item introuvable." };
-        if (state.stats.money < item.price) return { ok: false, error: `Besoin de ${item.price} cr.` };
+        if (state.stats.money < item.price) return { ok: false, error: `Besoin de ${item.price} Wory.` };
         const existing = (state.inventory ?? []).find((i) => i.itemId === itemId);
         const currentQty = existing?.quantity ?? 0;
         if (currentQty >= item.maxStack) return { ok: false, error: "Quantité max atteinte." };
@@ -3890,7 +3890,7 @@ export const useGameStore = create<GameState>()(
 
         set((state) => {
           if (state.stats.money < gift.price) {
-            result = { ok: false, bonus: 0, reaction: "", error: "Pas assez de crédits" };
+            result = { ok: false, bonus: 0, reaction: "", error: "Pas assez de Wory" };
             return state;
           }
           const bonus    = calcGiftBonus(gift, npcInterests);
