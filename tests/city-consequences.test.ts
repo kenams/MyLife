@@ -176,6 +176,37 @@ describe("applyCityConsequences (single bounded entry point)", () => {
     expect(out.events.length).toBeLessThanOrEqual(60);
   });
 
+  it("does not feed its own synthetic events back into district-mood derivation (no loop)", () => {
+    const now = new Date("2026-09-01T15:00:00Z");
+    // tick already carries a previous synthetic CREW event for Compans
+    const synthCrew = { ...ev("CREW", "Compans"), id: "cc:crew:Compans:WLV" };
+    const tick = lc({ events: [synthCrew, synthCrew, synthCrew] });
+    const out = applyCityConsequences(lc(), tick, { playerDistrict: null, elapsedMs: 0, forced: false, now });
+    // Compans must NOT be pushed to "competitif" purely by our own cc: events
+    expect(out.districtStates.Compans?.mood ?? "calme").not.toBe("competitif");
+    // no NEW cc: event was generated from the pre-existing ones
+    const inputCc = tick.events.filter((e) => e.id.startsWith("cc:")).length;
+    expect(out.events.filter((e) => e.id.startsWith("cc:")).length).toBe(inputCc);
+  });
+
+  it("emits a crew shift once, not again on the next stable tick (idempotent)", () => {
+    const now = new Date("2026-09-01T15:00:00Z");
+    const before = [crew("wlv", "Capitole", 70, 60), crew("kin", "Capitole", 40, 30)];
+    const after = [crew("wlv", "Capitole", 30, 20), crew("kin", "Capitole", 85, 75)];
+    const first = applyCityConsequences(lc({ crews: before }), lc({ crews: after }), { playerDistrict: null, elapsedMs: 0, forced: false, now });
+    expect(first.events.some((e) => e.id.startsWith("cc:crew:"))).toBe(true);
+    // next tick: prev == after == tick.crews → no shift
+    const second = applyCityConsequences(lc({ crews: after }), lc({ crews: after }), { playerDistrict: null, elapsedMs: 0, forced: false, now });
+    expect(second.events.some((e) => e.id.startsWith("cc:crew:"))).toBe(false);
+  });
+
+  it("forced tick never fills the digest even after a long elapsed gap", () => {
+    const now = new Date("2026-09-01T15:00:00Z");
+    const prev = lc({ districtStates: { Carmes: { mood: "calme", score: 0.5, at: "" } } });
+    const out = applyCityConsequences(prev, lc({ events: socialEvents }), { playerDistrict: null, elapsedMs: 5 * 60 * 60_000, forced: true, now });
+    expect(out.cityDigest).toEqual([]);
+  });
+
   it("surfaces a crew flip as a City Pulse candidate event", () => {
     const prev = lc({ crews: [crew("wlv", "Capitole", 70, 60), crew("kin", "Capitole", 40, 30)] });
     const tick = lc({ events: [], crews: [crew("wlv", "Capitole", 30, 20), crew("kin", "Capitole", 85, 75)] });

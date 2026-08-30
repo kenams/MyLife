@@ -791,7 +791,7 @@ export default function LifeMapScreen() {
       <View
         pointerEvents="none"
         style={{
-          position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1,
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
           backgroundColor: mapAmbient.color, opacity: mapAmbient.opacity,
         }}
       />
@@ -799,7 +799,7 @@ export default function LifeMapScreen() {
         <View
           pointerEvents="none"
           style={{
-            position: "absolute", top: 0, left: 0, right: 0, bottom: 0, zIndex: 1,
+            position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
             backgroundColor: mapWeather.color, opacity: mapWeather.opacity,
           }}
         />

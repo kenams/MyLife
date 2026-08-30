@@ -888,6 +888,7 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
   }, [env?.filter, env?.weatherKind, env?.weatherOpacity, env?.weatherColor, env?.animate]);
 
   // ── Territoires de crew au niveau quartier (fill + outline, opacité basse) ──
+  const districtsAppliedRef = useRef("");
   useEffect(() => {
     const map = mapRef.current as any;
     const gl = glRef.current as any;
@@ -895,7 +896,12 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
 
     const apply = () => {
       if (!map.getStyle?.()) return;
-      const features = districtsRef.current.map((d) => ({
+      const list = districtsRef.current;
+      const sig = JSON.stringify(list.map((d) => [d.name, d.color, d.contested, Math.round(d.opacity * 100), Math.round(d.radius)]));
+      if (sig === districtsAppliedRef.current && map.getSource("mylife-districts")) return;
+      districtsAppliedRef.current = sig;
+
+      const features = list.map((d) => ({
         type: "Feature" as const,
         properties: { color: d.color, fillOpacity: d.opacity, contested: d.contested ? 1 : 0 },
         geometry: { type: "Polygon" as const, coordinates: [circlePolygon(d.lat, d.lng, d.radius)] },
@@ -912,12 +918,14 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
         }, firstSymbol);
         map.addLayer({
           id: "mylife-districts-line", type: "line", source: "mylife-districts",
-          paint: {
-            "line-color": ["get", "color"],
-            "line-opacity": ["case", ["==", ["get", "contested"], 1], 0.9, 0.3],
-            "line-width": ["case", ["==", ["get", "contested"], 1], 2, 1],
-            "line-dasharray": ["case", ["==", ["get", "contested"], 1], ["literal", [2, 2]], ["literal", [1, 0]]],
-          },
+          filter: ["!=", ["get", "contested"], 1],
+          paint: { "line-color": ["get", "color"], "line-opacity": 0.3, "line-width": 1 },
+        }, firstSymbol);
+        // Contesté : contour tireté (indice de FORME, pas seulement la couleur)
+        map.addLayer({
+          id: "mylife-districts-contested", type: "line", source: "mylife-districts",
+          filter: ["==", ["get", "contested"], 1],
+          paint: { "line-color": ["get", "color"], "line-opacity": 0.9, "line-width": 2, "line-dasharray": [2, 2] },
         }, firstSymbol);
       } catch { /* style sans couche compatible : on ignore */ }
     };

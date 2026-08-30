@@ -37,7 +37,15 @@ async function writeCache(entry: CacheShape) {
  * Retourne une observation météo, du cache si frais, sinon tente le réseau
  * (timeout court). Ne throw jamais. `null` = inconnu → fallback en aval.
  */
-export async function fetchWeather(lat: number, lng: number): Promise<WeatherObservation | null> {
+let inFlight: Promise<WeatherObservation | null> | null = null;
+
+export function fetchWeather(lat: number, lng: number): Promise<WeatherObservation | null> {
+  if (inFlight) return inFlight;
+  inFlight = fetchWeatherInner(lat, lng).finally(() => { inFlight = null; });
+  return inFlight;
+}
+
+async function fetchWeatherInner(lat: number, lng: number): Promise<WeatherObservation | null> {
   const cached = await readCache();
   const fresh = cached && Date.now() - cached.at < TTL_MS && near(cached.lat, lat) && near(cached.lng, lng);
   if (fresh) return cached.obs;
@@ -57,13 +65,15 @@ export async function fetchWeather(lat: number, lng: number): Promise<WeatherObs
     const c = data?.current;
     if (!c) return cached?.obs ?? null;
 
-    const precipitation = Number(c.precipitation ?? 0) || 0;
+    const num = (v: unknown, d = 0) => (Number.isFinite(Number(v)) ? Number(v) : d);
+    const precipitation = Math.max(0, num(c.precipitation));
+    const temp = Number(c.temperature_2m);
     const obs: WeatherObservation = {
-      weather: weatherFromWmo(Number(c.weather_code ?? 0), precipitation),
-      temperatureC: c.temperature_2m != null ? Number(c.temperature_2m) : null,
+      weather: weatherFromWmo(num(c.weather_code), precipitation),
+      temperatureC: Number.isFinite(temp) ? temp : null,
       precipitation,
-      cloudCover: Math.max(0, Math.min(1, Number(c.cloud_cover ?? 0) / 100)),
-      windKph: Number(c.wind_speed_10m ?? 0) || 0,
+      cloudCover: Math.max(0, Math.min(1, num(c.cloud_cover) / 100)),
+      windKph: Math.max(0, num(c.wind_speed_10m)),
       observedAt: new Date().toISOString(),
       source: "provider",
     };
