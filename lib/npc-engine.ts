@@ -70,6 +70,9 @@ export type NpcRelationship = {
   lastTopics: string[];    // dernières lignes utilisées, pour éviter la répétition
   turns: number;
   updatedAt: string;
+  encounters?: number;             // rencontres marquantes (bornées, pas un log)
+  lastOutcome?: string | null;     // dernier résultat d'approche
+  lastEncounterAt?: string | null; // pour le cooldown anti-spam
 };
 
 function storageKey(playerId: string, npcId: string) {
@@ -88,6 +91,37 @@ async function saveNpcRelationship(playerId: string, npcId: string, rel: NpcRela
   try {
     await AsyncStorage.setItem(storageKey(playerId, npcId), JSON.stringify(rel));
   } catch { /* stockage indisponible, tant pis pour la persistance */ }
+}
+
+/** Délai minimum avant qu'un même PNJ puisse re-proposer / re-suggérer (anti-spam). */
+export const NPC_ENCOUNTER_COOLDOWN_MS = 45 * 60_000;
+
+export function npcEncounterCoolingDown(rel: NpcRelationship, now = Date.now()): boolean {
+  if (!rel.lastEncounterAt) return false;
+  const t = Date.parse(rel.lastEncounterAt);
+  return Number.isFinite(t) && now - t < NPC_ENCOUNTER_COOLDOWN_MS;
+}
+
+/**
+ * Enregistre UNE rencontre marquante (pas chaque message). Mémoire bornée :
+ * `encounters` est un simple compteur plafonné, aucun historique de texte.
+ */
+export async function noteNpcEncounter(
+  playerId: string, npcId: string, outcome: string,
+): Promise<NpcRelationship> {
+  const rel = await loadNpcRelationship(playerId, npcId);
+  const positive = outcome === "ACCEPT" || outcome === "SHORT" || outcome === "OUTING_OK";
+  const negative = outcome === "DECLINE" || outcome === "OUTING_NO";
+  const next: NpcRelationship = {
+    ...rel,
+    encounters: Math.min(99, (rel.encounters ?? 0) + 1),
+    lastOutcome: outcome,
+    lastEncounterAt: new Date().toISOString(),
+    trust: Math.max(0, Math.min(100, rel.trust + (positive ? 2 : negative ? -1 : 0))),
+    updatedAt: new Date().toISOString(),
+  };
+  await saveNpcRelationship(playerId, npcId, next);
+  return next;
 }
 
 const TRUST_DELTA: Partial<Record<NpcIntent, number>> = {
@@ -238,6 +272,7 @@ export async function runNpcTurn(
   const nextTopics = [chosen, ...rel.lastTopics].slice(0, 6);
   const nextTrust = Math.max(0, Math.min(100, rel.trust + (TRUST_DELTA[intent] ?? 0)));
   const nextRel: NpcRelationship = {
+    ...rel,
     trust: nextTrust, lastIntent: intent, lastTopics: nextTopics,
     turns: rel.turns + 1, updatedAt: new Date().toISOString(),
   };
