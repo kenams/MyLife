@@ -1,4 +1,5 @@
 import { supabase } from "./supabase";
+import { isCityUnlocked } from "./progression";
 
 export interface Crew {
   id:               string;
@@ -146,8 +147,10 @@ export async function isTagAvailable(tag: string): Promise<boolean> {
 
 export async function createCrew(
   name: string, tag: string, emoji: string, color: string,
-  description: string, founderName: string, founderEmoji: string
-): Promise<Crew | { error: "TAG_TAKEN" } | null> {
+  description: string, founderName: string, founderEmoji: string,
+  playerLevel: number,
+): Promise<Crew | { error: "TAG_TAKEN" | "LEVEL_LOCKED" } | null> {
+  if (!isCityUnlocked("crew", playerLevel)) return { error: "LEVEL_LOCKED" };
   if (!supabase) return null;
   const normalizedTag = tag.toUpperCase().trim().replace(/[^A-Z0-9]/g, "").slice(0, 5);
 
@@ -166,8 +169,9 @@ export async function createCrew(
 }
 
 export async function joinCrew(
-  crewId: string, _playerName: string, _playerEmoji: string
+  crewId: string, _playerName: string, _playerEmoji: string, playerLevel: number,
 ): Promise<boolean> {
+  if (!isCityUnlocked("crew", playerLevel)) return false;
   if (!supabase) return false;
   // RPC : assigne toujours le rôle 'recruit', jamais un rôle passé par le
   // client (même logique que createCrew — insert direct verrouillé).

@@ -17,6 +17,7 @@ import {
 } from "@/lib/crews";
 import { supabase } from "@/lib/supabase";
 import { requestAndGetLocation } from "@/lib/life-map";
+import { getCityUnlock, getCrewAccess, getPlayerXpThreshold } from "@/lib/progression";
 
 const C = {
   bg:      "#080808", card:    "#111111", cardAlt: "#181818",
@@ -44,8 +45,8 @@ function LivePulse({ color = C.green, size = 7 }: { color?: string; size?: numbe
   );
 }
 
-function CrewCard({ crew, isMyCrewId, onJoin }: {
-  crew: Crew; isMyCrewId: boolean; onJoin: (id: string) => void;
+function CrewCard({ crew, isMyCrewId, canJoin, onJoin }: {
+  crew: Crew; isMyCrewId: boolean; canJoin: boolean; onJoin: (id: string) => void;
 }) {
   const scale = useRef(new Animated.Value(1)).current;
   return (
@@ -91,12 +92,16 @@ function CrewCard({ crew, isMyCrewId, onJoin }: {
           <View style={{ flex: 1 }} />
           {!isMyCrewId && (
             <Pressable
+              disabled={!canJoin}
               onPressIn={() => Animated.spring(scale, { toValue: 0.97, useNativeDriver: true }).start()}
               onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
               onPress={() => onJoin(crew.id)}
               style={{ backgroundColor: crew.color + "15", paddingHorizontal: 14, paddingVertical: 7,
-                borderRadius: 8, borderWidth: 1, borderColor: crew.color + "40" }}>
-              <Text style={{ color: crew.color, fontSize: 12, fontWeight: "800" }}>REJOINDRE</Text>
+                borderRadius: 8, borderWidth: 1, borderColor: crew.color + "40",
+                opacity: canJoin ? 1 : 0.45 }}>
+              <Text style={{ color: crew.color, fontSize: 12, fontWeight: "800" }}>
+                {canJoin ? "REJOINDRE" : "🔒 NIV.2"}
+              </Text>
             </Pressable>
           )}
         </View>
@@ -113,6 +118,8 @@ export default function CrewsScreen() {
   const playerXp         = useGameStore((s) => s.stats?.socialRankScore ?? 0);
   const playerReputation = useGameStore((s) => s.stats?.reputation ?? 0);
   const playerMoney      = useGameStore((s) => s.stats?.money ?? 0);
+  const playerLevel      = useGameStore((s) => s.playerLevel ?? 1);
+  const progressionXp    = useGameStore((s) => s.playerXp ?? 0);
 
   const [crews,       setCrews]       = useState<Crew[]>([]);
   const [myCrewId,    setMyCrewId]    = useState<string | null>(null);
@@ -154,6 +161,9 @@ export default function CrewsScreen() {
   const [crewDesc,    setCrewDesc]    = useState("");
   const [tagStatus,   setTagStatus]   = useState<"idle" | "checking" | "ok" | "taken">("idle");
   const tagCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const crewAccess = getCrewAccess(playerLevel, Boolean(myCrewId));
+  const crewUnlockLevel = getCityUnlock("crew")?.unlockLevel ?? 2;
+  const crewUnlockXp = getPlayerXpThreshold(crewUnlockLevel);
 
   useEffect(() => {
     Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
@@ -319,13 +329,14 @@ export default function CrewsScreen() {
   }
 
   async function handleJoin(crewId: string) {
+    if (!crewAccess.canCreateOrJoin) { showToast(`Débloqué au niveau ${crewUnlockLevel}`); return; }
     if (myCrewId) { showToast("Tu es déjà dans un crew"); return; }
     if (cooldown && cooldown > new Date()) {
       const days = Math.ceil((cooldown.getTime() - Date.now()) / 86400000);
       showToast(`Cooldown actif — encore ${days}j avant de rejoindre`);
       return;
     }
-    const ok = await joinCrew(crewId, playerName, playerEmoji);
+    const ok = await joinCrew(crewId, playerName, playerEmoji, playerLevel);
     if (ok) {
       setMyCrewId(crewId);
       const c = crews.find((x) => x.id === crewId);
@@ -337,18 +348,21 @@ export default function CrewsScreen() {
   }
 
   async function handleCreate() {
+    if (!crewAccess.canCreateOrJoin) { showToast(`Débloqué au niveau ${crewUnlockLevel}`); return; }
     const tag = crewTag.trim().toUpperCase().slice(0, 3);
     if (!crewName.trim() || !tag) { showToast("Nom et tag requis"); return; }
     if (tag.length < 2) { showToast("Tag minimum 2 lettres"); return; }
     if (myCrewId) { showToast("Tu es déjà dans un crew"); return; }
     const result = await createCrew(
       crewName.trim(), tag,
-      crewEmoji, crewColor, crewDesc.trim(), playerName, playerEmoji
+      crewEmoji, crewColor, crewDesc.trim(), playerName, playerEmoji, playerLevel
     );
     if (!result) {
       showToast("Erreur réseau — réessaie");
-    } else if ("error" in result && result.error === "TAG_TAKEN") {
-      showToast(`❌ Tag [${tag}] déjà pris — choisis autre chose`);
+    } else if ("error" in result) {
+      showToast(result.error === "LEVEL_LOCKED"
+        ? `Débloqué au niveau ${crewUnlockLevel}`
+        : `❌ Tag [${tag}] déjà pris — choisis autre chose`);
     } else if ("id" in result) {
       setCrews((prev) => [result, ...prev]);
       setMyCrewId(result.id);
@@ -551,10 +565,22 @@ export default function CrewsScreen() {
         )}
 
         {/* Créer crew CTA */}
+        {!crewAccess.canCreateOrJoin && (
+          <View style={{ backgroundColor: C.purple + "10", borderRadius: 12, padding: 14, marginBottom: 12,
+            borderWidth: 1, borderColor: C.purple + "30", gap: 5 }}>
+            <Text style={{ color: C.purple, fontSize: 13, fontWeight: "900" }}>
+              🔒 Débloqué au niveau {crewUnlockLevel}
+            </Text>
+            <Text style={{ color: C.textSoft, fontSize: 11 }}>
+              {Math.min(progressionXp, crewUnlockXp)} / {crewUnlockXp} XP vers le niveau {crewUnlockLevel}
+            </Text>
+          </View>
+        )}
         {!myCrewId && (
-          <Pressable onPress={() => setShowCreate(true)}
+          <Pressable disabled={!crewAccess.canCreateOrJoin} onPress={() => setShowCreate(true)}
             style={{ backgroundColor: C.gold + "12", borderRadius: 12, padding: 16, marginBottom: 20,
-              borderWidth: 1, borderColor: C.gold + "35", flexDirection: "row", alignItems: "center", gap: 12 }}>
+              borderWidth: 1, borderColor: C.gold + "35", flexDirection: "row", alignItems: "center", gap: 12,
+              opacity: crewAccess.canCreateOrJoin ? 1 : 0.45 }}>
             <Text style={{ fontSize: 22 }}>👑</Text>
             <View style={{ flex: 1 }}>
               <Text style={{ color: C.gold, fontSize: 14, fontWeight: "900" }}>Fonde ton crew</Text>
@@ -705,6 +731,7 @@ export default function CrewsScreen() {
               key={crew.id}
               crew={crew}
               isMyCrewId={myCrewId === crew.id}
+              canJoin={crewAccess.canCreateOrJoin && !myCrewId}
               onJoin={handleJoin}
             />
           ))
@@ -713,7 +740,7 @@ export default function CrewsScreen() {
       </ScrollView>
 
       {/* Modal créer crew */}
-      <Modal visible={showCreate} transparent animationType="slide">
+      <Modal visible={showCreate && crewAccess.canCreateOrJoin} transparent animationType="slide">
         <View style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "flex-end" }}>
           <View style={{ backgroundColor: C.card, borderTopLeftRadius: 20, borderTopRightRadius: 20,
             padding: 24, paddingBottom: 48 }}>

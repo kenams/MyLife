@@ -200,6 +200,10 @@ export function getTalentPoints(playerLevel: number): number {
 
 export const PLAYER_XP_PER_LEVEL = 200;
 
+export function getPlayerXpThreshold(playerLevel: number): number {
+  return Math.max(0, Math.floor(playerLevel - 1) * PLAYER_XP_PER_LEVEL);
+}
+
 export function getPlayerLevelFromXp(playerXp: number): number {
   return Math.max(1, Math.floor(Math.max(0, playerXp) / PLAYER_XP_PER_LEVEL) + 1);
 }
@@ -224,6 +228,23 @@ export const CITY_UNLOCKS: CityUnlock[] = [
   { id: "secteurs", name: "Secteurs de la ville", hint: "Des zones à influence longue durée", emoji: "🌆", unlockLevel: 12 },
   { id: "roi", name: "Course au Roi de Toulouse", hint: "Le sommet du classement de la ville", emoji: "👑", unlockLevel: 15 },
 ];
+
+export function getCityUnlock(id: string): CityUnlock | null {
+  return CITY_UNLOCKS.find((unlock) => unlock.id === id) ?? null;
+}
+
+export function isCityUnlocked(id: string, playerLevel: number): boolean {
+  const unlock = getCityUnlock(id);
+  return Boolean(unlock && Number.isFinite(playerLevel) && playerLevel >= unlock.unlockLevel);
+}
+
+export function getCrewAccess(playerLevel: number, hasExistingCrew: boolean) {
+  return {
+    canView: true,
+    canCreateOrJoin: isCityUnlocked("crew", playerLevel),
+    canManageExisting: hasExistingCrew,
+  };
+}
 
 /** Le prochain palier de ville strictement au-dessus du niveau courant. */
 export function nextCityUnlock(playerLevel: number): CityUnlock | null {
