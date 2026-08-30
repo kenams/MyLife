@@ -71,15 +71,32 @@ const SELECT =
    attacker:attacker_crew ( tag, emoji, color ),
    defender:defender_crew ( tag, emoji, color )`;
 
+const BATTLE_QUERY_TIMEOUT_MS = 7000;
+
+function withTimeout<T>(request: PromiseLike<T>, ms = BATTLE_QUERY_TIMEOUT_MS): Promise<T> {
+  return Promise.race([
+    Promise.resolve(request),
+    new Promise<T>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("battle-query-timeout")), ms);
+    }),
+  ]);
+}
+
 export async function fetchUpcomingBattles(): Promise<TerritoryBattle[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("territory_battles")
-    .select(SELECT)
-    .in("status", ["scheduled", "live"])
-    .order("scheduled_at", { ascending: true });
-  if (error || !data) return [];
-  return data.map(mapBattle);
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .from("territory_battles")
+        .select(SELECT)
+        .in("status", ["scheduled", "live"])
+        .order("scheduled_at", { ascending: true })
+    );
+    if (error || !data) return [];
+    return data.map(mapBattle);
+  } catch {
+    return [];
+  }
 }
 
 /** Battles résolues dans les dernières 24 h impliquant `crewId` (pour le FOMO §8). */
@@ -176,4 +193,3 @@ export function subscribeBattle(battleId: string, onChange: () => void) {
     sb.removeChannel(ch);
   };
 }
-
