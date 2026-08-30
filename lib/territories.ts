@@ -33,47 +33,70 @@ export type TerritoryEvent = {
   created_at: string;
 };
 
+const TERRITORY_QUERY_TIMEOUT_MS = 7000;
+
+function withTimeout<T>(request: PromiseLike<T>, ms = TERRITORY_QUERY_TIMEOUT_MS): Promise<T> {
+  return Promise.race([
+    Promise.resolve(request),
+    new Promise<T>((_resolve, reject) => {
+      setTimeout(() => reject(new Error("territory-query-timeout")), ms);
+    }),
+  ]);
+}
+
 export async function fetchTerritories(): Promise<Territory[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("territories")
-    .select(
-      `id, district_id, influence, prestige, conquered_at, defenses_won, next_battle_at,
-       owner_crew_id,
-       districts:district_id ( name, emoji, center_lat, center_lng ),
-       crews:owner_crew_id ( tag, name, emoji, color )`
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .from("territories")
+        .select(
+          `id, district_id, influence, prestige, conquered_at, defenses_won, next_battle_at,
+           owner_crew_id,
+           districts:district_id ( name, emoji, center_lat, center_lng ),
+           crews:owner_crew_id ( tag, name, emoji, color )`
+        )
     );
-  if (error || !data) return [];
-  return data.map((r: Record<string, any>) => ({
-    id: r.id,
-    district_id: r.district_id,
-    district_name: r.districts?.name ?? "Quartier",
-    district_emoji: r.districts?.emoji ?? "📍",
-    center_lat: r.districts?.center_lat ?? 0,
-    center_lng: r.districts?.center_lng ?? 0,
-    owner_crew_id: r.owner_crew_id,
-    owner_tag: r.crews?.tag ?? null,
-    owner_name: r.crews?.name ?? null,
-    owner_emoji: r.crews?.emoji ?? null,
-    owner_color: r.crews?.color ?? null,
-    influence: r.influence ?? 50,
-    prestige: r.prestige ?? 1,
-    conquered_at: r.conquered_at ?? null,
-    defenses_won: r.defenses_won ?? 0,
-    next_battle_at: r.next_battle_at ?? null,
-  }));
+    if (error || !data) return [];
+    return data.map((r: Record<string, any>) => ({
+      id: r.id,
+      district_id: r.district_id,
+      district_name: r.districts?.name ?? "Quartier",
+      district_emoji: r.districts?.emoji ?? "📍",
+      center_lat: r.districts?.center_lat ?? 0,
+      center_lng: r.districts?.center_lng ?? 0,
+      owner_crew_id: r.owner_crew_id,
+      owner_tag: r.crews?.tag ?? null,
+      owner_name: r.crews?.name ?? null,
+      owner_emoji: r.crews?.emoji ?? null,
+      owner_color: r.crews?.color ?? null,
+      influence: r.influence ?? 50,
+      prestige: r.prestige ?? 1,
+      conquered_at: r.conquered_at ?? null,
+      defenses_won: r.defenses_won ?? 0,
+      next_battle_at: r.next_battle_at ?? null,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchTerritoryEvents(territoryId: string, limit = 20): Promise<TerritoryEvent[]> {
   if (!supabase || !territoryId) return [];
-  const { data, error } = await supabase
-    .from("territory_events")
-    .select("id, kind, crew_id, detail, created_at")
-    .eq("territory_id", territoryId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  if (error) return [];
-  return (data ?? []) as TerritoryEvent[];
+  try {
+    const { data, error } = await withTimeout(
+      supabase
+        .from("territory_events")
+        .select("id, kind, crew_id, detail, created_at")
+        .eq("territory_id", territoryId)
+        .order("created_at", { ascending: false })
+        .limit(limit)
+    );
+    if (error) return [];
+    return (data ?? []) as TerritoryEvent[];
+  } catch {
+    return [];
+  }
 }
 
 /** Realtime : la carte réagit dès qu'un territoire change de main. */
