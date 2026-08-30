@@ -41,6 +41,7 @@ import {
 import { joinFlashEvent, checkinFlashEvent } from "@/lib/flash-events";
 import { MoveMissionModal } from "@/components/move-mission-modal";
 import { MapFirstSessionHint, MapPrimarySuggestion } from "@/components/map-session-guidance";
+import { NpcInteraction } from "@/components/npc-interaction";
 import {
   groupMapOpportunities,
   MAP_OPPORTUNITY_SECTION_LABELS,
@@ -842,14 +843,18 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
 }
 
 // ── Player Sheet ──────────────────────────────────────────────────────────────
-function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock, onGoTo, traveling, onChatNpc }: {
+function PlayerSheet({ player, myCrewId, playerId, npcOpportunity, onClose, onInvite, onReport, onBlock, onGoTo, traveling, onChatNpc, onFeedback, onNavigate }: {
   player: MapPlayer | null; myCrewId: string | null; onClose: () => void;
+  playerId: string | null;
+  npcOpportunity: { label: string; route: string } | null;
   onInvite: (p: MapPlayer) => void;
   onReport: (p: MapPlayer) => void;
   onBlock:  (p: MapPlayer) => void;
   onGoTo: (p: MapPlayer) => void;
   traveling: boolean;
   onChatNpc: (p: MapPlayer) => void;
+  onFeedback: (t: string) => void;
+  onNavigate: (r: string) => void;
 }) {
   const scale = useRef(new Animated.Value(0.95)).current;
   const [addState, setAddState] = useState<"idle" | "loading" | "sent" | "error">("idle");
@@ -981,18 +986,17 @@ function PlayerSheet({ player, myCrewId, onClose, onInvite, onReport, onBlock, o
           </Pressable>
         )}
 
-        {player.is_npc && (
-          <Pressable
-            onPress={() => { onChatNpc(player); onClose(); }}
-            style={{
-              backgroundColor: C.purple + "18", borderRadius: 14,
-              paddingVertical: 13, alignItems: "center",
-              borderWidth: 1, borderColor: C.purple + "45",
-            }}>
-            <Text style={{ color: C.purple, fontSize: 13, fontWeight: "900" }}>
-              💬 Discuter (PNJ)
-            </Text>
-          </Pressable>
+        {player.is_npc && playerId && (
+          <NpcInteraction
+            player={player}
+            playerId={playerId}
+            nearbyOpportunity={npcOpportunity}
+            palette={{ surface: "#08080F", border: C.border, text: C.text, muted: C.soft, accent: C.purple }}
+            onFeedback={onFeedback}
+            onNavigate={(r) => { onClose(); onNavigate(r); }}
+            onClose={onClose}
+            onOpenFullChat={() => { onChatNpc(player); onClose(); }}
+          />
         )}
 
         {!player.is_npc && player.status !== "ghost" && (
@@ -1728,6 +1732,14 @@ export default function LifeMapScreen() {
       recentSignalIds: recentPulseIds,
     });
   }, [avatar?.homeDistrict, avatar?.lookingFor, livingCity?.events, myCrewId, recentPulseIds]);
+  const npcOpportunity = useMemo(() => {
+    const s = cityPulseSignals[0];
+    if (!s) return null;
+    return {
+      label: s.district ? `Voir ${mapOpportunityKindLabel(s.kind)} · ${s.district}` : `Voir ${mapOpportunityKindLabel(s.kind)}`,
+      route: cityPulseRoute(s),
+    };
+  }, [cityPulseSignals]);
   const crewDominance = useMemo(() => {
     const inputs = crewZones.length > 0
       ? crewZones.map((zone) => ({
@@ -2276,12 +2288,14 @@ export default function LifeMapScreen() {
       )}
 
       {/* ── MODALS ────────────────────────────────────────────────────────── */}
-      <PlayerSheet player={selected} myCrewId={myCrewId} onClose={() => setSelected(null)}
+      <PlayerSheet player={selected} myCrewId={myCrewId} playerId={myUserId} npcOpportunity={npcOpportunity} onClose={() => setSelected(null)}
         onInvite={handleInvite}
         onReport={(p) => { setSelected(null); setReportTarget(p); }}
         onBlock={handleBlock}
         onGoTo={handleGoTo}
         traveling={!!travel}
+        onFeedback={setMapFeedback}
+        onNavigate={(r) => router.push(r as never)}
         onChatNpc={(p) => { setNpcChatTarget(p); setNpcHistory([]); setNpcError(null); setNpcQuickReplies([]); setNpcEngine("local"); }} />
 
       {/* ── TRAJET EN COURS ──────────────────────────────────────────────── */}

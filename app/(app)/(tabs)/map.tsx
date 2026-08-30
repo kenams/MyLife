@@ -22,6 +22,7 @@ import { sendLocalNotification } from "@/lib/push-notifications";
 import { blockUser } from "@/lib/safety";
 import { ReportModal } from "@/components/report-modal";
 import { MapFirstSessionHint, MapPrimarySuggestion } from "@/components/map-session-guidance";
+import { NpcInteraction } from "@/components/npc-interaction";
 import { useGameStore } from "@/stores/game-store";
 import {
   groupMapOpportunities,
@@ -125,12 +126,14 @@ function PlayerMarker({ player, onPress }: { player: MapPlayer; onPress: () => v
 }
 
 // ── Fiche profil joueur (bottom sheet) ───────────────────────────────────────
-function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
+function PlayerSheet({ player, onClose, onInvite, onReport, onBlock, npcOpportunity, onFeedback }: {
   player: MapPlayer | null;
   onClose: () => void;
   onInvite: (p: MapPlayer) => void;
   onReport: (p: MapPlayer) => void;
   onBlock: (p: MapPlayer) => void;
+  npcOpportunity: { label: string; route: string } | null;
+  onFeedback: (t: string) => void;
 }) {
   if (!player) return null;
   const cfg = STATUS_CONFIG[player.status];
@@ -217,9 +220,15 @@ function PlayerSheet({ player, onClose, onInvite, onReport, onBlock }: {
         </View>
 
         {player.is_npc && (
-          <Text style={{ color: L.textSoft, fontSize: 12, lineHeight: 17 }}>
-            Cet habitant vit sa vie dans Toulouse. Croise-le lors d'un événement ou d'une mission pour interagir.
-          </Text>
+          <NpcInteraction
+            player={player}
+            playerId="local_user"
+            nearbyOpportunity={npcOpportunity}
+            palette={{ surface: L.cardAlt, border: L.border, text: L.text, muted: L.muted, accent: L.primary }}
+            onFeedback={onFeedback}
+            onNavigate={(r) => { onClose(); router.push(r as never); }}
+            onClose={onClose}
+          />
         )}
 
         {/* CTA */}
@@ -680,6 +689,15 @@ export default function LifeMapScreen() {
       recentSignalIds: recentPulseIds,
     });
   }, [avatar?.homeDistrict, avatar?.lookingFor, livingCity?.events, recentPulseIds]);
+
+  const npcOpportunity = useMemo(() => {
+    const s = cityPulseSignals[0];
+    if (!s) return null;
+    return {
+      label: s.district ? `Voir ${mapOpportunityKindLabel(s.kind)} · ${s.district}` : `Voir ${mapOpportunityKindLabel(s.kind)}`,
+      route: cityPulseRoute(s),
+    };
+  }, [cityPulseSignals]);
   const crewDominance = useMemo(() => {
     const inputs = bastions.length > 0
       ? bastions.map((zone) => ({
@@ -917,7 +935,9 @@ export default function LifeMapScreen() {
       <PlayerSheet player={selected} onClose={() => setSelected(null)}
         onInvite={handleInvite}
         onReport={(p) => { setSelected(null); setReportTarget(p); }}
-        onBlock={handleBlock} />
+        onBlock={handleBlock}
+        npcOpportunity={npcOpportunity}
+        onFeedback={setMapFeedback} />
       {reportTarget && (
         <ReportModal
           visible={!!reportTarget}
