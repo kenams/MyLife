@@ -11,7 +11,7 @@ import {
 describe("living city simulation", () => {
   it("seeds the QA population presets", () => {
     expect(populationForPreset("LOW")).toBe(30);
-    expect(populationForPreset("NORMAL")).toBe(100);
+    expect(populationForPreset("NORMAL")).toBe(220);
     expect(populationForPreset("BUSY")).toBe(250);
 
     const busy = seedLivingCityNpcs("BUSY", new Date("2026-08-29T20:00:00Z"));

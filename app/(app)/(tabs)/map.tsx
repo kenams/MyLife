@@ -23,7 +23,11 @@ import { blockUser } from "@/lib/safety";
 import { ReportModal } from "@/components/report-modal";
 import { MapFirstSessionHint, MapPrimarySuggestion } from "@/components/map-session-guidance";
 import { NpcInteraction } from "@/components/npc-interaction";
+import { useWorldEnvironment } from "@/hooks/use-world-environment";
+import { mapAmbientOverlay, weatherOverlay } from "@/lib/world-environment";
+import { ACTIVE_CITY } from "@/lib/city-config";
 import { useGameStore } from "@/stores/game-store";
+import { getNewPlayerMapStep, playableMapOpportunities } from "@/lib/new-player-loop";
 import {
   groupMapOpportunities,
   MAP_OPPORTUNITY_SECTION_LABELS,
@@ -533,6 +537,11 @@ export default function LifeMapScreen() {
   const hasHydrated       = useGameStore((s) => s.hasHydrated);
   const mapIntroDismissed = useGameStore((s) => s.mapIntroDismissed);
   const dismissMapIntro   = useGameStore((s) => s.dismissMapIntro);
+  const performAction     = useGameStore((s) => s.performAction);
+  const missionProgresses = useGameStore((s) => s.missionProgresses ?? []);
+  const worldEnv          = useWorldEnvironment();
+  const mapAmbient        = mapAmbientOverlay(worldEnv);
+  const mapWeather        = weatherOverlay(worldEnv);
 
   const [players,       setPlayers]       = useState<MapPlayer[]>([]);
   const [myStatus,      setMyStatus]      = useState<MapStatus>("ghost");
@@ -553,6 +562,7 @@ export default function LifeMapScreen() {
   const [mapFeedback, setMapFeedback] = useState<string | null>(null);
 
   const mapRef = useRef<MapView>(null);
+  const districtMomentRef = useRef<{ name: string; at: number }>({ name: "", at: 0 });
 
   useEffect(() => {
     if (!mapFeedback) return;
@@ -681,17 +691,25 @@ export default function LifeMapScreen() {
   const cityPulseSignals = useMemo(() => {
     const livingSignals = livingCityEventsToCityPulse(livingCity?.events ?? []);
     const lookingFor = avatar?.lookingFor ?? [];
-    return selectCityPulseOpportunities(livingSignals, {
+    const rankedSignals = selectCityPulseOpportunities(livingSignals, {
       district: avatar?.homeDistrict ?? "Capitole",
       // Respecte le choix fait à la création de l'avatar (pas de nouveau système).
       wantsDating: lookingFor.some((x) => /rencontre/i.test(x)),
       wantsSocial: lookingFor.some((x) => /ami|sortie|discussion|social/i.test(x)),
       recentSignalIds: recentPulseIds,
     });
-  }, [avatar?.homeDistrict, avatar?.lookingFor, livingCity?.events, recentPulseIds]);
+    return playableMapOpportunities(rankedSignals, playerLevel, missionProgresses);
+  }, [avatar?.homeDistrict, avatar?.lookingFor, livingCity?.events, missionProgresses, playerLevel, recentPulseIds]);
+  const newPlayerStep = useMemo(
+    () => getNewPlayerMapStep(playerLevel, missionProgresses),
+    [missionProgresses, playerLevel]
+  );
+  useEffect(() => {
+    if (newPlayerStep) setPrimarySuggestionDismissed(false);
+  }, [newPlayerStep?.signal.id]);
 
   const npcOpportunity = useMemo(() => {
-    const s = cityPulseSignals[0];
+    const s = cityPulseSignals.find((signal) => !signal.id.startsWith("new-player:"));
     if (!s) return null;
     return {
       label: s.district ? `Voir ${mapOpportunityKindLabel(s.kind)} · ${s.district}` : `Voir ${mapOpportunityKindLabel(s.kind)}`,
@@ -723,9 +741,48 @@ export default function LifeMapScreen() {
       .slice(0, 3);
   }, [bastions, livingCity?.crews]);
 
+  // ── Moment d'entrée de quartier (P1) — cooldown + dedupe ──────────────
+  useEffect(() => {
+    if (!myLocation) return;
+    let nearest: { name: string; d: number } | null = null;
+    for (const q of ACTIVE_CITY.quartiers) {
+      const d = haversineMeters(myLocation, { lat: q.lat, lng: q.lng });
+      if (!nearest || d < nearest.d) nearest = { name: q.name, d };
+    }
+    if (!nearest || nearest.d > 900) return;
+    const prev = districtMomentRef.current;
+    if (nearest.name === prev.name || Date.now() - prev.at < 90_000) return;
+    districtMomentRef.current = { name: nearest.name, at: Date.now() };
+
+    const dom = crewDominance.find((c) => c.district === nearest!.name);
+    const mood = livingCity?.districtStates?.[nearest.name]?.mood;
+    let sub = "";
+    if (dom?.state === "contested") sub = " · District contesté";
+    else if (dom) sub = ` · [${dom.dominant.name}] domine ce quartier`;
+    else if (mood === "nocturne") sub = " · Ambiance nocturne";
+    else if (mood === "social") sub = " · Quartier animé";
+    else if (mood === "competitif") sub = " · Tensions de crews";
+    setMapFeedback(`${nearest.name.toUpperCase()}${sub}`);
+  }, [myLocation, crewDominance, livingCity?.districtStates]);
+
   function handleCityPulsePress(signal: CityPulseSignal) {
     setShowMapContext(false);
     setRecentPulseIds((ids) => [signal.id, ...ids.filter((id) => id !== signal.id)].slice(0, 12));
+    if (newPlayerStep?.signal.id === signal.id) {
+      if (newPlayerStep.intent === "explore") {
+        const xpBefore = useGameStore.getState().playerXp;
+        performAction("walk");
+        const xpEarned = useGameStore.getState().playerXp - xpBefore;
+        dismissMapIntro();
+        setMapFeedback(`Quartier exploré · +${xpEarned} XP`);
+        hapticImpact("medium");
+        return;
+      }
+      setPrimarySuggestionDismissed(true);
+      router.push(newPlayerStep.intent === "missions" ? "/(app)/missions" as never : "/(app)/(tabs)/home" as never);
+      return;
+    }
+    setPrimarySuggestionDismissed(true);
     router.push(cityPulseRoute(signal) as never);
   }
 
@@ -755,6 +812,24 @@ export default function LifeMapScreen() {
             onPress={() => { hapticImpact("light"); setSelected(p); }} />
         ))}
       </MapView>
+
+      {/* Ambiance World Environment (sous les contrôles) */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+          backgroundColor: mapAmbient.color, opacity: mapAmbient.opacity,
+        }}
+      />
+      {mapWeather.kind && (
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: mapWeather.color, opacity: mapWeather.opacity,
+          }}
+        />
+      )}
 
       {/* Filtre pills */}
       <FilterPills active={filter} onChange={setFilter} />

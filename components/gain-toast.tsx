@@ -24,9 +24,12 @@ const C = {
 
 export function GainToast() {
   const lastGain = useGameStore((s) => s.lastGain);
+  const playerLevel = useGameStore((s) => s.playerLevel ?? 1);
   const [shown, setShown] = useState<typeof lastGain>(null);
+  const [shownLevel, setShownLevel] = useState<number | null>(null);
   const anim = useRef(new Animated.Value(0)).current;
   const seenAt = useRef(0);
+  const seenLevel = useRef(playerLevel);
   const reduceMotion = useRef(false);
 
   useEffect(() => {
@@ -39,6 +42,9 @@ export function GainToast() {
     if (!lastGain || lastGain.at === seenAt.current) return;
     seenAt.current = lastGain.at;
     setShown(lastGain);
+    const leveledUp = playerLevel > seenLevel.current;
+    setShownLevel(leveledUp ? playerLevel : null);
+    seenLevel.current = Math.max(seenLevel.current, playerLevel);
     hapticImpact("light");
 
     const inMs = reduceMotion.current ? 0 : 220;
@@ -49,13 +55,19 @@ export function GainToast() {
       Animated.delay(1250),
       Animated.timing(anim, { toValue: 0, duration: outMs, easing: Easing.in(Easing.quad), useNativeDriver: Platform.OS !== "web" }),
     ]).start(({ finished }) => {
-      if (finished) setShown(null);
+      if (finished) {
+        setShown(null);
+        setShownLevel(null);
+      }
     });
-  }, [lastGain, anim]);
+  }, [lastGain, playerLevel, anim]);
 
   if (!shown) return null;
 
   const parts: { label: string; color: string }[] = [];
+  if (shownLevel) {
+    parts.push({ label: shownLevel === 2 ? "NIVEAU 2 · CREWS DÉBLOQUÉS" : `NIVEAU ${shownLevel}`, color: C.money });
+  }
   if (shown.xp > 0) parts.push({ label: `+${shown.xp} XP`, color: C.xp });
   if (shown.money > 0) parts.push({ label: wory(shown.money, { sign: true }), color: C.money });
   if (shown.reputation > 0) parts.push({ label: `+${shown.reputation} rép`, color: C.rep });

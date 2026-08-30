@@ -86,7 +86,7 @@ export type LivingCityTickResult = {
 
 const PRESET_COUNTS: Record<LivingCityPreset, number> = {
   LOW: 30,
-  NORMAL: 100,
+  NORMAL: 220,
   BUSY: 250,
   CHAOS: 500,
 };
@@ -288,7 +288,7 @@ export function seedLivingCityNpcs(preset: LivingCityPreset, now = new Date()): 
       lastInviteAt: null,
       posX: Math.round(8 + random() * 84),
       posY: Math.round(8 + random() * 84),
-      presenceOnline: random() > 0.45,
+      presenceOnline: random() > 0.25,
       lastOnlineAt: now.toISOString(),
       is_npc: true,
       is_demo: true,
@@ -431,7 +431,7 @@ function updateNpc(npc: NpcState, minutes: number, now: Date, playerDistrict: st
   const archetypes = (npc.personality ?? "social/balanced").split("/");
   const level: LivingCityLevel =
     npc.homeDistrictSlug === playerDistrict ? "NEAR_PLAYER" :
-    random() > 0.6 ? "ACTIVE_DISTRICT" : "OFFSCREEN";
+    random() > 0.45 ? "ACTIVE_DISTRICT" : "OFFSCREEN";
   const routineAction = activityFor(hourPhase(now.getHours()), archetypes, random);
   const npcContext: NpcContext = {
     hour: now.getHours(),
@@ -444,7 +444,7 @@ function updateNpc(npc: NpcState, minutes: number, now: Date, playerDistrict: st
   const intent = chooseNpcAction(npc, npcContext, now);
   const action = avatarActionForIntent(intent.intent, routineAction);
   const currentActivity = currentActivityForIntent(intent.intent, action);
-  const detailFactor = level === "NEAR_PLAYER" ? 1 : level === "ACTIVE_DISTRICT" ? 0.55 : 0.18;
+  const detailFactor = level === "NEAR_PLAYER" ? 1 : level === "ACTIVE_DISTRICT" ? 0.85 : 0.4;
   const delta = Math.min(8, Math.max(0.2, minutes / 10)) * detailFactor;
   const locationSlug = locationFor(action, npc.homeDistrictSlug ?? playerDistrict, random);
   return {
@@ -460,9 +460,9 @@ function updateNpc(npc: NpcState, minutes: number, now: Date, playerDistrict: st
     npcWory: Math.max(0, Math.round((npc.npcWory ?? npc.money) + (action === "working" ? 4 : action === "chatting" ? -1 : 0) * delta)),
     xp: npc.xp + Math.round((action === "working" ? 5 : action === "exercising" ? 4 : 2) * delta),
     level: Math.max(1, Math.floor((npc.xp + Math.round(delta * 4)) / 100) + 1),
-    posX: Math.round(clamp(npc.posX + (random() * 10 - 5) * detailFactor, 4, 96)),
-    posY: Math.round(clamp(npc.posY + (random() * 10 - 5) * detailFactor, 4, 96)),
-    presenceOnline: action !== "sleeping" && random() > (level === "OFFSCREEN" ? 0.62 : 0.28),
+    posX: Math.round(clamp(npc.posX + (random() * 16 - 8) * detailFactor, 4, 96)),
+    posY: Math.round(clamp(npc.posY + (random() * 16 - 8) * detailFactor, 4, 96)),
+    presenceOnline: action !== "sleeping" && random() > (level === "OFFSCREEN" ? 0.4 : 0.15),
     lastOnlineAt: action !== "sleeping" ? now.toISOString() : npc.lastOnlineAt,
     lastTickAt: now.toISOString(),
   };

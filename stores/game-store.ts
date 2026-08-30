@@ -55,11 +55,14 @@ import {
 import { buildAdvice, detectLifePattern, getMomentumState, getSocialRankLabel, RANK_ORDER } from "@/lib/selectors";
 import { checkQuestCompletion, generateDailyQuests, getTodayQuestKey } from "@/lib/daily-quests";
 import type { DailyQuest } from "@/lib/daily-quests";
+import { createFreshPlayerProgressState, playerProgressPersistenceSlice, shouldResetDailyGoals } from "@/lib/fresh-player";
+import { getPlayerLevelFromXp } from "@/lib/progression";
 import { generateWorldEvent, isWorldEventActive } from "@/lib/world-events";
 import type { WorldEvent } from "@/lib/world-events";
 import {
   createLivingCityState,
   seedLivingCityNpcs,
+  populationForPreset,
   simulateLivingCityTick,
   type LivingCityEventKind,
   type LivingCityPreset,
@@ -230,6 +233,12 @@ const DEFAULT_ROOMS: Array<Omit<Room, "createdAt">> = [
   }
 ];
 
+/** Garde l'état des PNJ existants, ajoute les nouveaux du seed (montée de population). */
+function mergeNpcPopulation(existing: NpcState[], seed: NpcState[]): NpcState[] {
+  const byId = new Map(existing.map((n) => [n.id, n]));
+  return seed.map((n) => byId.get(n.id) ?? n);
+}
+
 function createDefaultRoom(room: Omit<Room, "createdAt">): Room {
   return { ...room, createdAt: new Date().toISOString() } as Room;
 }
@@ -249,6 +258,7 @@ type GameState = {
   currentNeighborhoodSlug: string;
   conversations: Conversation[];
   dailyGoals: ReturnType<typeof createInitialRuntime>["dailyGoals"];
+  lastDailyGoalResetAt: string | null;
   lastRewardAt: string | null;
   notifications: NotificationItem[];
   advice: ReturnType<typeof createInitialRuntime>["advice"];
@@ -505,6 +515,7 @@ function initialState() {
     npcRelations: [] as NpcRelation[],
     activeDatePlanId: null as string | null,
     appTheme: DEFAULT_THEME as ThemeId,
+    lastDailyGoalResetAt: null as string | null,
     avatar: null as AvatarProfile | null,
     dailyEvent: null as DailyEvent | null,
     lastKnownRank: null as SocialRank | null,
@@ -1385,8 +1396,7 @@ function withActionApplied(state: GameState, action: LifeActionId): Partial<Game
   };
   const rawXp = Math.round((XP_TABLE[action] ?? 5) * boostMultiplier * timeMult);
   const newPlayerXp = (state.playerXp ?? 0) + rawXp;
-  const XP_PER_LEVEL = 200;
-  const newPlayerLevel = Math.max(1, Math.floor(newPlayerXp / XP_PER_LEVEL) + 1);
+  const newPlayerLevel = getPlayerLevelFromXp(newPlayerXp);
 
   // Missions progress
   const { updatedProgresses } = applyActionToMissions(
@@ -1481,12 +1491,12 @@ export const useGameStore = create<GameState>()(
         }
         if (!isSupabaseConfigured || !supabase) {
           // Mode local : créer session locale
-          set({ session: { email: cleanedEmail, provider: "local" } });
+          set({ ...initialState(), session: { email: cleanedEmail, provider: "local" }, hasHydrated: true });
           return { ok: true };
         }
         const { error } = await supabase.auth.signUp({ email: cleanedEmail, password });
         if (error) return { ok: false, error: error.message };
-        set({ session: { email: cleanedEmail, provider: "supabase" } });
+        set({ ...initialState(), session: { email: cleanedEmail, provider: "supabase" }, hasHydrated: true });
         return { ok: true };
       },
       resetPassword: async (email: string) => {
@@ -1524,12 +1534,12 @@ export const useGameStore = create<GameState>()(
       completeAvatar: (avatar) => {
         const stats = createStatsFromAvatar(avatar);
         const createdAt = nowIso();
-        const starterMissions = applyActionToMissions([], "walk", 1).updatedProgresses;
+        const freshProgress = createFreshPlayerProgressState(stats, createdAt);
         set({
           avatar,
           stats,
           advice: buildAdvice(stats),
-          missionProgresses: starterMissions,
+          ...freshProgress,
           invitations: [
             {
               id: "invite-ava-start",
@@ -1574,8 +1584,8 @@ export const useGameStore = create<GameState>()(
           const today = new Date().toDateString();
 
           // Reset daily goals at midnight
-          const lastGoalReset = (state as GameState & { lastDailyGoalResetAt?: string | null }).lastDailyGoalResetAt;
-          const goalsNeedReset = !lastGoalReset || new Date(lastGoalReset).toDateString() !== today;
+          const lastGoalReset = state.lastDailyGoalResetAt;
+          const goalsNeedReset = shouldResetDailyGoals(lastGoalReset, today);
           const dailyGoals = goalsNeedReset ? seededDailyGoals() : state.dailyGoals;
 
           // Streak warning: lastRewardAt was yesterday → still ok; was before yesterday → streak will reset on next claim
@@ -1800,8 +1810,9 @@ export const useGameStore = create<GameState>()(
       performAction: (action) => set((state) => withActionApplied(state, action)),
       claimMission: (missionId) => set((state) => {
         const { updatedProgresses, xp, money } = claimMissionReward(state.missionProgresses ?? [], missionId);
+        if (xp <= 0 && money <= 0) return state;
         const newPlayerXp = (state.playerXp ?? 0) + xp;
-        const newPlayerLevel = Math.max(1, Math.floor(newPlayerXp / 200) + 1);
+        const newPlayerLevel = getPlayerLevelFromXp(newPlayerXp);
         return {
           missionProgresses: updatedProgresses,
           playerXp: newPlayerXp,
@@ -3693,7 +3704,7 @@ export const useGameStore = create<GameState>()(
         const quest = (s.dailyQuests ?? []).find((q) => q.id === questId);
         if (!quest || !quest.completed || quest.claimed) return {};
         const newPlayerXp = (s.playerXp ?? 0) + quest.xpReward;
-        const newPlayerLevel = Math.max(1, Math.floor(newPlayerXp / 200) + 1);
+        const newPlayerLevel = getPlayerLevelFromXp(newPlayerXp);
         const newStats = normalizeStats({ ...s.stats, money: s.stats.money + quest.moneyReward });
         const feed = appendFeed(s.lifeFeed, {
           id: `feed-quest-${Date.now()}`,
@@ -3727,7 +3738,7 @@ export const useGameStore = create<GameState>()(
           money: s.stats.money + event.moneyReward,
         });
         const newPlayerXp = (s.playerXp ?? 0) + event.xpReward;
-        const newPlayerLevel = Math.max(1, Math.floor(newPlayerXp / 200) + 1);
+        const newPlayerLevel = getPlayerLevelFromXp(newPlayerXp);
         const feed = appendFeed(s.lifeFeed, {
           id: `feed-world-event-${Date.now()}`,
           title: `🌍 ${event.title} — ${event.city.name}`,
@@ -3971,7 +3982,7 @@ export const useGameStore = create<GameState>()(
         currentLocationSlug: state.currentLocationSlug,
         currentNeighborhoodSlug: state.currentNeighborhoodSlug,
         conversations: state.conversations,
-        dailyGoals: state.dailyGoals,
+        ...playerProgressPersistenceSlice(state),
         lastRewardAt: state.lastRewardAt,
         notifications: state.notifications,
         advice: state.advice,
@@ -3980,7 +3991,6 @@ export const useGameStore = create<GameState>()(
         datePlans: state.datePlans,
         dailyEvent: state.dailyEvent,
         lastKnownRank: state.lastKnownRank,
-        lastDailyGoalResetAt: (state as GameState & { lastDailyGoalResetAt?: string | null }).lastDailyGoalResetAt,
         lifeFeed: state.lifeFeed,
         npcs: state.npcs,
         rooms: state.rooms,
@@ -3997,12 +4007,6 @@ export const useGameStore = create<GameState>()(
         moneyTransfers: state.moneyTransfers,
         studyProgress: state.studyProgress,
         supabaseAvatarId: state.supabaseAvatarId,
-        playerXp: state.playerXp,
-        playerLevel: state.playerLevel,
-        missionProgresses: state.missionProgresses,
-        unlockedTalents: state.unlockedTalents,
-        dailyQuests: state.dailyQuests,
-        questLastRefreshDate: state.questLastRefreshDate,
         worldEvent: state.worldEvent,
         worldEventJoined: state.worldEventJoined,
         livingCity: state.livingCity,
@@ -4040,9 +4044,15 @@ export const useGameStore = create<GameState>()(
           state.joinedRooms ?? []
         );
         const prevLivingCity = state.livingCity ?? createLivingCityState("NORMAL");
+        // Complète la population si une sauvegarde ancienne en contient moins
+        // que le preset courant (ex : montée de NORMAL 100 → 220).
+        const targetPop = populationForPreset(prevLivingCity.preset ?? "NORMAL");
+        const seededNpcs = state.npcs && state.npcs.length >= targetPop
+          ? state.npcs
+          : mergeNpcPopulation(state.npcs ?? [], seedLivingCityNpcs(prevLivingCity.preset ?? "NORMAL"));
         const livingResult = simulateLivingCityTick({
           state: prevLivingCity,
-          npcs: state.npcs ?? seedLivingCityNpcs("NORMAL"),
+          npcs: seededNpcs,
           playerDistrict: state.avatar?.homeDistrict ?? "Capitole",
         });
         // Retour après absence : conséquences autonomes + résumé "pendant ton absence".

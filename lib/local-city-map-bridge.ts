@@ -44,6 +44,10 @@ export function getLocalCityPlayers(): MapPlayer[] {
 
 export function subscribeLocalCityPlayers(listener: (player: MapPlayer) => void) {
   listeners.add(listener);
+  // Rejoue l'état courant : un abonné tardif (écran carte monté après le
+  // premier publish de CityRuntime) recevait sinon uniquement les diffs
+  // suivants et ne voyait qu'une fraction de la ville.
+  for (const player of currentPlayers) listener(player);
   return () => listeners.delete(listener);
 }
 

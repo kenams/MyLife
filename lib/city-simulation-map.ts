@@ -127,14 +127,14 @@ export function estimateCityActivity(
   // detail; zooming out relies on clusters/aggregate city signals.
   const zoomFactor = clamp((zoom - 9) / 8, 0, 1);
   const rhythmFactor = clamp(mobileShare / 0.31, 0.25, 1);
-  const materializedAgents = Math.round(36 + zoomFactor * 84 + rhythmFactor * 40);
+  const materializedAgents = Math.round(120 + zoomFactor * 90 + rhythmFactor * 40);
 
   return {
     referencePopulation: city.referencePopulation,
     awakePopulation,
     mobilePopulation,
     socialPopulation,
-    materializedAgents: clamp(materializedAgents, 36, 160),
+    materializedAgents: clamp(materializedAgents, 90, 250),
   };
 }
 
@@ -259,9 +259,12 @@ export function selectMaterializedNpcs(
   zoom = 12,
 ): NpcState[] {
   const budget = estimateCityActivity(at, city, zoom).materializedAgents;
-  return npcs
-    .filter((npc) => npc.presenceOnline)
-    .sort((a, b) => hash(`${a.id}:${at.toDateString()}`) - hash(`${b.id}:${at.toDateString()}`))
+  // Ensemble STABLE tick après tick : on trie par un hash déterministe de l'id
+  // (sans la date, sans presenceOnline) pour éviter la valse ghost/add qui
+  // faisait "disparaître" la ville. presenceOnline n'influence plus que le
+  // statut affiché, pas la présence sur la carte.
+  return [...npcs]
+    .sort((a, b) => hash(a.id) - hash(b.id))
     .slice(0, budget);
 }
 

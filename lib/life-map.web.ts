@@ -1,3 +1,4 @@
+import { getLocalCityPlayers, subscribeLocalCityPlayers } from "./local-city-map-bridge";
 import { supabase } from "./supabase";
 
 export type MapStatus = "free" | "vibe" | "charo" | "taken" | "ghost";
@@ -153,31 +154,45 @@ export function isPresenceFresh(updatedAt: string, now = Date.now()): boolean {
 
 // ── Fetch tous les joueurs visibles (non-ghost, présence fraîche) ────────────
 export async function fetchAllPlayers(): Promise<MapPlayer[]> {
-  if (!supabase) return MOCK_PLAYERS;
+  const localCity = getLocalCityPlayers();
+  if (!supabase) return localCity.length > 0 ? localCity : MOCK_PLAYERS;
   const { data, error } = await supabase
     .from("life_map_players")
     .select("*")
+    .eq("is_npc", false)
     .neq("status", "ghost")
     .gt("updated_at", new Date(Date.now() - PRESENCE_TTL_MS).toISOString())
     .order("updated_at", { ascending: false })
     .limit(200);
-  if (error || !data || data.length === 0) return MOCK_PLAYERS;
-  return data as MapPlayer[];
+  const realPlayers = !error && data ? (data as MapPlayer[]) : [];
+  if (realPlayers.length === 0 && localCity.length === 0) return MOCK_PLAYERS;
+  return [...realPlayers, ...localCity];
 }
 
-// ── Subscribe Realtime aux updates de la map ──────────────────────────────────
+// ── Subscribe Realtime + résidents simulés (bridge City Engine) ──────────────
 export function subscribeToMap(onUpdate: (player: MapPlayer) => void) {
-  if (!supabase) return null;
-  return supabase
-    .channel("life_map_live")
-    .on("postgres_changes", {
-      event: "*",
-      schema: "public",
-      table: "life_map_players",
-    }, (payload) => {
-      if (payload.new) onUpdate(payload.new as MapPlayer);
-    })
-    .subscribe();
+  const unsubscribeLocal = subscribeLocalCityPlayers(onUpdate);
+  const realtime = supabase
+    ? supabase
+        .channel("life_map_live")
+        .on("postgres_changes", {
+          event: "*",
+          schema: "public",
+          table: "life_map_players",
+        }, (payload) => {
+          if (!payload.new) return;
+          const player = payload.new as MapPlayer;
+          if (player.is_npc) return;
+          onUpdate(player);
+        })
+        .subscribe()
+    : null;
+  return {
+    unsubscribe() {
+      unsubscribeLocal();
+      realtime?.unsubscribe();
+    },
+  };
 }
 
 // ── Mock players — coordonnées Toulouse pour test GPS local ──────────────────

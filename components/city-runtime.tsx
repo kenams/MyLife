@@ -4,7 +4,7 @@ import { livingNpcsToMapPlayers } from "@/lib/city-simulation-map";
 import { clearLocalCityPlayers, publishLocalCityPlayers } from "@/lib/local-city-map-bridge";
 import { useGameStore } from "@/stores/game-store";
 
-const CITY_TICK_MS = 30_000;
+const CITY_TICK_MS = 15_000;
 const IMMEDIATE_TICK_STALE_MS = 45_000;
 
 /**

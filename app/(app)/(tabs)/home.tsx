@@ -1,6 +1,6 @@
 "use client";
 import { router, useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Animated, Modal, Platform, Pressable, ScrollView, Text, View } from "react-native";
 import { wory } from "@/lib/branding";
 import { supabase } from "@/lib/supabase";
@@ -41,6 +41,7 @@ import { NotificationsBell } from "@/components/notifications-bell";
 import { OnboardingTour } from "@/components/onboarding-tour";
 import { DailyHub } from "@/components/daily-hub";
 import { LivingCityDevPanel } from "@/components/living-city-dev-panel";
+import { getNewPlayerMapStep } from "@/lib/new-player-loop";
 
 const L = {
   bg:        "#080808",
@@ -457,6 +458,7 @@ export default function HomeScreen() {
   const bootstrap        = useGameStore((s) => s.bootstrap);
   const dailyEvent       = useGameStore((s) => s.dailyEvent);
   const playerLevel      = useGameStore((s) => s.playerLevel ?? 1);
+  const missionProgresses = useGameStore((s) => s.missionProgresses ?? []);
   const housingTier      = useGameStore((s) => s.housingTier);
   const checkHousingRent = useGameStore((s) => s.checkHousingRent);
   const lifeFeed         = useGameStore((s) => s.lifeFeed ?? []);
@@ -492,6 +494,15 @@ export default function HomeScreen() {
 
   const topCrisis  = crises[0];
   const actionById = new Map(ALL_ACTIONS.map((a) => [a.id, a]));
+  const levelOneStep = useMemo(
+    () => getNewPlayerMapStep(playerLevel, missionProgresses),
+    [missionProgresses, playerLevel]
+  );
+  const levelOneAction: LifeActionId | undefined = levelOneStep?.signal.id === "new-player:first-meal"
+    ? "home-cooking"
+    : levelOneStep?.signal.id === "new-player:meditate"
+      ? "meditate"
+      : undefined;
 
   // Raison de blocage explicite
   function blockedReason(a: ActionDef): string | undefined {
@@ -504,6 +515,7 @@ export default function HomeScreen() {
   // Liste : crise prioritaire + suggestions + essentiels, dispo d'abord puis bloqués
   const wantedIds = Array.from(new Set([
     topCrisis?.action,
+    levelOneAction,
     ...suggested,
     "work-shift", "healthy-meal", "sleep", "shower", "walk", "meditate",
   ].filter(Boolean) as LifeActionId[])).slice(0, 8);

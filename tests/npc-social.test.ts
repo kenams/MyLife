@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   resolveNpcApproach,
   resolveOutingProposal,
+  districtLine,
   npcActivityShort,
   type NpcApproachContext,
 } from "../lib/npc-social";
@@ -61,6 +62,7 @@ describe("resolveNpcApproach", () => {
     const withCrew = resolveNpcApproach({ ...base, activityLabel: "🎉 En sortie", status: "charo", crewTag: "WLV", npcId: "npc-crew" });
     // opener may or may not mention it, but district action stays available for non-guarded
     expect(withCrew.actions.length).toBeGreaterThan(0);
+    expect(districtLine({ ...base, crewTag: "WLV" })).toContain("Wolves [WLV]");
   });
 });
 

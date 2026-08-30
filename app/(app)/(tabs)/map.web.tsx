@@ -39,9 +39,14 @@ import {
   type SeasonMission, type District, type MissionParticipationStatus,
 } from "@/lib/season";
 import { joinFlashEvent, checkinFlashEvent } from "@/lib/flash-events";
+import { ACTIVE_CITY } from "@/lib/city-config";
+import { useWorldEnvironment } from "@/hooks/use-world-environment";
+import { mapCanvasFilter, weatherOverlay, environmentHudLabel, crewOverlayBoost } from "@/lib/world-environment";
 import { MoveMissionModal } from "@/components/move-mission-modal";
 import { MapFirstSessionHint, MapPrimarySuggestion } from "@/components/map-session-guidance";
 import { NpcInteraction } from "@/components/npc-interaction";
+import { npcActivityShort } from "@/lib/npc-social";
+import { getNewPlayerMapStep, playableMapOpportunities } from "@/lib/new-player-loop";
 import {
   groupMapOpportunities,
   MAP_OPPORTUNITY_SECTION_LABELS,
@@ -166,12 +171,21 @@ function injectMapStyles() {
     .mylife-map-container .maplibregl-map { background: #04040A !important; }
     .mylife-map-container .mylife-map-vignette {
       position: absolute; inset: 0; pointer-events: none; z-index: 2;
-      background: radial-gradient(120% 85% at 50% 45%, rgba(0,0,0,0) 45%, rgba(0,0,0,0.55) 100%);
+      background: radial-gradient(130% 90% at 50% 42%, rgba(0,0,0,0) 55%, rgba(0,0,0,0.42) 100%);
     }
-    .mylife-map-container .mylife-map-scanlines {
-      position: absolute; inset: 0; pointer-events: none; z-index: 3; opacity: .05;
-      background: repeating-linear-gradient(0deg, #fff 0px, #fff 1px, transparent 1px, transparent 3px);
+    .mylife-map-container .mylife-map-scanlines { display: none; }
+    .mylife-map-container .mylife-map-weather {
+      position: absolute; inset: 0; pointer-events: none; z-index: 3;
+      opacity: 0; transition: opacity 1600ms ease, background-color 1600ms ease;
+      mix-blend-mode: multiply;
     }
+    .mylife-map-container .mylife-map-weather.rain {
+      background-image: repeating-linear-gradient(74deg, rgba(255,255,255,0.10) 0px, rgba(255,255,255,0.10) 1px, transparent 1px, transparent 7px);
+      background-size: 100% 100%;
+    }
+    @keyframes mylifeRainDrift { to { background-position: 0 220px; } }
+    .mylife-map-container .mylife-map-weather.rain.animate { animation: mylifeRainDrift 1.1s linear infinite; }
+    .mylife-map-container .mylife-map-weather.haze { backdrop-filter: blur(1px); }
     .mylife-map-container .maplibregl-ctrl-group {
       border: 1px solid rgba(255,255,255,.08) !important;
       background: rgba(8,8,15,.92) !important;
@@ -251,6 +265,28 @@ interface LeafletMapProps {
   crewZones?: CrewZoneRich[];
   missions?: MissionMapFeatureSource[];
   onMissionClick?: (missionId: string) => void;
+  env?: MapEnv;
+  districts?: MapDistrict[];
+}
+
+type MapEnv = {
+  filter: string;
+  weatherKind: "haze" | "rain" | "storm" | null;
+  weatherColor: string;
+  weatherOpacity: number;
+  animate: boolean;
+};
+type MapDistrict = {
+  name: string; lat: number; lng: number; radius: number;
+  color: string; contested: boolean; opacity: number;
+};
+
+function applyWeatherEl(el: HTMLElement | null, env: MapEnv | undefined) {
+  if (!el) return;
+  const kind = env?.weatherKind ?? null;
+  el.className = "mylife-map-weather" + (kind ? ` ${kind}` : "") + (kind === "rain" && env?.animate ? " animate" : "");
+  el.style.backgroundColor = kind ? (env?.weatherColor ?? "transparent") : "transparent";
+  el.style.opacity = kind ? String(env?.weatherOpacity ?? 0) : "0";
 }
 
 function prefersReducedMotion(): boolean {
@@ -389,7 +425,7 @@ function syncPlayersSource(
   superclusterRef.current = new Supercluster<PlayerFeatureProps>({ radius, maxZoom }).load(geojson.features as any);
 }
 
-function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, onError, crewZones = [], missions = [], onMissionClick }: LeafletMapProps) {
+function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady, onError, crewZones = [], missions = [], onMissionClick, env, districts = [] }: LeafletMapProps) {
   const containerRef = useRef<View>(null);
   const mapRef        = useRef<unknown>(null);
   const glRef         = useRef<unknown>(null);
@@ -401,6 +437,11 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
   missionsRef.current = missions;
   const superclusterRef = useRef<Supercluster<PlayerFeatureProps> | null>(null);
   const missionSuperclusterRef = useRef<Supercluster<MissionFeatureProps> | null>(null);
+  const envRef = useRef<MapEnv | undefined>(env);
+  envRef.current = env;
+  const weatherElRef = useRef<HTMLElement | null>(null);
+  const districtsRef = useRef<MapDistrict[]>(districts);
+  districtsRef.current = districts;
   // Le click handler des layers est enregistré une seule fois (map.on("load"),
   // effet mount-only) : sans ref, il resterait figé sur la version
   // d'onPlayerClick capturée au tout premier rendu (souvent avec players=[]
@@ -460,8 +501,11 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
       map.on("load", async () => {
         const canvasContainer = map.getCanvasContainer?.() as HTMLElement | undefined;
         if (canvasContainer) {
+          // Grading naturel piloté par World Environment (jamais néon).
+          canvasContainer.style.transition = "filter 1600ms ease";
           canvasContainer.style.filter =
-            "invert(1) hue-rotate(255deg) brightness(1.35) contrast(0.95) saturate(2.2)";
+            envRef.current?.filter ??
+            "invert(1) hue-rotate(215deg) brightness(1.12) contrast(0.99) saturate(1.12) sepia(0)";
         }
 
         // Extrusion 3D des bâtiments si la source vectorielle les expose
@@ -501,9 +545,12 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
         const vignetteEl = document.createElement("div");
         vignetteEl.className = "mylife-map-vignette";
         mapEl.appendChild(vignetteEl);
-        const scanlinesEl = document.createElement("div");
-        scanlinesEl.className = "mylife-map-scanlines";
-        mapEl.appendChild(scanlinesEl);
+        const weatherEl = document.createElement("div");
+        weatherEl.className = "mylife-map-weather";
+        weatherEl.setAttribute("aria-hidden", "true");
+        mapEl.appendChild(weatherEl);
+        weatherElRef.current = weatherEl;
+        applyWeatherEl(weatherEl, envRef.current);
 
         // ── Zones crew (polygones GeoJSON — pas de géométrie "circle" native) ──
         const features = crewZones.map((zone) => {
@@ -834,6 +881,61 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
     };
   }, [myLat, myLng]);
 
+  // ── World Environment : grading du canvas + voile météo ──────────────
+  useEffect(() => {
+    const map = mapRef.current as any;
+    const canvasContainer = map?.getCanvasContainer?.() as HTMLElement | undefined;
+    if (canvasContainer && env?.filter) canvasContainer.style.filter = env.filter;
+    applyWeatherEl(weatherElRef.current, env);
+  }, [env?.filter, env?.weatherKind, env?.weatherOpacity, env?.weatherColor, env?.animate]);
+
+  // ── Territoires de crew au niveau quartier (fill + outline, opacité basse) ──
+  const districtsAppliedRef = useRef("");
+  useEffect(() => {
+    const map = mapRef.current as any;
+    const gl = glRef.current as any;
+    if (!map || !gl) return;
+
+    const apply = () => {
+      if (!map.getStyle?.()) return;
+      const list = districtsRef.current;
+      const sig = JSON.stringify(list.map((d) => [d.name, d.color, d.contested, Math.round(d.opacity * 100), Math.round(d.radius)]));
+      if (sig === districtsAppliedRef.current && map.getSource("mylife-districts")) return;
+      districtsAppliedRef.current = sig;
+
+      const features = list.map((d) => ({
+        type: "Feature" as const,
+        properties: { color: d.color, fillOpacity: d.opacity, contested: d.contested ? 1 : 0 },
+        geometry: { type: "Polygon" as const, coordinates: [circlePolygon(d.lat, d.lng, d.radius)] },
+      }));
+      const data = { type: "FeatureCollection" as const, features };
+      const src = map.getSource("mylife-districts");
+      if (src) { src.setData(data); return; }
+      try {
+        map.addSource("mylife-districts", { type: "geojson", data });
+        const firstSymbol = (map.getStyle().layers ?? []).find((l: any) => l.type === "symbol")?.id;
+        map.addLayer({
+          id: "mylife-districts-fill", type: "fill", source: "mylife-districts",
+          paint: { "fill-color": ["get", "color"], "fill-opacity": ["get", "fillOpacity"] },
+        }, firstSymbol);
+        map.addLayer({
+          id: "mylife-districts-line", type: "line", source: "mylife-districts",
+          filter: ["!=", ["get", "contested"], 1],
+          paint: { "line-color": ["get", "color"], "line-opacity": 0.3, "line-width": 1 },
+        }, firstSymbol);
+        // Contesté : contour tireté (indice de FORME, pas seulement la couleur)
+        map.addLayer({
+          id: "mylife-districts-contested", type: "line", source: "mylife-districts",
+          filter: ["==", ["get", "contested"], 1],
+          paint: { "line-color": ["get", "color"], "line-opacity": 0.9, "line-width": 2, "line-dasharray": [2, 2] },
+        }, firstSymbol);
+      } catch { /* style sans couche compatible : on ignore */ }
+    };
+
+    if (clusterReadyRef.current) apply();
+    else map.once?.("load", apply);
+  }, [districts]);
+
   return (
     <View
       ref={containerRef}
@@ -911,9 +1013,10 @@ function PlayerSheet({ player, myCrewId, playerId, npcOpportunity, onClose, onIn
       <Animated.View style={{
         transform: [{ scale }],
         backgroundColor: C.card,
-        borderTopLeftRadius: 28, borderTopRightRadius: 28,
-        padding: 24, paddingBottom: 48, gap: 18,
+        borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        padding: 20, paddingBottom: 32, gap: 14,
         borderTopWidth: 1, borderColor: C.border,
+        width: "100%", maxWidth: 460, alignSelf: "center",
       }}>
         <View style={{ width: 36, height: 3, borderRadius: 2, backgroundColor: C.muted, alignSelf: "center" }} />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
@@ -942,7 +1045,9 @@ function PlayerSheet({ player, myCrewId, playerId, npcOpportunity, onClose, onIn
             paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: cfg.color + "35",
           }}>
             <Text style={{ fontSize: 20 }}>{cfg.emoji}</Text>
-            <Text style={{ color: cfg.color, fontSize: 9, fontWeight: "900" }}>{cfg.label}</Text>
+            <Text style={{ color: cfg.color, fontSize: 9, fontWeight: "900" }}>
+              {player.is_npc ? (npcActivityShort(player.last_action) ?? "Ville").toUpperCase() : cfg.label}
+            </Text>
           </View>
         </View>
 
@@ -1238,6 +1343,7 @@ function MobileMapContextDrawer({
   visible,
   signals,
   districts,
+  hudLabel,
   takeoverAlert,
   roi,
   onClose,
@@ -1247,6 +1353,7 @@ function MobileMapContextDrawer({
 }: {
   visible: boolean;
   signals: CityPulseSignal[];
+  hudLabel: string;
   districts: DistrictCrewDominance[];
   takeoverAlert: TakeoverNotif | null;
   roi: RoiDeToulouse | null;
@@ -1335,7 +1442,7 @@ function MobileMapContextDrawer({
         }}>
           <View>
             <Text style={{ color: C.text, fontSize: 17, fontWeight: "900" }}>Autour de toi</Text>
-            <Text style={{ color: C.soft, fontSize: 11, marginTop: 2 }}>Toulouse en ce moment</Text>
+            <Text style={{ color: C.soft, fontSize: 11, marginTop: 2 }}>{hudLabel}</Text>
           </View>
           <Pressable
             accessibilityRole="button"
@@ -1430,11 +1537,16 @@ export default function LifeMapScreen() {
   const hasHydrated      = useGameStore((s) => s.hasHydrated);
   const mapIntroDismissed = useGameStore((s) => s.mapIntroDismissed);
   const dismissMapIntro  = useGameStore((s) => s.dismissMapIntro);
+  const performAction    = useGameStore((s) => s.performAction);
+  const missionProgresses = useGameStore((s) => s.missionProgresses ?? []);
 
   const [myUserId,     setMyUserId]     = useState<string | null>(null);
   useEffect(() => {
     supabase?.auth.getUser().then(({ data }) => setMyUserId(data?.user?.id ?? null));
   }, []);
+  // Identité locale pour la mémoire PNJ / le chat local quand il n'y a pas
+  // de session Supabase (mode profil local). Aligne le web sur le natif.
+  const npcActorId = myUserId ?? "local_user";
 
   const [players,      setPlayers]      = useState<MapPlayer[]>([]);
   const [crewZones,    setCrewZones]    = useState<CrewZoneRich[]>([]);
@@ -1627,7 +1739,7 @@ export default function LifeMapScreen() {
   const [npcEngine, setNpcEngine] = useState<"local" | "anthropic" | "openai">("local");
 
   async function sendToNpcText(text: string) {
-    if (!npcChatTarget || !text.trim() || npcSending || !myUserId) return;
+    if (!npcChatTarget || !text.trim() || npcSending) return;
     const trimmed = text.trim();
     setNpcInput("");
     setNpcError(null);
@@ -1639,7 +1751,7 @@ export default function LifeMapScreen() {
     // Délai d'écriture simulé — évite une réponse instantanée irréaliste.
     await new Promise((r) => setTimeout(r, 450 + Math.random() * 500));
     const res = await sendNpcMessage(
-      myUserId, npcChatTarget.user_id, npcChatTarget.display_name, npcChatTarget.last_action, npcHistory, trimmed
+      npcActorId, npcChatTarget.user_id, npcChatTarget.display_name, npcChatTarget.last_action, npcHistory, trimmed
     );
     if (res.ok && res.reply) {
       setNpcHistory((prev) => [...prev, { role: "npc", text: res.reply as string }]);
@@ -1723,7 +1835,7 @@ export default function LifeMapScreen() {
   const cityPulseSignals = useMemo(() => {
     const livingSignals = livingCityEventsToCityPulse(livingCity?.events ?? []);
     const lookingFor = avatar?.lookingFor ?? [];
-    return selectCityPulseOpportunities(livingSignals, {
+    const rankedSignals = selectCityPulseOpportunities(livingSignals, {
       district: avatar?.homeDistrict ?? "Capitole",
       crewId: myCrewId,
       // Respecte le choix fait à la création de l'avatar (pas de nouveau système).
@@ -1731,9 +1843,17 @@ export default function LifeMapScreen() {
       wantsSocial: lookingFor.some((x) => /ami|sortie|discussion|social/i.test(x)),
       recentSignalIds: recentPulseIds,
     });
-  }, [avatar?.homeDistrict, avatar?.lookingFor, livingCity?.events, myCrewId, recentPulseIds]);
+    return playableMapOpportunities(rankedSignals, playerLevel, missionProgresses);
+  }, [avatar?.homeDistrict, avatar?.lookingFor, livingCity?.events, missionProgresses, myCrewId, playerLevel, recentPulseIds]);
+  const newPlayerStep = useMemo(
+    () => getNewPlayerMapStep(playerLevel, missionProgresses),
+    [missionProgresses, playerLevel]
+  );
+  useEffect(() => {
+    if (newPlayerStep) setPrimarySuggestionDismissed(false);
+  }, [newPlayerStep?.signal.id]);
   const npcOpportunity = useMemo(() => {
-    const s = cityPulseSignals[0];
+    const s = cityPulseSignals.find((signal) => !signal.id.startsWith("new-player:"));
     if (!s) return null;
     return {
       label: s.district ? `Voir ${mapOpportunityKindLabel(s.kind)} · ${s.district}` : `Voir ${mapOpportunityKindLabel(s.kind)}`,
@@ -1766,10 +1886,57 @@ export default function LifeMapScreen() {
   }, [crewZones, livingCity?.crews]);
   void presenceTick; // dépendance volontaire pour forcer le recalcul périodique
 
+  // ── World Environment (jour/nuit + météo) ───────────────────────────
+  const env = useWorldEnvironment();
+  const mapEnv = useMemo(() => {
+    const w = weatherOverlay(env);
+    return {
+      filter: mapCanvasFilter(env),
+      weatherKind: w.kind,
+      weatherColor: w.color,
+      weatherOpacity: w.opacity,
+      animate: env.ambientIntensity > 0.3 && (w.kind === "rain"),
+    };
+  }, [env]);
+
+  const hudLabel = useMemo(() => environmentHudLabel(env, ACTIVE_CITY.name), [env]);
+
+  const mapDistricts = useMemo(() => {
+    const moods = livingCity?.districtStates ?? {};
+    const contestedSet = new Set(crewDominance.filter((d) => d.state === "contested").map((d) => d.district));
+    return crewZones.map((zone) => {
+      const mood = moods[zone.name]?.mood;
+      const base = zone.is_bastion ? 0.07 : 0.045;
+      return {
+        name: zone.name,
+        lat: zone.lat,
+        lng: zone.lng,
+        radius: zone.radius * 1.4,
+        color: zone.crew?.color ?? "#FFD600",
+        contested: contestedSet.has(zone.name),
+        opacity: Math.min(0.16, base * crewOverlayBoost(env, mood)),
+      };
+    });
+  }, [crewZones, crewDominance, livingCity?.districtStates, env]);
+
   function handleCityPulsePress(signal: CityPulseSignal) {
     setShowMapContext(false);
-    setPrimarySuggestionDismissed(true);
     setRecentPulseIds((ids) => [signal.id, ...ids.filter((id) => id !== signal.id)].slice(0, 12));
+    if (newPlayerStep?.signal.id === signal.id) {
+      if (newPlayerStep.intent === "explore") {
+        const xpBefore = useGameStore.getState().playerXp;
+        performAction("walk");
+        const xpEarned = useGameStore.getState().playerXp - xpBefore;
+        dismissMapIntro();
+        setMapFeedback(`Quartier exploré · +${xpEarned} XP`);
+        hapticImpact("medium");
+        return;
+      }
+      setPrimarySuggestionDismissed(true);
+      router.push(newPlayerStep.intent === "missions" ? "/(app)/missions" as never : "/(app)/(tabs)/home" as never);
+      return;
+    }
+    setPrimarySuggestionDismissed(true);
     router.push(cityPulseRoute(signal) as never);
   }
 
@@ -1953,6 +2120,8 @@ export default function LifeMapScreen() {
           crewZones={crewZones}
           missions={missionMapFeatures}
           onMissionClick={(id) => { hapticImpact("light"); setSelectedMissionId(id); setMissionError(null); }}
+          env={mapEnv}
+          districts={mapDistricts}
         />
       )}
 
@@ -2067,16 +2236,15 @@ export default function LifeMapScreen() {
         </ScrollView>
       )}
 
-      {!isMobileWeb && <CityPulseStrip signals={cityPulseSignals} onPress={handleCityPulsePress} />}
-      {!isMobileWeb && <CrewDominanceStrip districts={crewDominance} onPress={handleCrewContextPress} />}
+      {/* Bandeaux latéraux retirés : tout passe par ☰ (carte plein écran, web & mobile). */}
 
-      {isMobileWeb && (
+      {(
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${mapContextCount} informations autour de toi`}
           onPress={() => setShowMapContext(true)}
           style={{
-            position: "absolute", top: 63, right: 12, zIndex: 7,
+            position: "absolute", top: isMobileWeb ? 63 : 108, right: isMobileWeb ? 12 : 16, zIndex: 7,
             minWidth: 48, height: 44, borderRadius: 22, paddingHorizontal: 10,
             backgroundColor: "rgba(8,8,15,0.94)", borderWidth: 1, borderColor: C.gold + "55",
             flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
@@ -2089,11 +2257,12 @@ export default function LifeMapScreen() {
 
       {/* ── GÉOLOC ────────────────────────────────────────────────────────── */}
       {!myLocation ? (
-        <View style={{ position: "absolute", bottom: isMobileWeb ? 14 : 110, left: isMobileWeb ? 12 : 20, right: isMobileWeb ? 12 : 20, zIndex: 5 }}>
+        <View style={{ position: "absolute", bottom: isMobileWeb ? 14 : 24, left: isMobileWeb ? 12 : 20, right: isMobileWeb ? 12 : 20, zIndex: 5, alignItems: "center" }}>
           <Pressable onPress={() => void activateLocation()}
             style={{
-              minHeight: 48, backgroundColor: C.gold, borderRadius: isMobileWeb ? 14 : 18, paddingVertical: isMobileWeb ? 13 : 18,
-              alignItems: "center", shadowColor: C.gold, shadowOpacity: 0.5, shadowRadius: 24,
+              minHeight: 48, width: "100%", maxWidth: 440, backgroundColor: C.gold, borderRadius: isMobileWeb ? 14 : 16,
+              paddingVertical: isMobileWeb ? 13 : 15,
+              alignItems: "center", shadowColor: C.gold, shadowOpacity: 0.4, shadowRadius: 20,
               flexDirection: "row", justifyContent: "center", gap: 10,
             }}>
             {loading
@@ -2141,7 +2310,7 @@ export default function LifeMapScreen() {
       <MapFirstSessionHint
         visible={hasHydrated && !mapIntroDismissed && !showMapContext}
         onDismiss={dismissMapIntro}
-        bottom={isMobileWeb ? (myLocation ? 72 : 108) : 116}
+        bottom={isMobileWeb ? (myLocation ? 72 : 108) : (myLocation ? 116 : 116)}
         palette={{ background: C.glass, border: C.gold + "70", text: C.text, muted: C.soft, accent: C.gold }}
       />
 
@@ -2154,7 +2323,7 @@ export default function LifeMapScreen() {
           if (id) setRecentPulseIds((ids) => [id, ...ids.filter((x) => x !== id)].slice(0, 12));
           setPrimarySuggestionDismissed(true);
         }}
-        bottom={isMobileWeb ? (myLocation ? 72 : 108) : 116}
+        bottom={isMobileWeb ? (myLocation ? 72 : 108) : (myLocation ? 116 : 116)}
         palette={{ background: C.glass, border: C.gold + "55", text: C.text, muted: C.soft, accent: C.gold }}
       />
 
@@ -2288,7 +2457,7 @@ export default function LifeMapScreen() {
       )}
 
       {/* ── MODALS ────────────────────────────────────────────────────────── */}
-      <PlayerSheet player={selected} myCrewId={myCrewId} playerId={myUserId} npcOpportunity={npcOpportunity} onClose={() => setSelected(null)}
+      <PlayerSheet player={selected} myCrewId={myCrewId} playerId={npcActorId} npcOpportunity={npcOpportunity} onClose={() => setSelected(null)}
         onInvite={handleInvite}
         onReport={(p) => { setSelected(null); setReportTarget(p); }}
         onBlock={handleBlock}
@@ -2514,8 +2683,9 @@ export default function LifeMapScreen() {
       )}
 
       <MobileMapContextDrawer
-        visible={isMobileWeb && showMapContext}
+        visible={showMapContext}
         signals={cityPulseSignals}
+        hudLabel={hudLabel}
         districts={crewDominance}
         takeoverAlert={takeoverAlert}
         roi={roi}

@@ -4,6 +4,7 @@
 // IA, aucun timer, aucun appel réseau. Évalué UNIQUEMENT au moment où le
 // joueur interagit.
 import { getNpcPersonality, type NpcPersonality } from "./npc-engine";
+import { DEFAULT_LIVING_CITY_CREWS } from "./living-city";
 
 export type NpcApproachOutcome =
   | "ACCEPT" | "SHORT" | "SUGGEST" | "LATER" | "BUSY" | "DECLINE";
@@ -219,9 +220,11 @@ export function districtLine(ctx: NpcApproachContext): string {
   const seed = hash(`${ctx.npcId}:district:${ctx.encounters}`);
   const q = personality.quartier;
   if (ctx.crewTag) {
+    const crew = DEFAULT_LIVING_CITY_CREWS.find((item) => item.tag === ctx.crewTag);
+    const crewLabel = crew ? `${crew.name} [${crew.tag}]` : `le crew [${ctx.crewTag}]`;
     return pick([
-      `Ici c'est plutôt le territoire de [${ctx.crewTag}] en ce moment. Ça bouge.`,
-      `Mon crew [${ctx.crewTag}] est actif dans le coin, tu verras.`,
+      `Ici c'est plutôt le territoire de ${crewLabel} en ce moment. Ça bouge.`,
+      `${crewLabel} est actif dans le coin, tu verras.`,
     ], seed);
   }
   return pick([
