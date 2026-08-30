@@ -65,9 +65,9 @@ export default function TabsLayout() {
           backgroundColor: T.tabBg,
           borderTopColor: T.tabBorder,
           borderTopWidth: 1,
-          height: Platform.OS === "web" ? 76 : 72,
-          paddingBottom: Platform.OS === "web" ? 10 : 8,
-          paddingTop: 8,
+          height: Platform.OS === "web" ? 70 : 72,
+          paddingBottom: 8,
+          paddingTop: 6,
           shadowColor: T.tabShadow,
           shadowOpacity: 1,
           shadowRadius: 20,
@@ -76,12 +76,14 @@ export default function TabsLayout() {
         },
         tabBarActiveTintColor:   T.tabActive,
         tabBarInactiveTintColor: T.tabInactive,
-        tabBarItemStyle:   { borderRadius: 16, marginHorizontal: 2 },
-        tabBarLabelStyle:  { fontSize: 10, fontWeight: "800", marginTop: 1 },
+        tabBarItemStyle:   { minHeight: 54, borderRadius: 12, marginHorizontal: 1 },
+        tabBarLabelStyle:  { fontSize: 10, fontWeight: "800", marginTop: 0 },
+        tabBarAllowFontScaling: false,
       }}
     >
       <Tabs.Screen name="home" options={{
         title: "Vie",
+        href: null,
         tabBarIcon: ({ color, focused }) => (
           <Ionicons name={focused ? "sparkles" : "sparkles-outline"} color={color} size={23} />
         ),
