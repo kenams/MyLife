@@ -68,6 +68,47 @@ export async function enterApp(page: Page) {
 }
 
 /**
+ * Passe la porte légale (âge + consentement) et atterrit sur /sign-in.
+ * Nécessaire depuis un contexte navigateur neuf.
+ */
+export async function gotoSignIn(page: Page) {
+  // Pré-arme la porte légale (âge + consentement) directement dans le storage
+  // web — plus fiable qu'un pilotage du formulaire masqué de date.
+  await page.goto("/");
+  await page.evaluate(() => {
+    for (const k of ["@mylife_age_verified", "@mylife_consent_v1"]) {
+      try { window.localStorage.setItem(k, "true"); } catch { /* storage bloqué */ }
+    }
+  });
+  await page.goto("/(auth)/sign-in").catch(() => page.goto("/sign-in"));
+  // Si l'app renvoie encore vers welcome, on suit le lien de connexion.
+  const toSignIn = page.getByText(/déjà un compte|Se connecter|CONNEXION/i).first();
+  if (!/sign-in/.test(page.url())) {
+    await toSignIn.click({ timeout: 6000 }).catch(() => undefined);
+  }
+  await page.waitForURL(/sign-in|welcome/, { timeout: 15_000 }).catch(() => undefined);
+  await page.waitForTimeout(1200);
+}
+
+/**
+ * Connexion via un VRAI compte Supabase (parité / cross-device).
+ * Passe par l'écran /sign-in, onglet CONNEXION. Aucun mot de passe n'est loggé.
+ */
+export async function loginWithSupabase(page: Page, email: string, password: string) {
+  await gotoSignIn(page);
+  await page.getByText(/^CONNEXION$/).first().click({ timeout: 8000 }).catch(() => undefined);
+  const idField = page.locator("input").first();
+  await idField.fill(email);
+  const pwField = page.locator('input[type="password"]').first().or(page.locator("input").nth(1));
+  await pwField.fill(password);
+  const cta = page.getByText(/ENTRER DANS LA VILLE|CONNEXION\.\.\./).first();
+  await cta.scrollIntoViewIfNeeded();
+  await cta.click();
+  await page.waitForURL(/\/(map|avatar|home)/, { timeout: 30_000 });
+  await waitForMap(page);
+}
+
+/**
  * Onglet de la bottom-nav. expo-router web rend chaque onglet en <a href="/xxx">
  * (role=link) contenant le libellé exact. On cible par href pour éviter les
  * faux positifs (ex. lien d'attribution "OpenFreeMap" pour /Map/).

@@ -74,7 +74,7 @@ import { calcGiftBonus, getGiftReaction, GIFTS, getTierFromScore, TIER_META, DAT
 import type { GiftId } from "@/lib/romance";
 import { DEFAULT_THEME } from "@/lib/themes";
 import type { ThemeId } from "@/lib/themes";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { isSupabaseConfigured, passwordResetRedirect, supabase } from "@/lib/supabase";
 import type {
   AvatarProfile,
   AvatarStats,
@@ -1498,7 +1498,7 @@ export const useGameStore = create<GameState>()(
           return { ok: false, error: "Supabase non configuré. Mode local uniquement." };
         }
         const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
-          redirectTo: "mylife://reset-password"
+          redirectTo: passwordResetRedirect()
         });
         if (error) return { ok: false, error: error.message };
         return { ok: true };

@@ -1,7 +1,7 @@
 import { router } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import {
-  Animated, Easing, Platform, Pressable, SafeAreaView,
+  Animated, Easing, KeyboardAvoidingView, Platform, Pressable, SafeAreaView,
   ScrollView, Text, TextInput, View,
 } from "react-native";
 import { useGameStore } from "@/stores/game-store";
@@ -258,9 +258,13 @@ function NpcChip({ emoji, name, color, level, idx }: {
 }
 
 // ── Input ────────────────────────────────────────────────────────────────────
-function FieldInput({ value, onChange, placeholder, secure, icon, keyboard }: {
+function FieldInput({ value, onChange, placeholder, secure, icon, keyboard, autoComplete, textContentType, returnKeyType, onSubmitEditing }: {
   value: string; onChange: (t: string) => void; placeholder: string;
   secure?: boolean; icon: string; keyboard?: "email-address" | "default";
+  autoComplete?: "email" | "username" | "password" | "password-new" | "off";
+  textContentType?: "emailAddress" | "username" | "password" | "newPassword" | "none";
+  returnKeyType?: "next" | "go" | "done";
+  onSubmitEditing?: () => void;
 }) {
   const [focused, setFocused] = useState(false);
   const accent = useRef(new Animated.Value(0)).current;
@@ -282,11 +286,18 @@ function FieldInput({ value, onChange, placeholder, secure, icon, keyboard }: {
       <TextInput
         value={value} onChangeText={onChange}
         placeholder={placeholder} placeholderTextColor={C.ghost}
-        secureTextEntry={secure} autoCapitalize="none"
+        secureTextEntry={secure} autoCapitalize="none" autoCorrect={false}
         keyboardType={keyboard}
+        autoComplete={autoComplete}
+        textContentType={textContentType}
+        returnKeyType={returnKeyType}
+        onSubmitEditing={onSubmitEditing}
+        blurOnSubmit={returnKeyType === "go" || returnKeyType === "done"}
         onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
         style={{
-          flex: 1, color: C.text, fontSize: 14,
+          flex: 1, color: C.text,
+          // ≥ 16px sur le web : empêche le zoom automatique de Safari iOS au focus.
+          fontSize: Platform.OS === "web" ? 16 : 15,
           paddingVertical: 16, paddingRight: 16,
           fontWeight: "600",
           ...(Platform.OS === "web" ? { outlineWidth: 0 } as object : {}),
@@ -510,10 +521,15 @@ export default function SignInScreen() {
       {/* ── Scanline ── */}
       <ScanLine />
 
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
       <ScrollView
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ paddingTop: 44, paddingBottom: 80 }}
+        keyboardDismissMode="on-drag"
+        contentContainerStyle={{ paddingTop: 44, paddingBottom: 80, maxWidth: 520, width: "100%", alignSelf: "center" }}
       >
         {/* ── HEADER BADGE ── */}
         <Animated.View style={{ opacity: mainOp, paddingHorizontal: 24, marginBottom: 8, marginTop: 8 }}>
@@ -619,24 +635,35 @@ export default function SignInScreen() {
                 {tab === "signin" ? (
                   <FieldInput
                     value={email} onChange={setEmail}
-                    placeholder="@TonPseudo" icon="🏷️"
+                    placeholder="@TonPseudo ou email" icon="🏷️"
+                    autoComplete="username" textContentType="username"
+                    returnKeyType="next"
                   />
                 ) : (
                   <FieldInput
                     value={email} onChange={setEmail}
                     placeholder="ton@email.com" icon="✉️" keyboard="email-address"
+                    autoComplete="email" textContentType="emailAddress"
+                    returnKeyType={tab === "reset" ? "go" : "next"}
+                    onSubmitEditing={tab === "reset" ? ctaAction : undefined}
                   />
                 )}
                 {tab !== "reset" && (
                   <FieldInput
                     value={password} onChange={setPassword}
                     placeholder="Mot de passe" icon="🔑" secure
+                    autoComplete={tab === "signup" ? "password-new" : "password"}
+                    textContentType={tab === "signup" ? "newPassword" : "password"}
+                    returnKeyType={tab === "signin" ? "go" : "next"}
+                    onSubmitEditing={tab === "signin" ? ctaAction : undefined}
                   />
                 )}
                 {tab === "signup" && (
                   <FieldInput
                     value={confirm} onChange={setConfirm}
                     placeholder="Confirme" icon="🔒" secure
+                    autoComplete="password-new" textContentType="newPassword"
+                    returnKeyType="go" onSubmitEditing={ctaAction}
                   />
                 )}
               </View>
@@ -711,6 +738,7 @@ export default function SignInScreen() {
           </Text>
         </View>
       </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

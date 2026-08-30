@@ -20,6 +20,21 @@ export type MylifeDebugSnapshot = {
   activityHistogram: Record<string, number>;
   travelingCount: number;
   positions: { id: string; lat: number; lng: number; act: string }[];
+  /**
+   * État de progression DU JOUEUR (ses propres données, non sensibles) — sert
+   * aux tests de parité cross-device. Aucun email / token / session ici.
+   */
+  player: {
+    authProvider: string | null;
+    hasSupabaseSession: boolean;
+    username: string | null;
+    level: number;
+    xp: number;
+    wory: number;
+    crewTag: string | null;
+    unreadNotifications: number;
+    isQa: boolean;
+  } | null;
 };
 
 const ENABLED =
@@ -32,11 +47,24 @@ function scrubActivity(label: string | null | undefined): string {
   return label.replace(/[^\p{L}\s]/gu, "").trim().split(/\s+/).slice(0, 3).join(" ") || "idle";
 }
 
+export type DebugPlayerInput = {
+  authProvider: string | null;
+  hasSupabaseSession: boolean;
+  username: string | null;
+  level: number;
+  xp: number;
+  wory: number;
+  crewTag: string | null;
+  unreadNotifications: number;
+  isQa: boolean;
+};
+
 export function publishMylifeDebug(input: {
   players: MapPlayer[];
   livingCity: LivingCityState | null | undefined;
   realCount: number;
   npcCount: number;
+  player?: DebugPlayerInput | null;
 }) {
   if (!ENABLED || typeof window === "undefined") return;
   const npcs = input.players.filter((p) => p.is_npc);
@@ -63,6 +91,7 @@ export function publishMylifeDebug(input: {
       lng: Math.round(p.lng * 1e5) / 1e5,
       act: scrubActivity(p.last_action),
     })),
+    player: input.player ?? null,
   };
   const w = window as unknown as {
     __mylifeDebug?: MylifeDebugSnapshot & { history: number[] };

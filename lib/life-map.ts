@@ -22,6 +22,9 @@ export type MapPlayer = {
   crew_color: string | null;
   crew_tag: string | null;
   updated_at: string;
+  /** Habitants simulés en trajet : données structurées pour les 2 renderers. */
+  travel_mode?: import("@/lib/npc-travel").TravelMode | null;
+  destination?: string | null;
 };
 
 export const STATUS_CONFIG: Record<MapStatus, { label: string; color: string; emoji: string; desc: string }> = {
