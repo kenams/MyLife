@@ -60,6 +60,7 @@ import type { WorldEvent } from "@/lib/world-events";
 import {
   createLivingCityState,
   seedLivingCityNpcs,
+  populationForPreset,
   simulateLivingCityTick,
   type LivingCityEventKind,
   type LivingCityPreset,
@@ -229,6 +230,12 @@ const DEFAULT_ROOMS: Array<Omit<Room, "createdAt">> = [
     isActive: true
   }
 ];
+
+/** Garde l'état des PNJ existants, ajoute les nouveaux du seed (montée de population). */
+function mergeNpcPopulation(existing: NpcState[], seed: NpcState[]): NpcState[] {
+  const byId = new Map(existing.map((n) => [n.id, n]));
+  return seed.map((n) => byId.get(n.id) ?? n);
+}
 
 function createDefaultRoom(room: Omit<Room, "createdAt">): Room {
   return { ...room, createdAt: new Date().toISOString() } as Room;
@@ -4040,9 +4047,15 @@ export const useGameStore = create<GameState>()(
           state.joinedRooms ?? []
         );
         const prevLivingCity = state.livingCity ?? createLivingCityState("NORMAL");
+        // Complète la population si une sauvegarde ancienne en contient moins
+        // que le preset courant (ex : montée de NORMAL 100 → 220).
+        const targetPop = populationForPreset(prevLivingCity.preset ?? "NORMAL");
+        const seededNpcs = state.npcs && state.npcs.length >= targetPop
+          ? state.npcs
+          : mergeNpcPopulation(state.npcs ?? [], seedLivingCityNpcs(prevLivingCity.preset ?? "NORMAL"));
         const livingResult = simulateLivingCityTick({
           state: prevLivingCity,
-          npcs: state.npcs ?? seedLivingCityNpcs("NORMAL"),
+          npcs: seededNpcs,
           playerDistrict: state.avatar?.homeDistrict ?? "Capitole",
         });
         // Retour après absence : conséquences autonomes + résumé "pendant ton absence".

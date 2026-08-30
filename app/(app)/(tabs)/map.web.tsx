@@ -45,6 +45,7 @@ import { mapCanvasFilter, weatherOverlay, environmentHudLabel, crewOverlayBoost 
 import { MoveMissionModal } from "@/components/move-mission-modal";
 import { MapFirstSessionHint, MapPrimarySuggestion } from "@/components/map-session-guidance";
 import { NpcInteraction } from "@/components/npc-interaction";
+import { npcActivityShort } from "@/lib/npc-social";
 import {
   groupMapOpportunities,
   MAP_OPPORTUNITY_SECTION_LABELS,
@@ -1011,9 +1012,10 @@ function PlayerSheet({ player, myCrewId, playerId, npcOpportunity, onClose, onIn
       <Animated.View style={{
         transform: [{ scale }],
         backgroundColor: C.card,
-        borderTopLeftRadius: 28, borderTopRightRadius: 28,
-        padding: 24, paddingBottom: 48, gap: 18,
+        borderTopLeftRadius: 24, borderTopRightRadius: 24,
+        padding: 20, paddingBottom: 32, gap: 14,
         borderTopWidth: 1, borderColor: C.border,
+        width: "100%", maxWidth: 460, alignSelf: "center",
       }}>
         <View style={{ width: 36, height: 3, borderRadius: 2, backgroundColor: C.muted, alignSelf: "center" }} />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
@@ -1042,7 +1044,9 @@ function PlayerSheet({ player, myCrewId, playerId, npcOpportunity, onClose, onIn
             paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1, borderColor: cfg.color + "35",
           }}>
             <Text style={{ fontSize: 20 }}>{cfg.emoji}</Text>
-            <Text style={{ color: cfg.color, fontSize: 9, fontWeight: "900" }}>{cfg.label}</Text>
+            <Text style={{ color: cfg.color, fontSize: 9, fontWeight: "900" }}>
+              {player.is_npc ? (npcActivityShort(player.last_action) ?? "Ville").toUpperCase() : cfg.label}
+            </Text>
           </View>
         </View>
 
@@ -1537,6 +1541,9 @@ export default function LifeMapScreen() {
   useEffect(() => {
     supabase?.auth.getUser().then(({ data }) => setMyUserId(data?.user?.id ?? null));
   }, []);
+  // Identité locale pour la mémoire PNJ / le chat local quand il n'y a pas
+  // de session Supabase (mode profil local). Aligne le web sur le natif.
+  const npcActorId = myUserId ?? "local_user";
 
   const [players,      setPlayers]      = useState<MapPlayer[]>([]);
   const [crewZones,    setCrewZones]    = useState<CrewZoneRich[]>([]);
@@ -1729,7 +1736,7 @@ export default function LifeMapScreen() {
   const [npcEngine, setNpcEngine] = useState<"local" | "anthropic" | "openai">("local");
 
   async function sendToNpcText(text: string) {
-    if (!npcChatTarget || !text.trim() || npcSending || !myUserId) return;
+    if (!npcChatTarget || !text.trim() || npcSending) return;
     const trimmed = text.trim();
     setNpcInput("");
     setNpcError(null);
@@ -1741,7 +1748,7 @@ export default function LifeMapScreen() {
     // Délai d'écriture simulé — évite une réponse instantanée irréaliste.
     await new Promise((r) => setTimeout(r, 450 + Math.random() * 500));
     const res = await sendNpcMessage(
-      myUserId, npcChatTarget.user_id, npcChatTarget.display_name, npcChatTarget.last_action, npcHistory, trimmed
+      npcActorId, npcChatTarget.user_id, npcChatTarget.display_name, npcChatTarget.last_action, npcHistory, trimmed
     );
     if (res.ok && res.reply) {
       setNpcHistory((prev) => [...prev, { role: "npc", text: res.reply as string }]);
@@ -2204,16 +2211,15 @@ export default function LifeMapScreen() {
         </ScrollView>
       )}
 
-      {!isMobileWeb && <CityPulseStrip signals={cityPulseSignals} onPress={handleCityPulsePress} />}
-      {!isMobileWeb && <CrewDominanceStrip districts={crewDominance} onPress={handleCrewContextPress} />}
+      {/* Bandeaux latéraux retirés : tout passe par ☰ (carte plein écran, web & mobile). */}
 
-      {isMobileWeb && (
+      {(
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={`${mapContextCount} informations autour de toi`}
           onPress={() => setShowMapContext(true)}
           style={{
-            position: "absolute", top: 63, right: 12, zIndex: 7,
+            position: "absolute", top: isMobileWeb ? 63 : 108, right: isMobileWeb ? 12 : 16, zIndex: 7,
             minWidth: 48, height: 44, borderRadius: 22, paddingHorizontal: 10,
             backgroundColor: "rgba(8,8,15,0.94)", borderWidth: 1, borderColor: C.gold + "55",
             flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
@@ -2226,11 +2232,12 @@ export default function LifeMapScreen() {
 
       {/* ── GÉOLOC ────────────────────────────────────────────────────────── */}
       {!myLocation ? (
-        <View style={{ position: "absolute", bottom: isMobileWeb ? 14 : 110, left: isMobileWeb ? 12 : 20, right: isMobileWeb ? 12 : 20, zIndex: 5 }}>
+        <View style={{ position: "absolute", bottom: isMobileWeb ? 14 : 24, left: isMobileWeb ? 12 : 20, right: isMobileWeb ? 12 : 20, zIndex: 5, alignItems: "center" }}>
           <Pressable onPress={() => void activateLocation()}
             style={{
-              minHeight: 48, backgroundColor: C.gold, borderRadius: isMobileWeb ? 14 : 18, paddingVertical: isMobileWeb ? 13 : 18,
-              alignItems: "center", shadowColor: C.gold, shadowOpacity: 0.5, shadowRadius: 24,
+              minHeight: 48, width: "100%", maxWidth: 440, backgroundColor: C.gold, borderRadius: isMobileWeb ? 14 : 16,
+              paddingVertical: isMobileWeb ? 13 : 15,
+              alignItems: "center", shadowColor: C.gold, shadowOpacity: 0.4, shadowRadius: 20,
               flexDirection: "row", justifyContent: "center", gap: 10,
             }}>
             {loading
@@ -2278,7 +2285,7 @@ export default function LifeMapScreen() {
       <MapFirstSessionHint
         visible={hasHydrated && !mapIntroDismissed && !showMapContext}
         onDismiss={dismissMapIntro}
-        bottom={isMobileWeb ? (myLocation ? 72 : 108) : 116}
+        bottom={isMobileWeb ? (myLocation ? 72 : 108) : (myLocation ? 116 : 116)}
         palette={{ background: C.glass, border: C.gold + "70", text: C.text, muted: C.soft, accent: C.gold }}
       />
 
@@ -2291,7 +2298,7 @@ export default function LifeMapScreen() {
           if (id) setRecentPulseIds((ids) => [id, ...ids.filter((x) => x !== id)].slice(0, 12));
           setPrimarySuggestionDismissed(true);
         }}
-        bottom={isMobileWeb ? (myLocation ? 72 : 108) : 116}
+        bottom={isMobileWeb ? (myLocation ? 72 : 108) : (myLocation ? 116 : 116)}
         palette={{ background: C.glass, border: C.gold + "55", text: C.text, muted: C.soft, accent: C.gold }}
       />
 
@@ -2425,7 +2432,7 @@ export default function LifeMapScreen() {
       )}
 
       {/* ── MODALS ────────────────────────────────────────────────────────── */}
-      <PlayerSheet player={selected} myCrewId={myCrewId} playerId={myUserId} npcOpportunity={npcOpportunity} onClose={() => setSelected(null)}
+      <PlayerSheet player={selected} myCrewId={myCrewId} playerId={npcActorId} npcOpportunity={npcOpportunity} onClose={() => setSelected(null)}
         onInvite={handleInvite}
         onReport={(p) => { setSelected(null); setReportTarget(p); }}
         onBlock={handleBlock}
@@ -2651,7 +2658,7 @@ export default function LifeMapScreen() {
       )}
 
       <MobileMapContextDrawer
-        visible={isMobileWeb && showMapContext}
+        visible={showMapContext}
         signals={cityPulseSignals}
         hudLabel={hudLabel}
         districts={crewDominance}

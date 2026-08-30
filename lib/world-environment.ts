@@ -168,8 +168,11 @@ const WEATHER_EMOJI: Record<WeatherState, string> = {
 const PHASE_LABEL: Record<WorldPhase, string> = { DAWN: "Aube", DAY: "Jour", SUNSET: "Coucher", NIGHT: "Nuit" };
 
 export function environmentHudLabel(env: WorldEnvironmentState, cityName: string): string {
+  const d = new Date(env.localTime);
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
   const temp = env.temperatureC != null ? `${Math.round(env.temperatureC)}°C · ` : "";
-  return `${cityName} · ${temp}${WEATHER_EMOJI[env.weather]} · ${PHASE_LABEL[env.phase]}`;
+  return `${cityName} · ${hh}:${mm} · ${temp}${WEATHER_EMOJI[env.weather]} · ${PHASE_LABEL[env.phase]}`;
 }
 
 /** Filtre CSS appliqué au canvas MapLibre : grading naturel, jamais néon. */

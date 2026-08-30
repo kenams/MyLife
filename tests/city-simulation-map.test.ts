@@ -16,12 +16,12 @@ describe("city simulation map projection", () => {
     expect(estimate.referencePopulation).toBe(TOULOUSE_CITY.referencePopulation);
     expect(estimate.awakePopulation).toBeGreaterThan(400_000);
     expect(estimate.mobilePopulation).toBeGreaterThan(100_000);
-    expect(estimate.materializedAgents).toBeLessThanOrEqual(160);
+    expect(estimate.materializedAgents).toBeLessThanOrEqual(250);
   });
 
   it("keeps QA presets separate from the city population model", () => {
     const npcs = seedLivingCityNpcs("NORMAL", new Date("2026-08-29T12:00:00Z"));
-    expect(npcs.length).toBe(100);
+    expect(npcs.length).toBe(220);
     expect(npcs.length).toBeLessThan(TOULOUSE_CITY.referencePopulation);
     expect(estimateCityActivity(new Date("2026-08-29T12:00:00")).referencePopulation).toBe(515_000);
   });

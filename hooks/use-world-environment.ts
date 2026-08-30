@@ -9,7 +9,7 @@ import {
 } from "@/lib/world-environment";
 import { fetchWeather } from "@/lib/weather-provider";
 
-const RECOMPUTE_MS = 5 * 60_000;   // ambiance : recalcul time-bucketé
+const RECOMPUTE_MS = 60_000;      // ambiance + horloge HUD : recalcul minute
 const WEATHER_MS = 60 * 60_000;    // météo : 1 fetch / h max
 
 function prefersReducedMotion(): boolean {
