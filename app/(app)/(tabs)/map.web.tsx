@@ -22,7 +22,6 @@ import {
   type CrewZoneRich, type TakeoverNotif, type RoiDeToulouse,
 } from "@/lib/crews";
 import { startNpcMapEngine, stopNpcMapEngine } from "@/lib/npc-map-engine";
-import { useInterpolatedPlayers } from "@/hooks/use-interpolated-players";
 import { publishMylifeDebug } from "@/lib/mylife-debug";
 import { sendLocalNotification } from "@/lib/push-notifications";
 import { blockUser } from "@/lib/safety";
@@ -791,14 +790,70 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
   // Mise à jour joueurs quand ils changent — setData() sur la source
   // existante (pas de recréation de carte, pas de perte de zoom/pitch/
   // bearing, pas de listeners dupliqués, pas de marqueurs DOM dupliqués).
+  //
+  // Lissage visuel : la simulation publie des positions cibles ; on interpole
+  // chaque marqueur PNJ vers sa cible via UN SEUL rAF global (jamais un timer
+  // par PNJ, jamais un re-render React). Les vrais joueurs (GPS) ne sont pas
+  // lissés.
+  const tweenRef = useRef<Map<string, { sLat: number; sLng: number; tLat: number; tLng: number; cLat: number; cLng: number; t0: number }>>(new Map());
+  const tweenPlayersRef = useRef<MapPlayer[]>([]);
+  const rafRef = useRef<number | null>(null);
+
   useEffect(() => {
     const map = mapRef.current as any;
     const gl = glRef.current as any;
     if (!map || !gl) return;
 
-    const applyData = () => syncPlayersSource(map, players, superclusterRef);
-    if (clusterReadyRef.current) applyData();
-    else map.once("load", applyData);
+    const EASE_MS = 2600;
+    const now = Date.now();
+    const seen = new Set<string>();
+    for (const p of players) {
+      seen.add(p.id);
+      const cur = tweenRef.current.get(p.id);
+      if (!cur) {
+        tweenRef.current.set(p.id, { sLat: p.lat, sLng: p.lng, tLat: p.lat, tLng: p.lng, cLat: p.lat, cLng: p.lng, t0: now });
+      } else if (Math.abs(cur.tLat - p.lat) > 1e-7 || Math.abs(cur.tLng - p.lng) > 1e-7) {
+        cur.sLat = cur.cLat; cur.sLng = cur.cLng;
+        cur.tLat = p.lat; cur.tLng = p.lng; cur.t0 = now;
+      }
+    }
+    for (const id of tweenRef.current.keys()) if (!seen.has(id)) tweenRef.current.delete(id);
+    tweenPlayersRef.current = players;
+
+    const applyData = () => {
+      const eased = tweenPlayersRef.current.map((p) => {
+        if (!p.is_npc) return p;
+        const tr = tweenRef.current.get(p.id);
+        if (!tr) return p;
+        return { ...p, lat: tr.cLat, lng: tr.cLng };
+      });
+      syncPlayersSource(map, eased, superclusterRef);
+    };
+
+    const step = () => {
+      const t = Date.now();
+      let moving = false;
+      for (const tr of tweenRef.current.values()) {
+        const k = 1 - Math.pow(1 - Math.min(1, (t - tr.t0) / EASE_MS), 3);
+        const nLat = tr.sLat + (tr.tLat - tr.sLat) * k;
+        const nLng = tr.sLng + (tr.tLng - tr.sLng) * k;
+        if (Math.abs(nLat - tr.cLat) > 1e-7 || Math.abs(nLng - tr.cLng) > 1e-7) {
+          tr.cLat = nLat; tr.cLng = nLng; moving = true;
+        }
+      }
+      applyData();
+      rafRef.current = moving ? requestAnimationFrame(step) : null;
+    };
+
+    if (clusterReadyRef.current) {
+      applyData();
+      if (rafRef.current == null) rafRef.current = requestAnimationFrame(step);
+    } else {
+      map.once("load", () => { applyData(); if (rafRef.current == null) rafRef.current = requestAnimationFrame(step); });
+    }
+    return () => {
+      if (rafRef.current != null) { cancelAnimationFrame(rafRef.current); rafRef.current = null; }
+    };
   }, [players]);
 
   useEffect(() => {
@@ -1656,24 +1711,31 @@ export default function LifeMapScreen() {
     return () => clearInterval(id);
   }, []);
 
-  const visible = players.filter((p) =>
+  const visible = useMemo(() => players.filter((p) =>
     p.status !== "ghost" &&
     !blocked.includes(p.user_id) &&
     (p.is_npc || isPresenceFresh(p.updated_at)) &&
     (filter === "all" || p.status === filter)
-  );
+  ), [players, blocked, filter]);
   const visibleRealCount = visible.filter((p) => !p.is_npc).length;
   const visibleNpcCount = visible.length - visibleRealCount;
-  // Lissage visuel global des positions PNJ (un seul timer, pas un par PNJ).
-  const animatedPlayers = useInterpolatedPlayers(visible);
+  // Le lissage visuel des positions PNJ vit DANS LeafletMap (setData direct,
+  // zéro re-render React). Ici on publie juste le snapshot QA périodiquement.
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
   useEffect(() => {
-    publishMylifeDebug({
-      players: animatedPlayers,
-      livingCity,
-      realCount: visibleRealCount,
-      npcCount: visibleNpcCount,
-    });
-  }, [animatedPlayers, livingCity, visibleRealCount, visibleNpcCount]);
+    if (typeof window === "undefined") return;
+    const id = window.setInterval(() => {
+      const v = visibleRef.current;
+      publishMylifeDebug({
+        players: v,
+        livingCity: useGameStore.getState().livingCity,
+        realCount: v.filter((p) => !p.is_npc).length,
+        npcCount: v.filter((p) => p.is_npc).length,
+      });
+    }, 2000);
+    return () => window.clearInterval(id);
+  }, []);
   const cityPulseSignals = useMemo(() => {
     const livingSignals = livingCityEventsToCityPulse(livingCity?.events ?? []);
     const lookingFor = avatar?.lookingFor ?? [];
@@ -1885,7 +1947,7 @@ export default function LifeMapScreen() {
       {!mapFailed && (
         <LeafletMap
           key={mapRetryKey}
-          players={animatedPlayers}
+          players={visible}
           myLat={myLocation?.lat}
           myLng={myLocation?.lng}
           onPlayerClick={(id) => {
@@ -2034,10 +2096,10 @@ export default function LifeMapScreen() {
 
       {/* ── GÉOLOC ────────────────────────────────────────────────────────── */}
       {!myLocation ? (
-        <View style={{ position: "absolute", bottom: isMobileWeb ? 14 : 110, left: isMobileWeb ? 12 : 20, right: isMobileWeb ? 12 : 20, zIndex: 5 }}>
+        <View pointerEvents="box-none" style={{ position: "absolute", bottom: isMobileWeb ? 22 : 110, left: isMobileWeb ? 12 : 20, right: isMobileWeb ? 12 : 20, zIndex: 5, alignItems: "center" }}>
           <Pressable onPress={() => void activateLocation()}
             style={{
-              minHeight: 48, backgroundColor: C.gold, borderRadius: isMobileWeb ? 14 : 18, paddingVertical: isMobileWeb ? 13 : 18,
+              minHeight: 48, width: "100%", maxWidth: 440, backgroundColor: C.gold, borderRadius: isMobileWeb ? 14 : 18, paddingVertical: isMobileWeb ? 13 : 18,
               alignItems: "center", shadowColor: C.gold, shadowOpacity: 0.5, shadowRadius: 24,
               flexDirection: "row", justifyContent: "center", gap: 10,
             }}>
@@ -2051,7 +2113,7 @@ export default function LifeMapScreen() {
                 </>
             }
           </Pressable>
-          <Text style={{ color: C.muted, fontSize: 11, textAlign: "center", marginTop: 8 }}>
+          <Text style={{ color: C.muted, fontSize: 11, textAlign: "center", marginTop: 8, pointerEvents: "none" }}>
             Position partagée en zone approximative · Ghost à tout moment
           </Text>
         </View>

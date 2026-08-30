@@ -12,6 +12,9 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    globals: true
+    globals: true,
+    // Les specs Playwright vivent dans e2e/ et se lancent via `npm run test:e2e`.
+    include: ["tests/**/*.test.ts"],
+    exclude: ["e2e/**", "node_modules/**", "dist/**"]
   }
 });

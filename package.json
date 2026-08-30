@@ -10,7 +10,12 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "typecheck:worker": "npm --prefix workers run typecheck",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:e2e": "playwright test",
+    "test:e2e:mobile": "playwright test --project=pixel5 --project=iphone-13 --project=narrow-320",
+    "test:e2e:headed": "playwright test --headed --project=pixel5",
+    "test:e2e:prod": "cross-env E2E_TARGET=prod playwright test --project=pixel5 e2e/smoke.spec.ts e2e/idle-demo.spec.ts",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@expo/metro-runtime": "~4.0.1",
@@ -42,9 +47,11 @@
     "zustand": "^5.0.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/node": "^25.6.0",
     "@types/react": "^18.3.12",
     "@types/supercluster": "^7.1.3",
+    "cross-env": "^10.1.0",
     "typescript": "^5.6.3",
     "vitest": "^4.1.4"
   }

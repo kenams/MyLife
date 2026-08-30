@@ -62,6 +62,9 @@ export type LivingCityState = {
   npcInteractionsLastTick: number;
   outingsLastTick: number;
   territorySignalsLastTick: number;
+  /** Anti-spam des interactions spontanées PNJ → joueur. */
+  lastSpontaneousAt?: string | null;
+  recentSpontaneousIds?: string[];
 };
 
 export type LivingCityTickInput = {
@@ -245,6 +248,8 @@ export function createLivingCityState(preset: LivingCityPreset = "NORMAL"): Livi
     npcInteractionsLastTick: 0,
     outingsLastTick: 0,
     territorySignalsLastTick: 0,
+    lastSpontaneousAt: null,
+    recentSpontaneousIds: [],
   };
 }
 
