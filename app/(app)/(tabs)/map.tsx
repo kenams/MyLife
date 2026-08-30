@@ -383,7 +383,7 @@ function CrewDominanceStrip({ districts, onPress }: {
 }) {
   if (districts.length === 0) return null;
   return (
-    <View style={{ position: "absolute", top: 172, left: 16, gap: 6, maxWidth: 220 }}>
+    <View style={{ position: "absolute", top: 178, left: 16, gap: 6, maxWidth: 220 }}>
       {districts.slice(0, 3).map((item) => (
         <Pressable key={`${item.district}:${item.dominant.id}`} onPress={onPress}
           style={{
@@ -544,13 +544,15 @@ export default function LifeMapScreen() {
   const visibleNpcCount = visiblePlayers.length - visibleRealCount;
   const cityPulseSignals = useMemo(() => {
     const livingSignals = livingCityEventsToCityPulse(livingCity?.events ?? []);
+    const lookingFor = avatar?.lookingFor ?? [];
     return selectCityPulseOpportunities(livingSignals, {
       district: avatar?.homeDistrict ?? "Capitole",
-      wantsDating: true,
-      wantsSocial: true,
+      // Respecte le choix fait à la création de l'avatar (pas de nouveau système).
+      wantsDating: lookingFor.some((x) => /rencontre/i.test(x)),
+      wantsSocial: lookingFor.some((x) => /ami|sortie|discussion|social/i.test(x)),
       recentSignalIds: recentPulseIds,
     });
-  }, [avatar?.homeDistrict, livingCity?.events, recentPulseIds]);
+  }, [avatar?.homeDistrict, avatar?.lookingFor, livingCity?.events, recentPulseIds]);
   const crewDominance = useMemo(() => {
     const inputs = bastions.length > 0
       ? bastions.map((zone) => ({
