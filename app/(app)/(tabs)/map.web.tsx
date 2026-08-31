@@ -93,10 +93,10 @@ function playerKind(player: MapPlayer): { label: string; color: string } {
 
 // ── MapLibre GL loader (injection dynamique dans le DOM) ──────────────────────
 // Moteur : MapLibre GL JS (open-source, licence BSD-3, gratuit, pas de clé API).
-// Tuiles : OpenFreeMap (https://openfreemap.org) — vecteur, gratuit, sans clé,
-// sans quota. Choisi après comparaison avec Mapbox (payant au-delà d'un seuil)
-// et MapTiler (quota gratuit limité) : OpenFreeMap est financé pour rester
-// gratuit indéfiniment et ne nécessite aucune inscription/API key à gérer.
+// Tuiles : CARTO "dark-matter" (https://carto.com) — vecteur, gratuit, sans clé,
+// CDN fiable, style déjà sombre. OpenFreeMap a été abandonné en 08/2026 après
+// avoir servi des tuiles vecteur vides (200, 0 octet, "x-ofm-debug: empty tile").
+// À terme, si besoin de garanties : MapTiler (clé + quota gratuit).
 //
 // DÉPENDANCE ÉPINGLÉE : version exacte 4.7.1 dans les deux URLs ci-dessous
 // (CSS + JS), jamais de version flottante (@latest). CSP du projet : aucune
@@ -421,7 +421,7 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
     // laisser un écran gris silencieux indéfiniment.
     const loadTimeout = setTimeout(() => {
       if (!readyFiredRef.current) onErrorRef.current?.();
-    }, 12_000);
+    }, 25_000);
 
     loadMaplibre(() => {
       const gl = (window as unknown as { maplibregl: unknown }).maplibregl as any;
@@ -435,12 +435,11 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
       mapEl.classList.add("mylife-map-container");
       mapEl.style.cssText = "width:100%;height:100%;position:absolute;top:0;left:0;right:0;bottom:0;";
 
-      // OpenFreeMap "liberty" — vecteur, gratuit, sans clé, sans quota.
-      // Grading sombre appliqué en filtre CSS sur le canvas (même technique
-      // qu'avec les tuiles raster précédentes) car "liberty" est un style clair.
+      // Basemap : CARTO "dark-matter" — vecteur, gratuit, sans clé, déjà sombre,
+      // CDN fiable. (OpenFreeMap servait des tuiles vides côté planet en 08/2026.)
       const map = new gl.Map({
         container: mapEl,
-        style: "https://tiles.openfreemap.org/styles/liberty",
+        style: "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json",
         center: [1.4442, 43.6047], // Toulouse — centre
         // Démarre à l'échelle du centre-ville : on voit des habitants
         // individuels bouger, pas seulement 4 méga-clusters métropolitains.
@@ -456,10 +455,13 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
       map.addControl(new gl.FullscreenControl(), "bottom-right");
 
       map.on("load", async () => {
+       try {
         const canvasContainer = map.getCanvasContainer?.() as HTMLElement | undefined;
         if (canvasContainer) {
+          // CARTO dark-matter est déjà sombre — léger grading pour rester dans
+          // l'ambiance néon MyLife (pas d'inversion, le style n'est pas clair).
           canvasContainer.style.filter =
-            "invert(1) hue-rotate(255deg) brightness(1.35) contrast(0.95) saturate(2.2)";
+            "hue-rotate(205deg) brightness(1.12) contrast(1.05) saturate(1.5)";
         }
 
         // Extrusion 3D des bâtiments si la source vectorielle les expose
@@ -764,22 +766,23 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
           });
         }
 
-        readyFiredRef.current = true;
-        clearTimeout(loadTimeout);
-        onReady();
+       } catch (err) {
+         // Un layer/sprite/source secondaire a échoué : la carte de base et les
+         // tuiles sont là — on montre la carte plutôt qu'un écran d'erreur.
+         console.warn("[MapLibre] setup post-load partiel:", err);
+       } finally {
+         readyFiredRef.current = true;
+         clearTimeout(loadTimeout);
+         onReady();
+       }
       });
 
-      // Erreur fatale de style (tuiles injoignables, style corrompu...) avant
-      // même le premier "load" — l'utilisateur doit voir un message, pas un
-      // écran gris. Les erreurs après chargement (ex: une image manquante)
-      // sont bénignes et n'affichent rien de cassé à l'écran ; seule
-      // l'absence de premier "load" déclenche l'état d'erreur ici.
+      // MapLibre émet "error" pour beaucoup de choses bénignes (sprite/glyph
+      // manquant, tuile isolée en échec, requête annulée pendant un pan). On
+      // les journalise sans casser l'écran : le seul vrai signal "la carte ne
+      // charge pas" est l'absence de premier "load", géré par loadTimeout.
       map.on("error", (e: unknown) => {
         console.warn("[MapLibre]", e);
-        if (!readyFiredRef.current) {
-          clearTimeout(loadTimeout);
-          onErrorRef.current?.();
-        }
       });
     });
 

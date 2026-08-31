@@ -1519,6 +1519,13 @@ export const useGameStore = create<GameState>()(
                 stats: mergedStats,
                 supabaseAvatarId: pulled.avatarId
               });
+            } else if (!get().avatar && supabase) {
+              // Pas encore d'avatar : on part vers l'écran de création. On y
+              // préremplit le pseudo choisi à l'inscription (profiles.username).
+              const { data: prof } = await supabase
+                .from("profiles").select("username").eq("id", userId).maybeSingle();
+              const uname = (prof?.username ?? "").trim();
+              if (uname) set({ pendingUsername: uname });
             }
             if (cloud.ok && cloud.envelope) {
               get()._hydratePlayerCloudState(cloud.envelope.state);
@@ -4130,6 +4137,7 @@ export const useGameStore = create<GameState>()(
         moneyTransfers: state.moneyTransfers,
         studyProgress: state.studyProgress,
         supabaseAvatarId: state.supabaseAvatarId,
+        pendingUsername: state.pendingUsername,
         playerXp: state.playerXp,
         playerLevel: state.playerLevel,
         missionProgresses: state.missionProgresses,

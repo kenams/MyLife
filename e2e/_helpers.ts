@@ -10,7 +10,7 @@ const IGNORED = [
   /Failed to load resource/i,
   /favicon/i,
   /net::ERR_/i,
-  /openfreemap|tiles?\./i,
+  /openfreemap|cartocdn|basemaps|tiles?\./i,
   /source map/i,
   /Warning: .*(componentWillReceiveProps|defaultProps|findDOMNode)/i,
 ];
