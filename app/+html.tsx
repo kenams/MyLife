@@ -7,10 +7,7 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
-        />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         <meta name="theme-color" content="#07111f" />
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -33,12 +30,10 @@ export default function Root({ children }: PropsWithChildren) {
               padding: 0;
               overflow: hidden;
               background: #04040A;
+              box-sizing: border-box;
             }
-            body {
-              padding-top: env(safe-area-inset-top);
-              padding-right: env(safe-area-inset-right);
-              padding-bottom: env(safe-area-inset-bottom);
-              padding-left: env(safe-area-inset-left);
+            *, *::before, *::after {
+              box-sizing: inherit;
             }
             /* Force RN web root to full viewport */
             body > div, #root > div {
