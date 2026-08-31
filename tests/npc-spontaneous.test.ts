@@ -70,4 +70,22 @@ describe("npc-spontaneous", () => {
     }, now);
     expect(again).toBeNull();
   });
+
+  it("transforme un moment social en séance sport quand le PNJ est à la salle", () => {
+    const actor = { ...npcs[0], currentActivity: "Séance fitness à la salle" };
+    const moment = pickSpontaneousNpcMoment([ev({ actorNpcIds: [actor.id] })], [actor, ...npcs.slice(1)], {
+      playerDistrict: "Capitole", playerLevel: 3, lastMomentAt: null, recentMomentIds: [],
+    }, now);
+    expect(moment!.kind).toBe("GYM");
+    expect(moment!.body).toContain("séance");
+  });
+
+  it("peut produire une vraie question sociale pour un PNJ curieux", () => {
+    const actor = { ...npcs[0], currentActivity: "Balade", personality: "Curieux et sociable" };
+    const moment = pickSpontaneousNpcMoment([ev({ actorNpcIds: [actor.id] })], [actor, ...npcs.slice(1)], {
+      playerDistrict: "Capitole", playerLevel: 3, lastMomentAt: null, recentMomentIds: [],
+    }, now);
+    expect(moment!.kind).toBe("QUESTION");
+    expect(moment!.title).toContain("te capte");
+  });
 });
