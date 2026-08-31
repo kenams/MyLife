@@ -47,7 +47,7 @@ Flux cible : Inscription (pseudo + email + mot de passe) → Avatar (pseudo pré
     Supabase (`avatars` row + `supabaseAvatarId`), joueur neuf Niv.1 / 0 XP
   - logout → login → retour direct sur `/map`, avatar + progression persistés
   - profil affiche bien le pseudo
-- **Compte de test livré** : `KenamsTest` / `kenams42+mylife@gmail.com` / `MyLife2026!`
+- **Compte de test livré** : identifiants conservés hors dépôt et mot de passe renouvelé après QA.
   (email confirmé à la main en base).
 - ⚠️ **Friction restante (non-bloquante pour le compte livré)** : « Confirm email » est
   ON sur le projet Supabase MyLife → un tout nouveau testeur doit cliquer le lien email
@@ -91,7 +91,7 @@ objectifs PNJ multi-jours explicites, rôles sociaux plus fins.
   log-only. Corrige l'écran « La carte n'a pas pu se charger » sur connexion lente /
   1re visite.
 - **Comptes de test prod** (email confirmé en base) :
-  - `KenamsTest` / `kenams42+mylife@gmail.com` / `MyLife2026!`
+  - compte QA Supabase configuré ; identifiants conservés hors dépôt.
   - `CollabTest` / `kenams42+collab@gmail.com` / `MyLife2026!`
 - ⚠️ openfreemap.org (CDN de tuiles gratuit, sans SLA) rate-limite l'IP après un gros
   volume de rechargements (tests). Un vrai utilisateur qui ouvre 1× ne le voit pas.
