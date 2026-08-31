@@ -5,7 +5,7 @@
  * influence, prestige, prochaine Battle. Réagit en temps réel aux conquêtes.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { router, Stack } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -21,6 +21,8 @@ import { useGameStore } from "@/stores/game-store";
 import { getMyCrewId } from "@/lib/crews";
 import { TerritoryPresenceBanner } from "@/components/territory-presence-banner";
 import { BattleFomo } from "@/components/battle-fomo";
+import { ToulousePowerBoard } from "@/components/toulouse-power-board";
+import { buildToulouseGeopolitics } from "@/lib/crew-geopolitics";
 
 const T = {
   bg: "#080808",
@@ -60,7 +62,6 @@ export default function TerritoriesScreen() {
     const [data, b] = await Promise.all([fetchTerritories(), fetchUpcomingBattles()]);
     setBattles(b);
     data.sort((a, b) => {
-      // Contestés / avec battle en premier, puis prestige.
       const ba = a.next_battle_at ? 0 : 1;
       const bb = b.next_battle_at ? 0 : 1;
       if (ba !== bb) return ba - bb;
@@ -83,6 +84,7 @@ export default function TerritoriesScreen() {
 
   const owned = items.filter((i) => i.owner_crew_id).length;
   const battleByDistrict = new Map(battles.map((b) => [b.district_id, b]));
+  const geopolitics = useMemo(() => buildToulouseGeopolitics(items), [items]);
 
   async function launchBattle(t: Territory) {
     setBusy(t.id);
@@ -136,6 +138,11 @@ export default function TerritoriesScreen() {
           showsVerticalScrollIndicator={false}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={T.gold} />}
         >
+          <ToulousePowerBoard
+            geopolitics={geopolitics}
+            totalTerritories={items.length}
+            onOpenRanking={() => router.push("/(app)/leaderboard")}
+          />
           <TerritoryPresenceBanner territories={items} myCrewId={myCrew} />
           <BattleFomo myCrewId={myCrew} />
 
@@ -147,6 +154,7 @@ export default function TerritoriesScreen() {
           {items.map((t) => {
             const held = daysHeld(t.conquered_at);
             const accent = t.owner_color ?? T.muted;
+            const hot = Boolean(t.next_battle_at) || (Boolean(t.owner_crew_id) && t.influence < 60);
             return (
               <View
                 key={t.id}
@@ -154,7 +162,7 @@ export default function TerritoriesScreen() {
                   backgroundColor: T.card,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: t.next_battle_at ? T.red + "50" : T.border,
+                  borderColor: hot ? T.red + "50" : T.border,
                   overflow: "hidden",
                 }}
               >
@@ -165,6 +173,7 @@ export default function TerritoriesScreen() {
                     <Text style={{ color: T.text, fontSize: 16, fontWeight: "900", flex: 1, letterSpacing: 0.5 }}>
                       {t.district_name.toUpperCase()}
                     </Text>
+                    {hot && <Text style={{ color: T.red, fontSize: 9.5, fontWeight: "900" }}>SOUS TENSION</Text>}
                     {t.prestige > 1 && (
                       <Text style={{ color: T.gold, fontSize: 11, fontWeight: "900" }}>★{t.prestige}</Text>
                     )}
@@ -173,7 +182,7 @@ export default function TerritoriesScreen() {
                   <Text style={{ color: t.owner_crew_id ? accent : T.textSoft, fontSize: 13, fontWeight: "800", marginTop: 6 }}>
                     {t.owner_crew_id
                       ? `${t.owner_emoji ?? "🏳️"} ${t.owner_name} [${t.owner_tag}]`
-                      : "Territoire neutre"}
+                      : "Territoire neutre · à prendre"}
                   </Text>
 
                   <View
