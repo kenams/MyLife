@@ -7,7 +7,19 @@ export default function Root({ children }: PropsWithChildren) {
       <head>
         <meta charSet="utf-8" />
         <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        <meta name="theme-color" content="#07111f" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="MyLife" />
+        <meta name="application-name" content="MyLife" />
+        <meta
+          name="description"
+          content="MyLife transforme ta vraie ville en monde ouvert social persistant."
+        />
+        <link rel="manifest" href="/manifest.webmanifest" />
+        <link rel="icon" href="/mylife-icon.svg" type="image/svg+xml" />
         <ScrollViewStyleReset />
         <style dangerouslySetInnerHTML={{
           __html: `
@@ -18,6 +30,10 @@ export default function Root({ children }: PropsWithChildren) {
               padding: 0;
               overflow: hidden;
               background: #04040A;
+              box-sizing: border-box;
+            }
+            *, *::before, *::after {
+              box-sizing: inherit;
             }
             /* Force RN web root to full viewport */
             body > div, #root > div {

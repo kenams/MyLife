@@ -1,0 +1,22 @@
+{
+  "name": "MyLife",
+  "short_name": "MyLife",
+  "description": "Ta vraie ville devient un monde ouvert social persistant.",
+  "start_url": "/map",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#07111f",
+  "theme_color": "#07111f",
+  "lang": "fr-FR",
+  "categories": ["games", "social", "lifestyle"],
+  "prefer_related_applications": false,
+  "icons": [
+    {
+      "src": "/mylife-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
