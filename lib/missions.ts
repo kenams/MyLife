@@ -234,6 +234,11 @@ export function claimMissionReward(
   const mission = getMission(missionId);
   if (!mission) return { updatedProgresses: progresses, xp: 0, money: 0 };
 
+  const claimable = progresses.some(
+    (progress) => progress.missionId === missionId && progress.status === "completed"
+  );
+  if (!claimable) return { updatedProgresses: progresses, xp: 0, money: 0 };
+
   const updatedProgresses = progresses.map((p) =>
     p.missionId === missionId && p.status === "completed"
       ? { ...p, status: "claimed" as MissionStatus, claimedAt: new Date().toISOString() }

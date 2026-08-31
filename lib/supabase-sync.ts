@@ -398,34 +398,6 @@ export async function unblockUser(
   return { ok: true };
 }
 
-// ─── Progression (XP, missions, talents) ─────────────────────────────────────
-
-export async function syncProgressionToSupabase(
-  avatarId: string,
-  data: {
-    playerXp: number;
-    playerLevel: number;
-    unlockedTalents: string[];
-    missionsClaimed: number;
-  }
-): Promise<{ ok: boolean; error?: string }> {
-  if (!isSupabaseConfigured || !supabase) return { ok: false, error: "Supabase non configuré" };
-
-  const { error } = await supabase.from("progression").upsert(
-    {
-      avatar_id: avatarId,
-      player_xp: data.playerXp,
-      player_level: data.playerLevel,
-      unlocked_talents: data.unlockedTalents,
-      missions_claimed: data.missionsClaimed,
-      updated_at: new Date().toISOString()
-    },
-    { onConflict: "avatar_id" }
-  );
-
-  if (error) return { ok: false, error: error.message };
-  return { ok: true };
-}
 
 // ─── Pull avatar from Supabase (for sign-in restore) ─────────────────────────
 

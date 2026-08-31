@@ -402,6 +402,8 @@ function ActionRow({ action, onPress, isNext, blockedReason }: {
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
       <Pressable
+        testID={`life-action-${action.id}`}
+        accessibilityLabel={action.label}
         onPressIn={() => !blocked && Animated.spring(scale, { toValue: 0.985, useNativeDriver: true }).start()}
         onPressOut={() => Animated.spring(scale, { toValue: 1, useNativeDriver: true }).start()}
         onPress={() => { if (!blocked) { hapticImpact("light"); onPress(); } }}

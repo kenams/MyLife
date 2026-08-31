@@ -13,7 +13,6 @@ import {
   pullAvatarFromSupabase,
   syncAvatarToSupabase,
   syncPremiumToSupabase,
-  syncProgressionToSupabase,
   syncStatsToSupabase,
   logSocialTransferToSupabase,
   syncStudyProgressToSupabase
@@ -74,7 +73,8 @@ import { calcGiftBonus, getGiftReaction, GIFTS, getTierFromScore, TIER_META, DAT
 import type { GiftId } from "@/lib/romance";
 import { DEFAULT_THEME } from "@/lib/themes";
 import type { ThemeId } from "@/lib/themes";
-import { isSupabaseConfigured, supabase } from "@/lib/supabase";
+import { pullPlayerCloudState, type PlayerCloudState } from "@/lib/player-cloud-sync";
+import { isSupabaseConfigured, passwordResetRedirect, supabase } from "@/lib/supabase";
 import type {
   AvatarProfile,
   AvatarStats,
@@ -265,7 +265,11 @@ type GameState = {
   signOut: () => void;
   // Méthodes internes utilisées par useAuthListener
   _setSupabaseSession: (email: string, userId: string) => void;
+  _clearSupabaseSession: () => void;
   _hydrateFromSupabase: (avatar: AvatarProfile, stats: Partial<AvatarStats> | undefined, avatarId: string) => void;
+  _hydratePlayerCloudState: (cloudState: PlayerCloudState) => void;
+  _cloudMutationId: string | null;
+  _clearCloudMutation: (mutationId: string) => void;
   completeAvatar: (avatar: AvatarProfile) => void;
   editAvatar: (avatar: AvatarProfile) => void;
   bootstrap: () => void;
@@ -391,6 +395,46 @@ type GameState = {
   setAppTheme: (id: ThemeId) => void;
 };
 
+const PLAYER_CLOUD_KEYS = [
+  "avatar",
+  "stats",
+  "currentLocationSlug",
+  "currentNeighborhoodSlug",
+  "conversations",
+  "dailyGoals",
+  "lastRewardAt",
+  "notifications",
+  "relationships",
+  "invitations",
+  "datePlans",
+  "tutorialDone",
+  "isPremium",
+  "premiumTier",
+  "premiumExpiresAt",
+  "activeBoosts",
+  "equippedCosmetics",
+  "workSession",
+  "jobXp",
+  "jobLevel",
+  "shiftHistory",
+  "playerXp",
+  "playerLevel",
+  "missionProgresses",
+  "unlockedTalents",
+  "studyProgress",
+  "moneyTransfers",
+  "housingTier",
+  "housingLastPaidAt",
+  "wealthScore",
+  "dailyQuests",
+  "questLastRefreshDate",
+  "worldEventJoined",
+  "inventory",
+  "npcRelations",
+  "activeDatePlanId",
+  "appTheme",
+] as const satisfies readonly (keyof GameState)[];
+
 const LOVE_ROOM_MOMENTS: Record<LoveRoomMomentKind, { title: string; userLine: string; reply: string; scoreGain: number; moodGain: number }> = {
   question: {
     title: "Question complicite",
@@ -454,6 +498,7 @@ function initialState() {
   const runtime = createInitialRuntime();
   return {
     hasHydrated: false,
+    _cloudMutationId: null as string | null,
     tutorialDone: false,
     session: null as UserSession | null,
     livingCity: createLivingCityState("NORMAL") as LivingCityState,
@@ -1456,7 +1501,10 @@ export const useGameStore = create<GameState>()(
           // Restaurer l'avatar depuis Supabase si existant
           const userId = data.user?.id;
           if (userId) {
-            const pulled = await pullAvatarFromSupabase(userId);
+            const [pulled, cloud] = await Promise.all([
+              pullAvatarFromSupabase(userId),
+              pullPlayerCloudState(userId),
+            ]);
             if (pulled.ok && pulled.avatar && pulled.avatarId) {
               const currentStats = get().stats;
               const mergedStats = pulled.stats ? { ...currentStats, ...pulled.stats } : currentStats;
@@ -1465,6 +1513,9 @@ export const useGameStore = create<GameState>()(
                 stats: mergedStats,
                 supabaseAvatarId: pulled.avatarId
               });
+            }
+            if (cloud.ok && cloud.envelope) {
+              get()._hydratePlayerCloudState(cloud.envelope.state);
             }
           }
           return { ok: true };
@@ -1498,7 +1549,7 @@ export const useGameStore = create<GameState>()(
           return { ok: false, error: "Supabase non configuré. Mode local uniquement." };
         }
         const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
-          redirectTo: "mylife://reset-password"
+          redirectTo: passwordResetRedirect()
         });
         if (error) return { ok: false, error: error.message };
         return { ok: true };
@@ -1514,6 +1565,7 @@ export const useGameStore = create<GameState>()(
       _setSupabaseSession: (email: string, _userId: string) => {
         set({ session: { email, provider: "supabase" } });
       },
+      _clearSupabaseSession: () => set({ session: null }),
       _hydrateFromSupabase: (
         avatar: AvatarProfile,
         stats: Partial<AvatarStats> | undefined,
@@ -1522,6 +1574,21 @@ export const useGameStore = create<GameState>()(
         const currentStats = get().stats;
         const mergedStats = stats ? { ...currentStats, ...stats } : currentStats;
         set({ avatar, stats: mergedStats, supabaseAvatarId: avatarId });
+      },
+      _hydratePlayerCloudState: (cloudState) => {
+        const allowed: Record<string, unknown> = {};
+        for (const key of PLAYER_CLOUD_KEYS) {
+          if (Object.prototype.hasOwnProperty.call(cloudState, key)) {
+            allowed[key] = cloudState[key];
+          }
+        }
+        if (cloudState.stats && typeof cloudState.stats === "object" && !Array.isArray(cloudState.stats)) {
+          allowed.stats = normalizeStats({ ...get().stats, ...cloudState.stats } as AvatarStats);
+        }
+        set(allowed as Partial<GameState>);
+      },
+      _clearCloudMutation: (mutationId) => {
+        if (get()._cloudMutationId === mutationId) set({ _cloudMutationId: null });
       },
       completeAvatar: (avatar) => {
         const stats = createStatsFromAvatar(avatar);
@@ -1802,6 +1869,7 @@ export const useGameStore = create<GameState>()(
       performAction: (action) => set((state) => withActionApplied(state, action)),
       claimMission: (missionId) => set((state) => {
         const { updatedProgresses, xp, money } = claimMissionReward(state.missionProgresses ?? [], missionId);
+        if (xp === 0 && money === 0) return state;
         const newPlayerXp = (state.playerXp ?? 0) + xp;
         const newPlayerLevel = Math.max(1, Math.floor(newPlayerXp / 200) + 1);
         return {
@@ -1810,6 +1878,7 @@ export const useGameStore = create<GameState>()(
           playerLevel: newPlayerLevel,
           stats: normalizeStats({ ...state.stats, money: state.stats.money + money }),
           lastGain: { xp: Math.max(0, xp), money: Math.max(0, money), reputation: 0, at: Date.now() },
+          _cloudMutationId: `reward:mission:${missionId}`,
         };
       }),
       unlockTalent: (talentId) => set((state) => ({
@@ -2385,6 +2454,7 @@ export const useGameStore = create<GameState>()(
               reputation: Math.max(0, nextStats.reputation - state.stats.reputation),
               at: Date.now(),
             },
+            _cloudMutationId: `reward:daily:${today}`,
           };
         }),
       markNotificationRead: (notificationId) => {
@@ -3686,12 +3756,6 @@ export const useGameStore = create<GameState>()(
               progress.completedAt
             )
           ));
-          await syncProgressionToSupabase(avatarId, {
-            playerXp: state.playerXp ?? 0,
-            playerLevel: state.playerLevel ?? 1,
-            unlockedTalents: state.unlockedTalents ?? [],
-            missionsClaimed: (state.missionProgresses ?? []).filter((p) => p.status === "claimed").length,
-          });
         }
       },
 
@@ -3727,6 +3791,7 @@ export const useGameStore = create<GameState>()(
           playerLevel: newPlayerLevel,
           stats: newStats,
           lifeFeed: feed,
+          _cloudMutationId: `reward:quest:${s.questLastRefreshDate ?? "unknown"}:${questId}`,
         };
       }),
 
@@ -3760,6 +3825,7 @@ export const useGameStore = create<GameState>()(
           playerLevel: newPlayerLevel,
           lifeFeed: feed,
           dailyQuests: updatedQuests,
+          _cloudMutationId: `reward:world-event:${event.id}`,
           notifications: appendNotification(s.notifications, {
             id: `world-event-joined-${Date.now()}`,
             kind: "reward",
@@ -4082,6 +4148,16 @@ export const useGameStore = create<GameState>()(
     }
   )
 );
+
+/** Persistent player-owned state only. World simulation and transient UI stay local. */
+export function selectPlayerCloudState(state: GameState = useGameStore.getState()): PlayerCloudState {
+  const snapshot: PlayerCloudState = {};
+  for (const key of PLAYER_CLOUD_KEYS) snapshot[key] = state[key];
+  snapshot.notifications = state.notifications.filter(
+    (notification) => !/^notif-(?:lc-|spm:)/.test(notification.id)
+  );
+  return snapshot;
+}
 
 export const residents = starterResidents;
 export const worldLocations = locations;

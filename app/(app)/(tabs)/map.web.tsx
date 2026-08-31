@@ -23,6 +23,7 @@ import {
 } from "@/lib/crews";
 import { startNpcMapEngine, stopNpcMapEngine } from "@/lib/npc-map-engine";
 import { publishMylifeDebug } from "@/lib/mylife-debug";
+import { createTweenStore } from "@/lib/map-interpolation";
 import { sendLocalNotification } from "@/lib/push-notifications";
 import { blockUser } from "@/lib/safety";
 import { requestFriend, blockRelation } from "@/lib/relationships";
@@ -800,8 +801,9 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
   // chaque marqueur PNJ vers sa cible via UN SEUL rAF global (jamais un timer
   // par PNJ, jamais un re-render React). Les vrais joueurs (GPS) ne sont pas
   // lissés.
-  const tweenRef = useRef<Map<string, { sLat: number; sLng: number; tLat: number; tLng: number; cLat: number; cLng: number; t0: number }>>(new Map());
-  const tweenPlayersRef = useRef<MapPlayer[]>([]);
+  // Moteur de lissage PARTAGÉ (lib/map-interpolation) — un seul store, aucune
+  // logique métier ici, juste le rendu.
+  const tweenStoreRef = useRef(createTweenStore());
   const rafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -809,45 +811,12 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
     const gl = glRef.current as any;
     if (!map || !gl) return;
 
-    const EASE_MS = 2600;
-    const now = Date.now();
-    const seen = new Set<string>();
-    for (const p of players) {
-      seen.add(p.id);
-      const cur = tweenRef.current.get(p.id);
-      if (!cur) {
-        tweenRef.current.set(p.id, { sLat: p.lat, sLng: p.lng, tLat: p.lat, tLng: p.lng, cLat: p.lat, cLng: p.lng, t0: now });
-      } else if (Math.abs(cur.tLat - p.lat) > 1e-7 || Math.abs(cur.tLng - p.lng) > 1e-7) {
-        cur.sLat = cur.cLat; cur.sLng = cur.cLng;
-        cur.tLat = p.lat; cur.tLng = p.lng; cur.t0 = now;
-      }
-    }
-    for (const id of tweenRef.current.keys()) if (!seen.has(id)) tweenRef.current.delete(id);
-    tweenPlayersRef.current = players;
+    tweenStoreRef.current.retarget(players);
 
-    const applyData = () => {
-      const eased = tweenPlayersRef.current.map((p) => {
-        if (!p.is_npc) return p;
-        const tr = tweenRef.current.get(p.id);
-        if (!tr) return p;
-        return { ...p, lat: tr.cLat, lng: tr.cLng };
-      });
-      syncPlayersSource(map, eased, superclusterRef);
-    };
-
+    const applyData = () => syncPlayersSource(map, tweenStoreRef.current.sample(), superclusterRef);
     const step = () => {
-      const t = Date.now();
-      let moving = false;
-      for (const tr of tweenRef.current.values()) {
-        const k = 1 - Math.pow(1 - Math.min(1, (t - tr.t0) / EASE_MS), 3);
-        const nLat = tr.sLat + (tr.tLat - tr.sLat) * k;
-        const nLng = tr.sLng + (tr.tLng - tr.sLng) * k;
-        if (Math.abs(nLat - tr.cLat) > 1e-7 || Math.abs(nLng - tr.cLng) > 1e-7) {
-          tr.cLat = nLat; tr.cLng = nLng; moving = true;
-        }
-      }
       applyData();
-      rafRef.current = moving ? requestAnimationFrame(step) : null;
+      rafRef.current = tweenStoreRef.current.hasMoving() ? requestAnimationFrame(step) : null;
     };
 
     if (clusterReadyRef.current) {
@@ -1601,10 +1570,6 @@ export default function LifeMapScreen() {
   const flyToRef = useRef<((lat: number, lng: number, zoom?: number, pitch?: number, bearing?: number) => void) | null>(null);
 
   useEffect(() => {
-    if (!isMobileWeb) setShowMapContext(false);
-  }, [isMobileWeb]);
-
-  useEffect(() => {
     getMyOfficerCrewId().then(setMyCrewId);
   }, []);
 
@@ -1732,11 +1697,27 @@ export default function LifeMapScreen() {
     if (typeof window === "undefined") return;
     const id = window.setInterval(() => {
       const v = visibleRef.current;
+      const s = useGameStore.getState();
+      const unread = (s.notifications ?? []).filter((n) => !n.read).length;
       publishMylifeDebug({
         players: v,
-        livingCity: useGameStore.getState().livingCity,
+        livingCity: s.livingCity,
         realCount: v.filter((p) => !p.is_npc).length,
         npcCount: v.filter((p) => p.is_npc).length,
+        player: {
+          authProvider: s.session?.provider ?? null,
+          hasSupabaseSession: s.session?.provider === "supabase",
+          username: s.avatar?.displayName ?? null,
+          level: s.playerLevel ?? 1,
+          xp: s.playerXp ?? 0,
+          wory: s.stats?.money ?? 0,
+          crewTag: s.livingCity?.crews?.find((c) => c.id === (s as { myCrewId?: string }).myCrewId)?.tag ?? null,
+          unreadNotifications: unread,
+          unreadNotificationIds: (s.notifications ?? []).filter((notification) => !notification.read).map((notification) => notification.id),
+          firstUnreadNotificationId: (s.notifications ?? []).find((notification) => !notification.read)?.id ?? null,
+          theme: s.appTheme,
+          isQa: /(?:\.test|mylife-qa\.internal)$/i.test(s.session?.email ?? ""),
+        },
       });
     }, 2000);
     return () => window.clearInterval(id);
@@ -2079,25 +2060,26 @@ export default function LifeMapScreen() {
         </ScrollView>
       )}
 
+      {/* Bandeaux desktop : simple confort souris. Le MÊME contenu est
+          accessible partout via le tiroir ☰ (parité stricte web). */}
       {!isMobileWeb && <CityPulseStrip signals={cityPulseSignals} onPress={handleCityPulsePress} />}
       {!isMobileWeb && <CrewDominanceStrip districts={crewDominance} onPress={handleCrewContextPress} />}
 
-      {isMobileWeb && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={`${mapContextCount} informations autour de toi`}
-          onPress={() => setShowMapContext(true)}
-          style={{
-            position: "absolute", top: 63, right: 12, zIndex: 7,
-            minWidth: 48, height: 44, borderRadius: 22, paddingHorizontal: 10,
-            backgroundColor: "rgba(8,8,15,0.94)", borderWidth: 1, borderColor: C.gold + "55",
-            flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
-            shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 6,
-          }}>
-          <Text style={{ color: C.text, fontSize: 16, fontWeight: "900" }}>☰</Text>
-          <Text style={{ color: C.gold, fontSize: 11, fontWeight: "900" }}>{mapContextCount}</Text>
-        </Pressable>
-      )}
+      {/* Tiroir « Autour de toi » : disponible sur TOUS les viewports. */}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${mapContextCount} informations autour de toi`}
+        onPress={() => setShowMapContext(true)}
+        style={{
+          position: "absolute", top: isMobileWeb ? 63 : 108, right: isMobileWeb ? 12 : 16, zIndex: 7,
+          minWidth: 48, height: 44, borderRadius: 22, paddingHorizontal: 10,
+          backgroundColor: "rgba(8,8,15,0.94)", borderWidth: 1, borderColor: C.gold + "55",
+          flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5,
+          shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 6,
+        }}>
+        <Text style={{ color: C.text, fontSize: 16, fontWeight: "900" }}>☰</Text>
+        <Text style={{ color: C.gold, fontSize: 11, fontWeight: "900" }}>{mapContextCount}</Text>
+      </Pressable>
 
       {/* ── GÉOLOC ────────────────────────────────────────────────────────── */}
       {!myLocation ? (
@@ -2482,7 +2464,7 @@ export default function LifeMapScreen() {
       )}
 
       <MobileMapContextDrawer
-        visible={isMobileWeb && showMapContext}
+        visible={showMapContext}
         signals={cityPulseSignals}
         districts={crewDominance}
         takeoverAlert={takeoverAlert}

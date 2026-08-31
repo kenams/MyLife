@@ -15,10 +15,14 @@ import {
  * La ville doit continuer de vivre — des habitants bougent, changent
  * d'activité, des trajets existent, City Pulse évolue, aucun crash.
  */
-test.describe("idle demo — la ville vit sans le joueur", () => {
-  test.setTimeout(5 * 60_000);
+// Durée de la fenêtre d'observation : 180 s par défaut (PR), 300 s en démo
+// finale (`E2E_IDLE_SECONDS=300`).
+const IDLE_SECONDS = Number(process.env.E2E_IDLE_SECONDS ?? 180);
 
-  test("après ~3 min sans interaction, le monde a changé", async ({ page }, testInfo) => {
+test.describe("idle demo — la ville vit sans le joueur", () => {
+  test.setTimeout((IDLE_SECONDS + 120) * 1000);
+
+  test(`après ~${Math.round(IDLE_SECONDS / 60)} min sans interaction, le monde a changé`, async ({ page }, testInfo) => {
     const guard = attachConsoleGuard(page);
     await enterApp(page);
 
@@ -26,9 +30,10 @@ test.describe("idle demo — la ville vit sans le joueur", () => {
     await testInfo.attach("t0", { body: await page.screenshot(), contentType: "image/png" });
 
     const samples: DebugSnapshot[] = [t0];
-    // 6 échantillons espacés de ~28 s ≈ 2 min 48
-    for (let i = 0; i < 6; i++) {
-      await page.waitForTimeout(28_000);
+    const stepMs = 28_000;
+    const steps = Math.max(4, Math.round((IDLE_SECONDS * 1000) / stepMs));
+    for (let i = 0; i < steps; i++) {
+      await page.waitForTimeout(stepMs);
       const snap = await readDebug(page);
       if (snap) samples.push(snap);
     }

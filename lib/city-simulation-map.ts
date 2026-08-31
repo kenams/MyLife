@@ -265,6 +265,8 @@ export function livingNpcToMapPlayer(
     crew_color: null,
     crew_tag: npc.crewTag ?? null,
     updated_at: npc.lastTickAt ?? new Date().toISOString(),
+    travel_mode: moving ? npc.travelMode ?? null : null,
+    destination: moving ? npc.destDistrictSlug ?? null : null,
   };
 }
 
