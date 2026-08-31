@@ -6,6 +6,7 @@ import { useGameStore } from "@/stores/game-store";
 
 export default function AvatarScreen() {
   const completeAvatar = useGameStore((s) => s.completeAvatar);
+  const pendingUsername = useGameStore((s) => s.pendingUsername);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: "#e8edf5" }}>
@@ -26,6 +27,7 @@ export default function AvatarScreen() {
         </View>
 
         <AvatarForm
+          initialDisplayName={pendingUsername ?? undefined}
           submitLabel="Entrer sur la Life Map"
           onSubmit={(avatar) => {
             completeAvatar(avatar);

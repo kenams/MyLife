@@ -233,14 +233,16 @@ function numberValue(input: string, fallback: number) {
 
 export function AvatarForm({
   initialAvatar,
+  initialDisplayName,
   submitLabel,
   onSubmit
 }: {
   initialAvatar?: AvatarProfile | null;
+  initialDisplayName?: string;
   submitLabel: string;
   onSubmit: (avatar: AvatarProfile) => void;
 }) {
-  const [displayName, setDisplayName] = useState(initialAvatar?.displayName ?? "");
+  const [displayName, setDisplayName] = useState(initialAvatar?.displayName ?? initialDisplayName ?? "");
   const [homeDistrict, setHomeDistrict] = useState(initialAvatar?.homeDistrict ?? toulouseDistrictOptions[0]);
   const [bio, setBio] = useState(initialAvatar?.bio ?? "");
   const [ageRange, setAgeRange] = useState(initialAvatar?.ageRange ?? ageRanges[2]);
