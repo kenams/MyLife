@@ -39,8 +39,23 @@ Document court, mis à jour à chaque PR. Évite de refaire un audit complet à 
 Flux cible : Inscription (pseudo + email + mot de passe) → Avatar (pseudo prérempli)
 → Map.
 
-## À vérifier au prochain passage
-- Statut de la confirmation email sur le projet Supabase (détermine si on va direct
-  sur `/(auth)/avatar` ou si on repasse par l'onglet connexion).
-- Créer compte neuf / logout / login / même compte téléphone + desktop : persistance
-  pseudo + progression.
+### 2026-08-31 (suite) — PR #27 mergée, flux testé en prod
+- Testé sur https://mylife-app-rho.vercel.app (E2E navigateur, master) :
+  - signup pseudo+email+mdp → check dispo pseudo live OK
+  - login **par pseudo** (RPC `email_for_username`) OK
+  - 1er login → `/avatar` avec pseudo prérempli → submit → `/map`, avatar synchronisé
+    Supabase (`avatars` row + `supabaseAvatarId`), joueur neuf Niv.1 / 0 XP
+  - logout → login → retour direct sur `/map`, avatar + progression persistés
+  - profil affiche bien le pseudo
+- **Compte de test livré** : `KenamsTest` / `kenams42+mylife@gmail.com` / `MyLife2026!`
+  (email confirmé à la main en base).
+- ⚠️ **Friction restante (non-bloquante pour le compte livré)** : « Confirm email » est
+  ON sur le projet Supabase MyLife → un tout nouveau testeur doit cliquer le lien email
+  avant d'atteindre la Map. Pour du test ouvert : Supabase → Authentication → Sign In /
+  Providers → Email → décocher « Confirm email ». Le code gère déjà les 2 cas
+  (`needsConfirm`).
+- Bruit relevé (non bloquant) : bandeau « MyLife sur ton téléphone » masque le haut de
+  certains écrans sur desktop ; `ACTIVE_CITY.displayName` = « NEO TOULOUSE ».
+
+## Prochain chantier : NPC Brain V1
+Voir roadmap. Heuristique/déterministe, pas de LLM par tick.
