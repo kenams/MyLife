@@ -1,11 +1,18 @@
--- Harden technical QA accounts: no plaintext password storage in public schema.
--- QA credentials must only exist in protected environment variables / Auth.
+-- Harden technical QA accounts: never retain a usable password in public schema.
+-- Automated QA login uses Supabase Auth plus a protected E2E_QA_PASSWORD env var.
 
 alter table if exists public.qa_test_accounts enable row level security;
 revoke all on table public.qa_test_accounts from anon, authenticated;
 
--- Remove the legacy plaintext credential column entirely. Existing values are
--- discarded; automated QA provisioning uses Supabase Auth admin APIs and a
--- protected E2E_QA_PASSWORD environment variable instead.
-alter table if exists public.qa_test_accounts
-  drop column if exists password_plain;
+-- Scrub any credential left by the legacy bootstrap migration while preserving
+-- the legacy column for compatibility with existing provisioning code.
+update public.qa_test_accounts
+set password_plain = 'managed-by-provision-script'
+where password_plain <> 'managed-by-provision-script';
+
+alter table public.qa_test_accounts
+  drop constraint if exists qa_test_accounts_password_plain_sentinel;
+
+alter table public.qa_test_accounts
+  add constraint qa_test_accounts_password_plain_sentinel
+  check (password_plain = 'managed-by-provision-script');
