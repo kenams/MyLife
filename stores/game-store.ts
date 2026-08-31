@@ -266,6 +266,7 @@ type GameState = {
   signUp: (email: string, password: string, username?: string) => Promise<{ ok: boolean; error?: string; needsConfirm?: boolean }>;
   checkUsername: (username: string) => Promise<{ ok: boolean; available: boolean; error?: string }>;
   resetPassword: (email: string) => Promise<{ ok: boolean; error?: string }>;
+  updatePassword: (password: string) => Promise<{ ok: boolean; error?: string }>;
   loadTestAccount: (preset?: TestAccountPreset) => void;
   signOut: () => void;
   // Méthodes internes utilisées par useAuthListener
@@ -1600,6 +1601,21 @@ export const useGameStore = create<GameState>()(
         const { error } = await supabase.auth.resetPasswordForEmail(cleanedEmail, {
           redirectTo: passwordResetRedirect()
         });
+        if (error) return { ok: false, error: error.message };
+        return { ok: true };
+      },
+      updatePassword: async (password: string) => {
+        if (!password || password.length < 8) {
+          return { ok: false, error: "8 caractères minimum." };
+        }
+        if (!isSupabaseConfigured || !supabase) {
+          return { ok: false, error: "Supabase non configuré. Mode local uniquement." };
+        }
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          return { ok: false, error: "Lien expiré ou invalide. Redemande un lien de réinitialisation." };
+        }
+        const { error } = await supabase.auth.updateUser({ password });
         if (error) return { ok: false, error: error.message };
         return { ok: true };
       },
