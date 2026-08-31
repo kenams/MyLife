@@ -229,10 +229,24 @@ export async function fetchCrewMembers(crewId: string): Promise<CrewMember[]> {
 
 export async function getMyCrewId(playerName: string): Promise<string | null> {
   if (!supabase) return null;
+  const { data: authData } = await supabase.auth.getSession();
+  const userId = authData.session?.user.id;
+  if (userId) {
+    const { data: membership } = await supabase
+      .from("crew_members")
+      .select("crew_id")
+      .eq("user_id", userId)
+      .limit(1)
+      .maybeSingle();
+    if (membership?.crew_id) return membership.crew_id;
+  }
+
+  // Legacy fallback for memberships created before user_id was mandatory.
   const { data } = await supabase
     .from("crew_members")
     .select("crew_id")
     .eq("player_name", playerName)
+    .limit(1)
     .maybeSingle();
   return data?.crew_id ?? null;
 }
