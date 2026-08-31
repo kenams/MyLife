@@ -51,6 +51,42 @@ function firstName(npcName: string): string {
   return npcName.split(".")[0] ?? npcName;
 }
 
+function normalizedText(...parts: Array<string | null | undefined>): string {
+  return parts.filter(Boolean).join(" ").toLocaleLowerCase("fr-FR");
+}
+
+/**
+ * La nature du moment doit refléter ce que le PNJ est réellement en train de
+ * faire, pas uniquement le type abstrait de l'événement. Cela donne davantage
+ * l'impression de croiser des habitants avec leur propre journée.
+ */
+function contextualMomentKind(
+  event: LivingCityEvent,
+  actor: NpcState | undefined,
+): SpontaneousMoment["kind"] | null {
+  const fallback = KIND_BY_EVENT[event.kind];
+  if (!fallback) return null;
+
+  const activity = normalizedText(actor?.currentActivity, actor?.action, event.title, event.body);
+  const personality = normalizedText(actor?.personality, ...(actor?.interests ?? []));
+
+  if (/(salle|gym|fitness|sport|running|course|training|entraînement|entrainement)/.test(activity)) {
+    return "GYM";
+  }
+  if (/(café|cafe|coffee|brunch)/.test(activity)) {
+    return "COFFEE";
+  }
+  if (
+    event.kind === "SOCIAL"
+    && (/(curieux|curieuse|curiosité|curiosite|discussion|culture|étudiant|etudiant)/.test(personality)
+      || /\?|question|avis|conseil/.test(activity))
+  ) {
+    return "QUESTION";
+  }
+
+  return fallback;
+}
+
 function templateFor(kind: SpontaneousMoment["kind"], name: string, district: string): { title: string; body: string } {
   switch (kind) {
     case "COFFEE":
@@ -93,10 +129,10 @@ export function pickSpontaneousNpcMoment(
       const actorId = event.actorNpcIds[0] ?? null;
       const actor = actorId ? npcById.get(actorId) : undefined;
       const name = firstName(actor?.name ?? "Quelqu'un");
-      let kind = KIND_BY_EVENT[event.kind]!;
+      let kind = contextualMomentKind(event, actor)!;
       // CREW seulement si le joueur a le niveau (cohérence progression).
       if (kind === "CREW" && ctx.playerLevel < 2) kind = "GREETING";
-      const id = `spm:${event.kind}:${actorId ?? "x"}:${event.district}`;
+      const id = `spm:${event.kind}:${actorId ?? "x"}:${event.district}:${kind}`;
       const tpl = templateFor(kind, name, event.district);
       return {
         id,
