@@ -243,6 +243,7 @@ export function AvatarForm({
   onSubmit: (avatar: AvatarProfile) => void;
 }) {
   const [displayName, setDisplayName] = useState(initialAvatar?.displayName ?? initialDisplayName ?? "");
+  const [nameError, setNameError] = useState("");
   const [homeDistrict, setHomeDistrict] = useState(initialAvatar?.homeDistrict ?? toulouseDistrictOptions[0]);
   const [bio, setBio] = useState(initialAvatar?.bio ?? "");
   const [ageRange, setAgeRange] = useState(initialAvatar?.ageRange ?? ageRanges[2]);
@@ -285,8 +286,10 @@ export function AvatarForm({
 
   function submit() {
     if (!displayName.trim()) {
+      setNameError("Choisis un pseudo pour continuer.");
       return;
     }
+    setNameError("");
 
     onSubmit({
       displayName: displayName.trim(),
@@ -336,7 +339,10 @@ export function AvatarForm({
       </Card>
 
       <Card>
-        <Input value={displayName} onChangeText={setDisplayName} placeholder="Prénom ou pseudo" />
+        <Input value={displayName} onChangeText={(v) => { setDisplayName(v); if (nameError) setNameError(""); }} placeholder="Prénom ou pseudo" />
+        {nameError !== "" && (
+          <Text style={{ color: "#ff6b6b", fontSize: 13, fontWeight: "700" }}>{nameError}</Text>
+        )}
         <ChoiceGroup
           label="Quartier approximatif"
           options={toulouseDistrictOptions}
