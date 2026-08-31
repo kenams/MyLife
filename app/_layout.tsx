@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { CityRuntime } from "@/components/city-runtime";
 import { DuskOverlay } from "@/components/dusk-overlay";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { useAuthListener } from "@/hooks/use-auth-listener";
 import { hasConsented } from "./(auth)/consent";
 import { isAgeVerified } from "./(auth)/age-check";
@@ -55,6 +56,7 @@ export default function RootLayout() {
       <CityRuntime />
       <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
       <DuskOverlay />
+      <PwaInstallPrompt />
     </QueryClientProvider>
   );
 }
