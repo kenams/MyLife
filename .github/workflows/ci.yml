@@ -13,7 +13,7 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout
@@ -31,5 +31,49 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
-      - name: Tests
+      - name: Unit tests
         run: npm test
+
+      - name: Production-like web export
+        run: npx expo export --platform web && node scripts/inject-pwa-html.mjs
+
+      - name: Verify mobile install metadata
+        run: |
+          grep -q 'viewport-fit=cover' dist/index.html
+          grep -q 'manifest.webmanifest' dist/index.html
+          grep -q 'apple-mobile-web-app-capable' dist/index.html
+          test -f dist/manifest.webmanifest
+
+  mobile-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: validate
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Pixel 5 smoke
+        run: npx playwright test --project=pixel5 e2e/smoke.spec.ts
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            e2e/.artifacts/
+          if-no-files-found: ignore
