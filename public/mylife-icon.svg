@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MyLife">
+  <rect width="512" height="512" rx="112" fill="#07111f"/>
+  <circle cx="256" cy="256" r="168" fill="none" stroke="#ffffff" stroke-width="22" opacity="0.92"/>
+  <path d="M154 326V186h34l68 82 68-82h34v140h-38v-82l-64 76-64-76v82z" fill="#ffffff"/>
+  <circle cx="391" cy="121" r="27" fill="#ffd54a"/>
+</svg>
