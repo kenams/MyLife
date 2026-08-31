@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
 
 import { CityAbsenceSummary } from "@/components/city-absence-summary";
+import { CityPulseDirector } from "@/components/city-pulse-director";
 import { CityRuntime } from "@/components/city-runtime";
 import { DuskOverlay } from "@/components/dusk-overlay";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
@@ -57,6 +58,7 @@ export default function RootLayout() {
       <CityRuntime />
       <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
       <CityAbsenceSummary />
+      <CityPulseDirector />
       <DuskOverlay />
       <PwaInstallPrompt />
     </QueryClientProvider>
