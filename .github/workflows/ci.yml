@@ -34,8 +34,15 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      - name: Web production export
-        run: npx expo export --platform web
+      - name: Production-like web export
+        run: npx expo export --platform web && node scripts/inject-pwa-html.mjs
+
+      - name: Verify mobile install metadata
+        run: |
+          grep -q 'viewport-fit=cover' dist/index.html
+          grep -q 'manifest.webmanifest' dist/index.html
+          grep -q 'apple-mobile-web-app-capable' dist/index.html
+          test -f dist/manifest.webmanifest
 
   mobile-smoke:
     runs-on: ubuntu-latest
