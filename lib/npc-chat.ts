@@ -1,5 +1,7 @@
 import { supabase } from "./supabase";
-import { runNpcTurn, type NpcIntent } from "./npc-engine";
+import { getNpcPersonality, runNpcTurn, type NpcIntent } from "./npc-engine";
+import { shouldEnhanceNpcTurn } from "./npc-chat-policy";
+import { getNpcMultiDayGoal } from "./npc-goals";
 
 export type NpcChatTurn = { role: "me" | "npc"; text: string };
 
@@ -13,11 +15,9 @@ export type NpcReplyResult = {
 };
 
 // ── Circuit breaker pour le LLM externe (facultatif) ──────────────────────
-// Le moteur local répond TOUJOURS en premier et instantanément. On tente en
-// plus, en arrière-plan, un enrichissement LLM seulement si un fournisseur
-// n'est pas déjà connu comme indisponible cette session — pour ne jamais
-// spammer une clé à plat (quota/crédit épuisé) ni faire attendre le joueur.
-const CIRCUIT_COOLDOWN_MS = 10 * 60_000; // 10 min avant de retenter après un échec
+// Le moteur local répond TOUJOURS en premier et instantanément. L'IA générative
+// n'est appelée que pour un moment qui compte réellement dans la relation.
+const CIRCUIT_COOLDOWN_MS = 10 * 60_000;
 let circuitOpenUntil = 0;
 const REQUEST_TIMEOUT_MS = 4000;
 
@@ -38,17 +38,26 @@ export async function sendNpcMessageLocal(
 }
 
 /**
- * Tentative d'enrichissement LLM, best-effort, jamais bloquante pour le
- * joueur : timeout court, aucune répétition tant que le circuit est ouvert.
- * Retourne null si indisponible — l'appelant garde alors la réponse locale.
+ * Enrichissement LLM best-effort. Il reçoit uniquement un contexte de jeu
+ * compact : personnalité stable + objectif courant + historique récent.
  */
 export async function tryEnhanceWithLlm(
-  npcName: string, npcMood: string | null, history: NpcChatTurn[], message: string
+  npcId: string,
+  npcName: string,
+  npcMood: string | null,
+  history: NpcChatTurn[],
+  message: string,
 ): Promise<{ reply: string; engine: "anthropic" | "openai" } | null> {
   if (!supabase || circuitIsOpen()) return null;
   const { data: sessionData } = await supabase.auth.getSession();
   const token = sessionData?.session?.access_token;
   if (!token) return null;
+
+  const personality = getNpcPersonality(npcId);
+  const goal = getNpcMultiDayGoal(
+    npcId,
+    `${personality.ton} ${personality.interet}`,
+  );
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -58,8 +67,20 @@ export async function tryEnhanceWithLlm(
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       signal: controller.signal,
       body: JSON.stringify({
-        npcName, npcMood,
-        history: history.map((h) => ({ role: h.role === "me" ? "user" : "npc", text: h.text })),
+        npcName,
+        npcMood,
+        personality: {
+          tone: personality.ton,
+          interest: personality.interet,
+          district: personality.quartier,
+        },
+        goal: {
+          type: goal.type,
+          label: goal.label,
+          motivation: goal.motivation,
+          progress: Math.round(goal.progress * 100),
+        },
+        history: history.slice(-10).map((h) => ({ role: h.role === "me" ? "user" : "npc", text: h.text })),
         message,
       }),
     });
@@ -82,16 +103,20 @@ export async function tryEnhanceWithLlm(
 }
 
 /**
- * Point d'entrée principal du chat PNJ : réponse locale immédiate (jamais de
- * vide, jamais d'erreur visible côté joueur), avec bonus LLM silencieux si
- * disponible et rapide.
+ * Point d'entrée principal du chat PNJ : le cerveau local décide et répond.
+ * Le texte génératif n'intervient que pour les échanges à forte valeur.
  */
 export async function sendNpcMessage(
   playerId: string, npcId: string, npcName: string, npcMood: string | null,
   history: NpcChatTurn[], message: string
 ): Promise<NpcReplyResult> {
   const local = await sendNpcMessageLocal(playerId, npcId, npcName, message);
-  const enhanced = await tryEnhanceWithLlm(npcName, npcMood, history, message);
+
+  if (!shouldEnhanceNpcTurn(local.intent, history.length, message)) {
+    return local;
+  }
+
+  const enhanced = await tryEnhanceWithLlm(npcId, npcName, npcMood, history, message);
   if (enhanced) {
     return { ...local, reply: enhanced.reply, engine: enhanced.engine };
   }
