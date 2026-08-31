@@ -6,6 +6,8 @@ type BeforeInstallPromptEvent = Event & {
   userChoice: Promise<{ outcome: "accepted" | "dismissed"; platform: string }>;
 };
 
+type InstallMode = "native-prompt" | "ios-guide" | null;
+
 const DISMISSED_KEY = "mylife:pwa-install-dismissed";
 
 function isStandalone(): boolean {
@@ -13,20 +15,34 @@ function isStandalone(): boolean {
     || Boolean((window.navigator as Navigator & { standalone?: boolean }).standalone);
 }
 
+function isIosSafari(): boolean {
+  const ua = window.navigator.userAgent;
+  const ios = /iPhone|iPad|iPod/i.test(ua)
+    || (window.navigator.platform === "MacIntel" && window.navigator.maxTouchPoints > 1);
+  const safari = /Safari/i.test(ua) && !/CriOS|FxiOS|EdgiOS|OPiOS/i.test(ua);
+  return ios && safari;
+}
+
 export function PwaInstallPrompt() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
-  const [visible, setVisible] = useState(false);
+  const [mode, setMode] = useState<InstallMode>(null);
 
   useEffect(() => {
     if (isStandalone() || window.localStorage.getItem(DISMISSED_KEY) === "1") return;
 
+    let iosTimer: ReturnType<typeof setTimeout> | null = null;
+    if (isIosSafari()) {
+      iosTimer = setTimeout(() => setMode("ios-guide"), 7_000);
+    }
+
     const onBeforeInstall = (event: Event) => {
       event.preventDefault();
+      if (iosTimer) clearTimeout(iosTimer);
       setInstallEvent(event as BeforeInstallPromptEvent);
-      setVisible(true);
+      setMode("native-prompt");
     };
     const onInstalled = () => {
-      setVisible(false);
+      setMode(null);
       setInstallEvent(null);
       window.localStorage.removeItem(DISMISSED_KEY);
     };
@@ -34,40 +50,49 @@ export function PwaInstallPrompt() {
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
     window.addEventListener("appinstalled", onInstalled);
     return () => {
+      if (iosTimer) clearTimeout(iosTimer);
       window.removeEventListener("beforeinstallprompt", onBeforeInstall);
       window.removeEventListener("appinstalled", onInstalled);
     };
   }, []);
 
-  if (!visible || !installEvent) return null;
+  if (!mode) return null;
 
   const dismiss = () => {
     window.localStorage.setItem(DISMISSED_KEY, "1");
-    setVisible(false);
+    setMode(null);
   };
 
   const install = async () => {
+    if (!installEvent) return;
     await installEvent.prompt();
     const choice = await installEvent.userChoice;
     if (choice.outcome === "accepted") {
-      setVisible(false);
+      setMode(null);
       setInstallEvent(null);
     }
   };
 
+  const ios = mode === "ios-guide";
   return (
     <View pointerEvents="box-none" style={styles.layer}>
       <View style={styles.card} accessibilityRole="alert">
         <View style={styles.copy}>
           <Text style={styles.title}>Installer MyLife</Text>
-          <Text style={styles.body}>Ajoute le jeu à ton écran d’accueil pour l’ouvrir comme une app.</Text>
+          <Text style={styles.body}>
+            {ios
+              ? "Sur iPhone : touche Partager, puis « Sur l’écran d’accueil ». MyLife s’ouvrira ensuite comme une app."
+              : "Ajoute le jeu à ton écran d’accueil pour l’ouvrir comme une app."}
+          </Text>
         </View>
         <View style={styles.actions}>
-          <Pressable accessibilityRole="button" onPress={dismiss} style={styles.secondary}>
-            <Text style={styles.secondaryText}>Plus tard</Text>
-          </Pressable>
-          <Pressable accessibilityRole="button" onPress={install} style={styles.primary}>
-            <Text style={styles.primaryText}>Installer</Text>
+          {!ios ? (
+            <Pressable accessibilityRole="button" onPress={dismiss} style={styles.secondary}>
+              <Text style={styles.secondaryText}>Plus tard</Text>
+            </Pressable>
+          ) : null}
+          <Pressable accessibilityRole="button" onPress={ios ? dismiss : install} style={styles.primary}>
+            <Text style={styles.primaryText}>{ios ? "Compris" : "Installer"}</Text>
           </Pressable>
         </View>
       </View>
