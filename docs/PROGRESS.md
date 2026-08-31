@@ -57,5 +57,30 @@ Flux cible : Inscription (pseudo + email + mot de passe) → Avatar (pseudo pré
 - Bruit relevé (non bloquant) : bandeau « MyLife sur ton téléphone » masque le haut de
   certains écrans sur desktop ; `ACTIVE_CITY.displayName` = « NEO TOULOUSE ».
 
-## Prochain chantier : NPC Brain V1
-Voir roadmap. Heuristique/déterministe, pas de LLM par tick.
+## NPC Brain V1 — DÉJÀ EN PLACE (2026-08-31)
+Vérifié dans le code, rien à réécrire (over-engineering évité) :
+- `lib/living-city.ts` + `lib/npc-brain-policy.ts` + `lib/npc-brain.ts` + `NpcState`.
+- Chaque PNJ a : 2 archétypes, personnalité, intérêts, quartier d'origine, rythme de
+  vie, sociabilité, profil compétitif, crew, mémoire relationnelle (`relationMemory`),
+  Wory, trajets coarse domicile→travail→resto→sortie.
+- Politique d'intention `chooseNpcAction(npc, ctx, now)` : REST/WORK/EAT/SOCIAL/CREW/
+  DATE/SPORT/ROAM selon heure + personnalité + activité du quartier + opportunités +
+  cooldown d'initiation. **Zéro LLM par tick** — RNG déterministe seedé par PNJ/minute.
+- LOD : NEAR_PLAYER / ACTIVE_DISTRICT / OFFSCREEN (détail dégressif).
+- Tests : `npc-brain`, `bot-brain`, `city-intelligence`, `game-director` — verts.
+Reste (améliorations, pas V1) : dialogue génératif pour les vraies conversations,
+objectifs PNJ multi-jours explicites, rôles sociaux plus fins.
+
+## 2026-08-31 (fin) — PR #28 : fixes trouvés au test prod
+- **login → avatar** : pseudo prérempli depuis `profiles.username` + message d'erreur
+  visible si vide (le submit était silencieux).
+- **map.web** : `loadTimeout` 12s→25s, handler `load` en try/finally (une couche
+  secondaire qui échoue n'empêche plus l'affichage de la carte), `map.on('error')`
+  log-only. Corrige l'écran « La carte n'a pas pu se charger » sur connexion lente /
+  1re visite.
+- **Comptes de test prod** (email confirmé en base) :
+  - `KenamsTest` / `kenams42+mylife@gmail.com` / `MyLife2026!`
+  - `CollabTest` / `kenams42+collab@gmail.com` / `MyLife2026!`
+- ⚠️ openfreemap.org (CDN de tuiles gratuit, sans SLA) rate-limite l'IP après un gros
+  volume de rechargements (tests). Un vrai utilisateur qui ouvre 1× ne le voit pas.
+  Reco moyen terme : provider de tuiles avec quota (MapTiler free) ou fallback raster.
