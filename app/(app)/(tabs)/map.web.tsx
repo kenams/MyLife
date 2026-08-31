@@ -421,7 +421,7 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
     // laisser un écran gris silencieux indéfiniment.
     const loadTimeout = setTimeout(() => {
       if (!readyFiredRef.current) onErrorRef.current?.();
-    }, 12_000);
+    }, 25_000);
 
     loadMaplibre(() => {
       const gl = (window as unknown as { maplibregl: unknown }).maplibregl as any;
@@ -456,6 +456,7 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
       map.addControl(new gl.FullscreenControl(), "bottom-right");
 
       map.on("load", async () => {
+       try {
         const canvasContainer = map.getCanvasContainer?.() as HTMLElement | undefined;
         if (canvasContainer) {
           canvasContainer.style.filter =
@@ -764,22 +765,23 @@ function LeafletMap({ players, myLat, myLng, onPlayerClick, onReady, onMapReady,
           });
         }
 
-        readyFiredRef.current = true;
-        clearTimeout(loadTimeout);
-        onReady();
+       } catch (err) {
+         // Un layer/sprite/source secondaire a échoué : la carte de base et les
+         // tuiles sont là — on montre la carte plutôt qu'un écran d'erreur.
+         console.warn("[MapLibre] setup post-load partiel:", err);
+       } finally {
+         readyFiredRef.current = true;
+         clearTimeout(loadTimeout);
+         onReady();
+       }
       });
 
-      // Erreur fatale de style (tuiles injoignables, style corrompu...) avant
-      // même le premier "load" — l'utilisateur doit voir un message, pas un
-      // écran gris. Les erreurs après chargement (ex: une image manquante)
-      // sont bénignes et n'affichent rien de cassé à l'écran ; seule
-      // l'absence de premier "load" déclenche l'état d'erreur ici.
+      // MapLibre émet "error" pour beaucoup de choses bénignes (sprite/glyph
+      // manquant, tuile isolée en échec, requête annulée pendant un pan). On
+      // les journalise sans casser l'écran : le seul vrai signal "la carte ne
+      // charge pas" est l'absence de premier "load", géré par loadTimeout.
       map.on("error", (e: unknown) => {
         console.warn("[MapLibre]", e);
-        if (!readyFiredRef.current) {
-          clearTimeout(loadTimeout);
-          onErrorRef.current?.();
-        }
       });
     });
 
