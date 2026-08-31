@@ -7,7 +7,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
-import { router, Stack } from "expo-router";
+import { router, Stack, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import {
   fetchTerritories,
@@ -18,10 +18,13 @@ import {
 import { fetchUpcomingBattles, createBattle, type TerritoryBattle } from "@/lib/territory-wars";
 import { nextBattleSlot, formatSlot } from "@/lib/battle-schedule";
 import { useGameStore } from "@/stores/game-store";
-import { getMyCrewId } from "@/lib/crews";
+import { getMyCrewId, getMyOfficerCrewId } from "@/lib/crews";
 import { TerritoryPresenceBanner } from "@/components/territory-presence-banner";
 import { BattleFomo } from "@/components/battle-fomo";
 import { ToulousePowerBoard } from "@/components/toulouse-power-board";
+import { CrewContextActionCard } from "@/components/crew-context-action-card";
+import { fetchCrewContextActionCompletedToday } from "@/lib/crew-context-action-api";
+import { selectCrewContextAction } from "@/lib/crew-context-actions";
 import { buildToulouseGeopolitics } from "@/lib/crew-geopolitics";
 
 const T = {
@@ -50,12 +53,19 @@ export default function TerritoriesScreen() {
   const [items, setItems] = useState<Territory[]>([]);
   const [battles, setBattles] = useState<TerritoryBattle[]>([]);
   const [myCrew, setMyCrew] = useState<string | null>(null);
+  const [officerCrew, setOfficerCrew] = useState<string | null>(null);
+  const [crewActionDoneToday, setCrewActionDoneToday] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const params = useLocalSearchParams<{ focus?: string | string[] }>();
+  const focusedTerritoryId = Array.isArray(params.focus) ? params.focus[0] : params.focus;
   const avatar = useGameStore((s) => s.avatar);
+  const playerLevel = useGameStore((s) => s.playerLevel ?? 1);
   const playerName = avatar?.displayName ?? "Joueur";
 
   useEffect(() => {
     getMyCrewId(playerName).then(setMyCrew);
+    getMyOfficerCrewId().then(setOfficerCrew);
+    fetchCrewContextActionCompletedToday().then(setCrewActionDoneToday);
   }, [playerName]);
 
   const load = useCallback(async () => {
@@ -85,6 +95,15 @@ export default function TerritoriesScreen() {
   const owned = items.filter((i) => i.owner_crew_id).length;
   const battleByDistrict = new Map(battles.map((b) => [b.district_id, b]));
   const geopolitics = useMemo(() => buildToulouseGeopolitics(items), [items]);
+  const crewAction = useMemo(() => selectCrewContextAction({
+    geopolitics,
+    territories: items,
+    battles,
+    myCrewId: myCrew,
+    playerLevel,
+    canLaunchBattle: Boolean(myCrew && officerCrew === myCrew),
+    completedToday: crewActionDoneToday,
+  }), [battles, crewActionDoneToday, geopolitics, items, myCrew, officerCrew, playerLevel]);
 
   async function launchBattle(t: Territory) {
     setBusy(t.id);
@@ -96,6 +115,11 @@ export default function TerritoriesScreen() {
     } else {
       alert(res.error ?? "Impossible de lancer la Battle (réservé aux officiers).");
     }
+  }
+
+  async function launchBattleForDistrict(districtId: string) {
+    const territory = items.find((item) => item.district_id === districtId);
+    if (territory) await launchBattle(territory);
   }
 
   return (
@@ -143,6 +167,13 @@ export default function TerritoriesScreen() {
             totalTerritories={items.length}
             onOpenRanking={() => router.push("/(app)/leaderboard")}
           />
+          {crewAction && (
+            <CrewContextActionCard
+              action={crewAction}
+              onTerritoryChanged={load}
+              onLaunchBattle={launchBattleForDistrict}
+            />
+          )}
           <TerritoryPresenceBanner territories={items} myCrewId={myCrew} />
           <BattleFomo myCrewId={myCrew} />
 
@@ -155,6 +186,7 @@ export default function TerritoriesScreen() {
             const held = daysHeld(t.conquered_at);
             const accent = t.owner_color ?? T.muted;
             const hot = Boolean(t.next_battle_at) || (Boolean(t.owner_crew_id) && t.influence < 60);
+            const focused = t.id === focusedTerritoryId;
             return (
               <View
                 key={t.id}
@@ -162,7 +194,7 @@ export default function TerritoriesScreen() {
                   backgroundColor: T.card,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: hot ? T.red + "50" : T.border,
+                  borderColor: focused ? T.gold : hot ? T.red + "50" : T.border,
                   overflow: "hidden",
                 }}
               >

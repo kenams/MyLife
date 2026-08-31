@@ -57,6 +57,18 @@ Flux cible : Inscription (pseudo + email + mot de passe) → Avatar (pseudo pré
 - Bruit relevé (non bloquant) : bandeau « MyLife sur ton téléphone » masque le haut de
   certains écrans sur desktop ; `ACTIVE_CITY.displayName` = « NEO TOULOUSE ».
 
+## 2026-08-31 - Crew actions contextuelles (branche `crew-geopolitics-actions-v1`)
+- Le Directeur City Pulse combine maintenant les evenements Living City avec le rapport
+  geopolitique persistant et propose une seule action Crew prioritaire : Battle, defense,
+  pression sur le leader, territoire neutre ou rejoindre un Crew.
+- Le CTA ouvre l'ecran Territoires existant et met le quartier cible en evidence.
+- Une contribution tactique numerique peut renforcer un territoire du Crew (+3) ou faire
+  baisser legerement l'influence rivale (-2), une fois par joueur et par jour.
+- L'action ne stocke aucune position et ne peut ni transferer un territoire, ni identifier
+  ou localiser un membre rival. Chaque effet est journalise dans `territory_events`.
+- Le doublon de version `20260911000000` existant sur `master` a ete corrige pour restaurer
+  la relecture a froid des migrations.
+
 ## NPC Brain V1 — DÉJÀ EN PLACE (2026-08-31)
 Vérifié dans le code, rien à réécrire (over-engineering évité) :
 - `lib/living-city.ts` + `lib/npc-brain-policy.ts` + `lib/npc-brain.ts` + `NpcState`.
