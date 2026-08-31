@@ -33,6 +33,9 @@ export type MylifeDebugSnapshot = {
     wory: number;
     crewTag: string | null;
     unreadNotifications: number;
+    unreadNotificationIds: string[];
+    firstUnreadNotificationId: string | null;
+    theme: string;
     isQa: boolean;
   } | null;
 };
@@ -56,6 +59,9 @@ export type DebugPlayerInput = {
   wory: number;
   crewTag: string | null;
   unreadNotifications: number;
+  unreadNotificationIds: string[];
+  firstUnreadNotificationId: string | null;
+  theme: string;
   isQa: boolean;
 };
 

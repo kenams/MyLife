@@ -1,46 +1,103 @@
-import { test, expect, chromium, devices } from "@playwright/test";
+import { test, expect, chromium, devices, type Page } from "@playwright/test";
 
 import { readQaCredentials } from "../lib/qa-account";
-import { loginWithSupabase, requireDebug, gotoTab, assertNoHorizontalOverflow } from "./_helpers";
+import {
+  assertNoHorizontalOverflow,
+  gotoTab,
+  loginWithSupabase,
+  readDebug,
+  requireDebug,
+  waitForMap,
+} from "./_helpers";
 
 const qa = readQaCredentials();
 
-/**
- * ONE ACCOUNT / ONE WORLD : le même compte QA Supabase ouvert sur desktop ET
- * sur Pixel 5 doit exposer le MÊME profil (username, level, XP, Wory, crew).
- * Les features principales doivent être atteignables sur les deux.
- */
-test.describe("parité desktop / mobile", () => {
-  test.skip(!qa, "E2E_QA_EMAIL / E2E_QA_PASSWORD non fournis");
-  test.setTimeout(180_000);
+async function waitForPlayer(page: Page, predicate: (player: NonNullable<Awaited<ReturnType<typeof readDebug>>["player"]>) => boolean) {
+  await expect.poll(async () => {
+    const player = (await readDebug(page))?.player;
+    return player ? predicate(player) : false;
+  }, { timeout: 30_000 }).toBe(true);
+  return (await requireDebug(page)).player!;
+}
 
-  test("même compte, même monde sur desktop et Pixel 5", async ({ baseURL }) => {
+test.describe("parite cross-device reelle", () => {
+  test.skip(!qa, "E2E_QA_EMAIL / E2E_QA_PASSWORD non fournis");
+  test.setTimeout(240_000);
+
+  test("desktop -> Pixel 5 -> desktop conserve progression, Wory et preferences", async ({ baseURL }) => {
     const browser = await chromium.launch();
     const desktop = await browser.newContext({ ...devices["Desktop Chrome"], baseURL });
     const mobile = await browser.newContext({ ...devices["Pixel 5"], baseURL });
 
-    const dPage = await desktop.newPage();
-    const mPage = await mobile.newPage();
+    try {
+      const dPage = await desktop.newPage();
+      await loginWithSupabase(dPage, qa!.email, qa!.password);
+      const initial = (await requireDebug(dPage)).player!;
+      expect(initial.isQa).toBe(true);
+      expect(initial.level).toBeGreaterThanOrEqual(8);
 
-    await loginWithSupabase(dPage, qa!.email, qa!.password);
-    await loginWithSupabase(mPage, qa!.email, qa!.password);
+      // Mutation gameplay desktop: vraie action du store, avec XP et Wory.
+      await dPage.goto("/home");
+      const meal = dPage.getByTestId("life-action-healthy-meal");
+      await meal.scrollIntoViewIfNeeded();
+      await meal.click();
+      await dPage.waitForTimeout(2_500);
+      await waitForMap(dPage);
+      const afterDesktop = await waitForPlayer(
+        dPage,
+        (player) => player.xp > initial.xp && player.wory < initial.wory
+      );
 
-    const d = (await requireDebug(dPage)).player!;
-    const m = (await requireDebug(mPage)).player!;
+      // Le second contexte est independant et se connecte apres la persistence desktop.
+      const mPage = await mobile.newPage();
+      await loginWithSupabase(mPage, qa!.email, qa!.password);
+      const onMobile = await waitForPlayer(
+        mPage,
+        (player) => player.xp === afterDesktop.xp && player.wory === afterDesktop.wory
+      );
+      expect(onMobile.username).toBe(afterDesktop.username);
+      expect(onMobile.level).toBe(afterDesktop.level);
 
-    expect(m.username).toBe(d.username);
-    expect(m.level).toBe(d.level);
-    expect(m.xp).toBe(d.xp);
-    expect(m.wory).toBe(d.wory);
-    expect(m.crewTag).toBe(d.crewTag);
-    expect(m.hasSupabaseSession && d.hasSupabaseSession).toBe(true);
+      // Preference + notification lue sur mobile.
+      await gotoTab(mPage, /Profil/i);
+      await mPage.getByText(/^Clean Life$/i).click();
+      await gotoTab(mPage, /Objectifs/i);
+      if (onMobile.unreadNotifications > 0) {
+        await mPage.getByTestId("mark-all-read").click();
+      }
+      await mPage.waitForTimeout(2_500);
 
-    // features principales atteignables sur mobile
-    for (const label of [/Objectifs/i, /Profil/i, /Chat/i, /Map/i]) {
-      await gotoTab(mPage, label);
+      // Deuxieme mutation gameplay depuis le Pixel 5.
+      await mPage.goto("/home");
+      const mobileAction = mPage.getByTestId("life-action-healthy-meal");
+      await mobileAction.scrollIntoViewIfNeeded();
+      await mobileAction.click();
+      await mPage.waitForTimeout(2_500);
+      await waitForMap(mPage);
+      const afterMobile = await waitForPlayer(
+        mPage,
+        (player) => player.xp > afterDesktop.xp
+          && player.theme === "clean-life"
+          && !player.unreadNotificationIds.includes("qa-device-parity-notification")
+      );
       await assertNoHorizontalOverflow(mPage);
-    }
 
-    await browser.close();
+      // Retour PC: reload propre, puis lecture de l'etat canonique serveur.
+      await dPage.reload();
+      await waitForMap(dPage);
+      const backOnDesktop = await waitForPlayer(
+        dPage,
+        (player) => player.xp === afterMobile.xp
+          && player.wory === afterMobile.wory
+          && player.theme === "clean-life"
+          && !player.unreadNotificationIds.includes("qa-device-parity-notification")
+      );
+      expect(backOnDesktop.level).toBe(afterMobile.level);
+      expect(backOnDesktop.username).toBe(afterMobile.username);
+    } finally {
+      await desktop.close();
+      await mobile.close();
+      await browser.close();
+    }
   });
 });

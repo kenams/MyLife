@@ -1,14 +1,10 @@
 /**
- * Compte QA Supabase — pilotage par variables d'environnement UNIQUEMENT.
+ * Real Supabase QA account, configured only through environment variables.
  *
- * Aucun identifiant n'est commité. Les tests E2E de parité (auth, cross-device)
- * lisent :
- *   E2E_QA_EMAIL     — email du compte QA Supabase réel
- *   E2E_QA_PASSWORD  — mot de passe (jamais loggé, jamais dans un rapport)
- *
- * Le compte QA doit être créé côté Supabase avec `is_qa = true` sur son profil
- * pour être exclu des classements / analytics (invariant produit déjà en place).
- * Sans ces variables, les specs concernées se `skip` proprement.
+ * E2E_QA_EMAIL and E2E_QA_PASSWORD are never committed or printed. The user
+ * must be registered in `qa_test_accounts` and carry Auth metadata
+ * `qa_account=true`; existing leaderboards exclude that table. Run
+ * `npm run qa:provision` with a service-role key to enforce the invariant.
  */
 
 export type QaCredentials = { email: string; password: string };
@@ -20,7 +16,7 @@ export function readQaCredentials(): QaCredentials | null {
   return { email, password };
 }
 
-/** Masque tout sauf le domaine, pour les logs de test. */
+/** Keeps only a small username prefix and the domain for test logs. */
 export function maskEmail(email: string): string {
   const [user, domain] = email.split("@");
   if (!domain) return "***";

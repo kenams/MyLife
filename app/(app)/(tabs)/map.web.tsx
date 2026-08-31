@@ -1713,7 +1713,10 @@ export default function LifeMapScreen() {
           wory: s.stats?.money ?? 0,
           crewTag: s.livingCity?.crews?.find((c) => c.id === (s as { myCrewId?: string }).myCrewId)?.tag ?? null,
           unreadNotifications: unread,
-          isQa: Boolean((s as { isQa?: boolean }).isQa),
+          unreadNotificationIds: (s.notifications ?? []).filter((notification) => !notification.read).map((notification) => notification.id),
+          firstUnreadNotificationId: (s.notifications ?? []).find((notification) => !notification.read)?.id ?? null,
+          theme: s.appTheme,
+          isQa: /(?:\.test|mylife-qa\.internal)$/i.test(s.session?.email ?? ""),
         },
       });
     }, 2000);

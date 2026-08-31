@@ -80,7 +80,7 @@ export async function gotoSignIn(page: Page) {
       try { window.localStorage.setItem(k, "true"); } catch { /* storage bloqué */ }
     }
   });
-  await page.goto("/(auth)/sign-in").catch(() => page.goto("/sign-in"));
+  await page.goto("/sign-in", { waitUntil: "domcontentloaded" });
   // Si l'app renvoie encore vers welcome, on suit le lien de connexion.
   const toSignIn = page.getByText(/déjà un compte|Se connecter|CONNEXION/i).first();
   if (!/sign-in/.test(page.url())) {
@@ -157,6 +157,20 @@ export type DebugSnapshot = {
   activityHistogram: Record<string, number>;
   positions: { id: string; lat: number; lng: number; act: string }[];
   history: number[];
+  player: {
+    authProvider: string | null;
+    hasSupabaseSession: boolean;
+    username: string | null;
+    level: number;
+    xp: number;
+    wory: number;
+    crewTag: string | null;
+    unreadNotifications: number;
+    unreadNotificationIds: string[];
+    firstUnreadNotificationId: string | null;
+    theme: string;
+    isQa: boolean;
+  } | null;
 };
 
 export async function readDebug(page: Page): Promise<DebugSnapshot | null> {
