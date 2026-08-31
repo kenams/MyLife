@@ -75,6 +75,9 @@ import { DEFAULT_THEME } from "@/lib/themes";
 import type { ThemeId } from "@/lib/themes";
 import { pullPlayerCloudState, type PlayerCloudState } from "@/lib/player-cloud-sync";
 import { isSupabaseConfigured, passwordResetRedirect, supabase } from "@/lib/supabase";
+
+/** Pseudo : 3–20 caractères alphanum + underscore, avec au moins une lettre. */
+export const USERNAME_RE = /^(?=.*[A-Za-z])[A-Za-z0-9_]{3,20}$/;
 import type {
   AvatarProfile,
   AvatarStats,
@@ -258,8 +261,10 @@ type GameState = {
   dailyEvent: DailyEvent | null;
   lastKnownRank: SocialRank | null;
   lifeFeed: ReturnType<typeof createInitialRuntime>["lifeFeed"];
+  pendingUsername: string | null;
   signIn: (email: string, password?: string) => Promise<{ ok: boolean; error?: string }>;
-  signUp: (email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  signUp: (email: string, password: string, username?: string) => Promise<{ ok: boolean; error?: string; needsConfirm?: boolean }>;
+  checkUsername: (username: string) => Promise<{ ok: boolean; available: boolean; error?: string }>;
   resetPassword: (email: string) => Promise<{ ok: boolean; error?: string }>;
   loadTestAccount: (preset?: TestAccountPreset) => void;
   signOut: () => void;
@@ -501,6 +506,7 @@ function initialState() {
     _cloudMutationId: null as string | null,
     tutorialDone: false,
     session: null as UserSession | null,
+    pendingUsername: null as string | null,
     livingCity: createLivingCityState("NORMAL") as LivingCityState,
     npcs: seedLivingCityNpcs("NORMAL") as NpcState[],
     rooms: DEFAULT_ROOMS.map(createDefaultRoom) as Room[],
@@ -1524,23 +1530,59 @@ export const useGameStore = create<GameState>()(
         set({ session: { email: cleanedEmail, provider: "local" } });
         return { ok: true };
       },
-      signUp: async (email: string, password: string) => {
+      signUp: async (email: string, password: string, username?: string) => {
         const cleanedEmail = email.trim().toLowerCase();
+        const cleanedUser = (username ?? "").trim();
         if (!cleanedEmail || !password) {
           return { ok: false, error: "Email et mot de passe requis." };
         }
         if (password.length < 6) {
           return { ok: false, error: "Mot de passe trop court (6 caractères min)." };
         }
+        if (cleanedUser && !USERNAME_RE.test(cleanedUser)) {
+          return { ok: false, error: "Pseudo : 3–20 caractères, lettres/chiffres/_ (au moins une lettre)." };
+        }
         if (!isSupabaseConfigured || !supabase) {
           // Mode local : créer session locale
-          set({ session: { email: cleanedEmail, provider: "local" } });
-          return { ok: true };
+          set({ session: { email: cleanedEmail, provider: "local" }, pendingUsername: cleanedUser || null });
+          return { ok: true, needsConfirm: false };
         }
-        const { error } = await supabase.auth.signUp({ email: cleanedEmail, password });
+        if (cleanedUser) {
+          const { data: available, error: availErr } = await supabase.rpc("username_available", {
+            p_username: cleanedUser,
+          });
+          if (!availErr && available === false) {
+            return { ok: false, error: "Ce pseudo est déjà pris." };
+          }
+        }
+        const { data, error } = await supabase.auth.signUp({
+          email: cleanedEmail,
+          password,
+          options: cleanedUser ? { data: { username: cleanedUser } } : undefined,
+        });
         if (error) return { ok: false, error: error.message };
-        set({ session: { email: cleanedEmail, provider: "supabase" } });
-        return { ok: true };
+        set({ session: { email: cleanedEmail, provider: "supabase" }, pendingUsername: cleanedUser || null });
+        if (data.session) {
+          // Confirmation email désactivée : session active immédiatement.
+          if (cleanedUser) {
+            const { error: unameErr } = await supabase.rpc("set_username", { p_username: cleanedUser });
+            if (unameErr) console.warn("[username] set_username après signup:", unameErr.message);
+          }
+          return { ok: true, needsConfirm: false };
+        }
+        return { ok: true, needsConfirm: true };
+      },
+      checkUsername: async (username: string) => {
+        const u = username.trim();
+        if (!USERNAME_RE.test(u)) {
+          return { ok: false, available: false, error: "3–20 caractères : lettres, chiffres, _" };
+        }
+        if (!isSupabaseConfigured || !supabase) {
+          return { ok: true, available: true };
+        }
+        const { data, error } = await supabase.rpc("username_available", { p_username: u });
+        if (error) return { ok: false, available: false, error: error.message };
+        return { ok: true, available: Boolean(data) };
       },
       resetPassword: async (email: string) => {
         const cleanedEmail = email.trim().toLowerCase();
@@ -1626,6 +1668,15 @@ export const useGameStore = create<GameState>()(
         });
         // Sync avatar vers Supabase immédiatement après création
         void get().syncToSupabase();
+        // Garantit que profiles.username reflète le pseudo choisi à l'inscription
+        // (si la metadata du signup n'a pas été appliquée par le trigger).
+        const pendingUsername = get().pendingUsername;
+        if (pendingUsername && isSupabaseConfigured && supabase && get().session?.provider === "supabase") {
+          void supabase.rpc("set_username", { p_username: pendingUsername }).then(({ error }) => {
+            if (error) console.warn("[username] set_username après avatar:", error.message);
+          });
+        }
+        set({ pendingUsername: null });
       },
       editAvatar: (avatar) => {
         set({ avatar });

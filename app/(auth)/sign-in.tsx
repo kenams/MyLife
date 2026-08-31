@@ -4,7 +4,7 @@ import {
   Animated, Easing, KeyboardAvoidingView, Platform, Pressable, SafeAreaView,
   ScrollView, Text, TextInput, View,
 } from "react-native";
-import { useGameStore } from "@/stores/game-store";
+import { USERNAME_RE, useGameStore } from "@/stores/game-store";
 import { ACTIVE_CITY } from "@/lib/city-config";
 
 // ── Palette ────────────────────────────────────────────────────────────────────
@@ -407,16 +407,36 @@ type Tab = "signin" | "signup" | "reset";
 export default function SignInScreen() {
   const signIn          = useGameStore(s => s.signIn);
   const signUp          = useGameStore(s => s.signUp);
+  const checkUsername   = useGameStore(s => s.checkUsername);
   const resetPassword   = useGameStore(s => s.resetPassword);
   const loadTestAccount = useGameStore(s => s.loadTestAccount);
 
   const [tab,      setTab]      = useState<Tab>("signin");
+  const [username, setUsername] = useState("");
   const [email,    setEmail]    = useState("");
   const [password, setPassword] = useState("");
   const [confirm,  setConfirm]  = useState("");
   const [error,    setError]    = useState("");
   const [success,  setSuccess]  = useState("");
   const [loading,  setLoading]  = useState(false);
+  const [unameStatus, setUnameStatus] =
+    useState<"idle" | "checking" | "ok" | "taken" | "invalid">("idle");
+
+  // Vérif de disponibilité du pseudo, débouncée, uniquement sur l'onglet inscription.
+  useEffect(() => {
+    if (tab !== "signup") return;
+    const u = username.trim();
+    if (!u) { setUnameStatus("idle"); return; }
+    if (!USERNAME_RE.test(u)) { setUnameStatus("invalid"); return; }
+    setUnameStatus("checking");
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      const r = await checkUsername(u);
+      if (cancelled) return;
+      setUnameStatus(!r.ok ? "invalid" : r.available ? "ok" : "taken");
+    }, 450);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [username, tab, checkUsername]);
 
   // Staggered global fade-in
   const mainOp = useRef(new Animated.Value(0)).current;
@@ -438,14 +458,21 @@ export default function SignInScreen() {
 
   async function handleSignUp() {
     clear();
+    if (!username.trim()) { setError("Choisis un pseudo."); return; }
+    if (unameStatus === "invalid") { setError("Pseudo invalide : 3–20 caractères, lettres/chiffres/_."); return; }
+    if (unameStatus === "taken") { setError("Ce pseudo est déjà pris."); return; }
     if (!email || !password) { setError("Email et mot de passe requis."); return; }
     if (password !== confirm) { setError("Les mots de passe ne correspondent pas."); return; }
     setLoading(true);
-    const r = await signUp(email, password);
+    const r = await signUp(email, password, username.trim());
     setLoading(false);
     if (!r.ok) { setError(r.error ?? "Inscription impossible."); return; }
-    setSuccess("Compte créé ✓  Vérifie ton email.");
-    setTab("signin");
+    if (r.needsConfirm) {
+      setSuccess("Compte créé ✓  Confirme ton email puis connecte-toi.");
+      setTab("signin");
+      return;
+    }
+    router.replace("/(auth)/avatar");
   }
 
   async function handleReset() {
@@ -632,6 +659,29 @@ export default function SignInScreen() {
 
               {/* Fields */}
               <View style={{ gap: 10, marginBottom: 14 }}>
+                {tab === "signup" && (
+                  <View style={{ gap: 6 }}>
+                    <FieldInput
+                      value={username} onChange={setUsername}
+                      placeholder="Ton pseudo" icon="🏷️"
+                      autoComplete="username" textContentType="username"
+                      returnKeyType="next"
+                    />
+                    {unameStatus !== "idle" && (
+                      <Text style={{
+                        fontSize: 11, fontWeight: "700", marginLeft: 4,
+                        color: unameStatus === "ok" ? C.green
+                          : unameStatus === "checking" ? C.dim
+                          : C.red,
+                      }}>
+                        {unameStatus === "checking" ? "Vérification…"
+                          : unameStatus === "ok" ? "Pseudo disponible ✓"
+                          : unameStatus === "taken" ? "Pseudo déjà pris"
+                          : "3–20 caractères : lettres, chiffres, _"}
+                      </Text>
+                    )}
+                  </View>
+                )}
                 {tab === "signin" ? (
                   <FieldInput
                     value={email} onChange={setEmail}
