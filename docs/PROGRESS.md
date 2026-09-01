@@ -2,85 +2,59 @@
 
 Document court, mis à jour à chaque PR. Évite de refaire un audit complet à chaque tour.
 
-## Feuille de route (prompt 2026-08-31)
-1. **Onboarding + pseudo dès l'inscription** ← en cours
-2. NPC Brain V1 (heuristique, pas de LLM par tick)
-3. City Pulse / Game Director (1–3 opportunités par ouverture)
-4. Offline World ("Pendant ton absence")
-5. Crew Life
-6. Géopolitique Toulouse
-7. Polish Map / mobile
+## Priorité actuelle
+1. **NPC SOCIAL V1 — bloqueur bêta solo**
+2. Fermer le gate réel de PR #33 Crew Geopolitics Actions
+3. Test production complet sans intervention développeur
+4. Crew Life
+5. Major NPC persistence / polish social
 
 ## Invariants
 - ONE GAME / ONE ACCOUNT / ONE WORLD / ONE URL. Pas de gameplay mobile parallèle.
-- `game-store` = vérité locale du gameplay. Supabase = persistance / sync.
-- Migrations : additives, idempotentes, timestampées, RLS correcte.
+- `game-store` = vérité locale gameplay. Supabase = persistance / sync.
+- Migrations additives, idempotentes, timestampées, RLS correcte.
 - No pay-to-win. Wory sans valeur réelle.
+- Pas de nouveau moteur NPC : réutiliser Living City / NPC Brain / City Pulse / Offline Return.
+- Aucun secret, mot de passe ou recovery code dans Git.
 
-## Fait
+## Livré sur master
 
-### 2026-08-31 — Pseudo à l'inscription (branche `claude/onboarding-pseudo-signup`)
-- Migration `20260911000000_username_signup.sql` :
-  - `username_available(text)` (anon) — format + disponibilité, appelée pendant la saisie.
-  - `set_username(text)` (authenticated) — pose/maj le pseudo sur `profiles`, garde-fou
-    si la metadata du signup n'a pas été appliquée par le trigger `handle_new_user`.
-  - index unique `lower(username)` sur `profiles`.
-- `game-store` :
-  - `signUp(email, password, username?)` → passe `options.data.username` à Supabase,
-    vérifie la dispo avant, renvoie `needsConfirm`. Si session immédiate (confirmation
-    email OFF) → `set_username` direct.
-  - `checkUsername(username)` → dispo temps réel.
-  - `pendingUsername` en state, réutilisé pour préremplir le `displayName` de l'avatar,
-    et rejoué via `set_username` à la fin de `completeAvatar`.
-- `sign-in.tsx` : champ **Ton pseudo** sur l'onglet inscription + statut live
-  (disponible / pris / invalide). Après signup sans confirmation → `/(auth)/avatar`.
-- `avatar.tsx` / `AvatarForm` : `displayName` prérempli avec le pseudo choisi.
+### Auth / onboarding
+- Pseudo dès l'inscription et login par pseudo.
+- Avatar prérempli puis persistance Supabase/player cloud state.
+- Password Recovery production via PR #34 et route `/reset-password`.
+- Les identifiants QA sont conservés hors dépôt et doivent être renouvelés s'ils ont été exposés dans l'historique.
 
-Flux cible : Inscription (pseudo + email + mot de passe) → Avatar (pseudo prérempli)
-→ Map.
+### Living City / NPC
+- Living City + NPC Brain heuristique, sans LLM par tick.
+- Déplacements coarse, routines, personnalité, intérêts, Crew, Wory et mémoire relationnelle locale.
+- Projection Map fréquente sans timer par PNJ.
+- Interactions spontanées déjà générées depuis les événements Living City, mais historiquement non garanties/actionnables pour un nouveau joueur.
 
-### 2026-08-31 (suite) — PR #27 mergée, flux testé en prod
-- Testé sur https://mylife-app-rho.vercel.app (E2E navigateur, master) :
-  - signup pseudo+email+mdp → check dispo pseudo live OK
-  - login **par pseudo** (RPC `email_for_username`) OK
-  - 1er login → `/avatar` avec pseudo prérempli → submit → `/map`, avatar synchronisé
-    Supabase (`avatars` row + `supabaseAvatarId`), joueur neuf Niv.1 / 0 XP
-  - logout → login → retour direct sur `/map`, avatar + progression persistés
-  - profil affiche bien le pseudo
-- **Compte de test livré** : `KenamsTest` / `kenams42+mylife@gmail.com` / `MyLife2026!`
-  (email confirmé à la main en base).
-- ⚠️ **Friction restante (non-bloquante pour le compte livré)** : « Confirm email » est
-  ON sur le projet Supabase MyLife → un tout nouveau testeur doit cliquer le lien email
-  avant d'atteindre la Map. Pour du test ouvert : Supabase → Authentication → Sign In /
-  Providers → Email → décocher « Confirm email ». Le code gère déjà les 2 cas
-  (`needsConfirm`).
-- Bruit relevé (non bloquant) : bandeau « MyLife sur ton téléphone » masque le haut de
-  certains écrans sur desktop ; `ACTIVE_CITY.displayName` = « NEO TOULOUSE ».
+### City Pulse / Offline
+- City Pulse Director V1 : une opportunité contextuelle sur la Map.
+- Offline Return V1 : résumé `PENDANT TON ABSENCE` via `livingCity.lastAbsenceSummary`.
 
-## NPC Brain V1 — DÉJÀ EN PLACE (2026-08-31)
-Vérifié dans le code, rien à réécrire (over-engineering évité) :
-- `lib/living-city.ts` + `lib/npc-brain-policy.ts` + `lib/npc-brain.ts` + `NpcState`.
-- Chaque PNJ a : 2 archétypes, personnalité, intérêts, quartier d'origine, rythme de
-  vie, sociabilité, profil compétitif, crew, mémoire relationnelle (`relationMemory`),
-  Wory, trajets coarse domicile→travail→resto→sortie.
-- Politique d'intention `chooseNpcAction(npc, ctx, now)` : REST/WORK/EAT/SOCIAL/CREW/
-  DATE/SPORT/ROAM selon heure + personnalité + activité du quartier + opportunités +
-  cooldown d'initiation. **Zéro LLM par tick** — RNG déterministe seedé par PNJ/minute.
-- LOD : NEAR_PLAYER / ACTIVE_DISTRICT / OFFSCREEN (détail dégressif).
-- Tests : `npc-brain`, `bot-brain`, `city-intelligence`, `game-director` — verts.
-Reste (améliorations, pas V1) : dialogue génératif pour les vraies conversations,
-objectifs PNJ multi-jours explicites, rôles sociaux plus fins.
+### Crews / Toulouse
+- Crews, territoires, battles et géopolitique Toulouse visibles.
+- PR #33 ajoute les actions Crew contextuelles ; migration distante et hardening sont présents, mais le gate d'action réelle authentifiée doit rester respecté avant merge.
 
-## 2026-08-31 (fin) — PR #28 : fixes trouvés au test prod
-- **login → avatar** : pseudo prérempli depuis `profiles.username` + message d'erreur
-  visible si vide (le submit était silencieux).
-- **map.web** : `loadTimeout` 12s→25s, handler `load` en try/finally (une couche
-  secondaire qui échoue n'empêche plus l'affichage de la carte), `map.on('error')`
-  log-only. Corrige l'écran « La carte n'a pas pu se charger » sur connexion lente /
-  1re visite.
-- **Comptes de test prod** (email confirmé en base) :
-  - `KenamsTest` / `kenams42+mylife@gmail.com` / `MyLife2026!`
-  - `CollabTest` / `kenams42+collab@gmail.com` / `MyLife2026!`
-- ⚠️ openfreemap.org (CDN de tuiles gratuit, sans SLA) rate-limite l'IP après un gros
-  volume de rechargements (tests). Un vrai utilisateur qui ouvre 1× ne le voit pas.
-  Reco moyen terme : provider de tuiles avec quota (MapTiler free) ou fallback raster.
+### Mobile / PWA
+- Une URL canonique web/PWA, responsive téléphone.
+- CI Node + typecheck + tests + export web + Pixel 5 smoke.
+
+## 2026-09-01 — NPC SOCIAL V1 (PR #35)
+- Nouveau directeur de présentation branché sur les PNJ Living City existants.
+- Première sollicitation dirigée à 45 s sur Map, donc sous le gate produit de 180 s.
+- Retour relation connue à 60 s avec continuité explicite.
+- `RÉPONDRE` : relation NPC +15 (`contact`) + DM existant ; `npcRelations` et `conversations` sont déjà synchronisés dans Player Cloud State.
+- `PAS MAINTENANT` : aucune pénalité relation, cooldown local 3 h.
+- QA exclue, priorité quartier, anti double-tap.
+- Aucun nouveau moteur/tick/LLM/Realtime/migration.
+- Tests unitaires du sélecteur + contrat timing ajoutés.
+- Validation production réelle nouveau compte → interaction → logout/login → callback reste obligatoire avant merge final.
+
+## Risques / dette connue
+- OpenFreeMap est gratuit sans SLA et peut rate-limit lors de gros volumes de reload QA ; prévoir un provider/fallback avant montée en charge.
+- Le README historique reste plus ancien que l'état réel du produit et devra être réécrit après fermeture du beta gate.
+- Les anciens secrets présents dans l'historique Git ne sont pas effacés par la modification de ce fichier : les credentials concernés doivent rester considérés compromis/rotatés.
