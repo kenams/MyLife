@@ -15,7 +15,6 @@ import {
 import { useGameStore } from "@/stores/game-store";
 
 const REFUSALS_KEY = "mylife:npc-social-refusals:v1";
-
 type RefusalMap = Record<string, number>;
 
 async function readActiveRefusals(now = Date.now()): Promise<RefusalMap> {
@@ -81,7 +80,7 @@ export function NpcSocialDirector() {
     if (resolving.current) return;
     resolving.current = true;
     setPrompt(null);
-    // +15 is the existing threshold for a persisted NPC "contact" relation.
+    // +15 is the existing threshold for a cloud-synced NPC "contact" relation.
     updateNpcRelation(prompt.npcId, 15, prompt.npcName);
     startDirectConversation(prompt.npcId, prompt.npcName);
     addSocialNotification({
@@ -94,7 +93,7 @@ export function NpcSocialDirector() {
       createdAt: new Date().toISOString(),
       read: false,
     });
-    router.push("/(app)/chat" as never);
+    router.push("/(app)/dm" as never);
   };
 
   const decline = () => {
@@ -116,48 +115,18 @@ export function NpcSocialDirector() {
   };
 
   return (
-    <View
-      pointerEvents="box-none"
-      style={{ position: "absolute", left: 12, right: 12, bottom: 92, zIndex: 120 }}
-    >
-      <View
-        style={{
-          borderRadius: 18,
-          borderWidth: 1,
-          borderColor: "rgba(255,255,255,0.16)",
-          backgroundColor: "rgba(12,12,14,0.96)",
-          padding: 14,
-          shadowColor: "#000",
-          shadowOpacity: 0.35,
-          shadowRadius: 16,
-          shadowOffset: { width: 0, height: 8 },
-          elevation: 14,
-        }}
-      >
+    <View pointerEvents="box-none" style={{ position: "absolute", left: 12, right: 12, bottom: 92, zIndex: 120 }}>
+      <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(12,12,14,0.96)", padding: 14, shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 14 }}>
         <Text style={{ color: "#FFD600", fontSize: 10, fontWeight: "900", letterSpacing: 1.4 }}>
           HABITANT SIMULÉ · {prompt.district.toUpperCase()}
         </Text>
-        <Text style={{ color: "#FFFFFF", fontSize: 17, fontWeight: "900", marginTop: 6 }}>
-          {prompt.title}
-        </Text>
-        <Text style={{ color: "#C8C5BD", fontSize: 13, lineHeight: 19, marginTop: 5 }}>
-          {prompt.body}
-        </Text>
+        <Text style={{ color: "#FFFFFF", fontSize: 17, fontWeight: "900", marginTop: 6 }}>{prompt.title}</Text>
+        <Text style={{ color: "#C8C5BD", fontSize: 13, lineHeight: 19, marginTop: 5 }}>{prompt.body}</Text>
         <View style={{ flexDirection: "row", gap: 9, marginTop: 13 }}>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Répondre à ${prompt.npcName}`}
-            onPress={accept}
-            style={{ flex: 1, paddingVertical: 11, borderRadius: 12, backgroundColor: "#FFD600", alignItems: "center" }}
-          >
+          <Pressable accessibilityRole="button" accessibilityLabel={`Répondre à ${prompt.npcName}`} onPress={accept} style={{ flex: 1, paddingVertical: 11, borderRadius: 12, backgroundColor: "#FFD600", alignItems: "center" }}>
             <Text style={{ color: "#080808", fontWeight: "900", fontSize: 12 }}>RÉPONDRE</Text>
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={`Pas maintenant pour ${prompt.npcName}`}
-            onPress={decline}
-            style={{ flex: 1, paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)", alignItems: "center" }}
-          >
+          <Pressable accessibilityRole="button" accessibilityLabel={`Pas maintenant pour ${prompt.npcName}`} onPress={decline} style={{ flex: 1, paddingVertical: 11, borderRadius: 12, borderWidth: 1, borderColor: "rgba(255,255,255,0.14)", alignItems: "center" }}>
             <Text style={{ color: "#E7E4DC", fontWeight: "800", fontSize: 12 }}>PAS MAINTENANT</Text>
           </Pressable>
         </View>
