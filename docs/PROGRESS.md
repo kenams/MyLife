@@ -47,7 +47,7 @@ Flux cible : Inscription (pseudo + email + mot de passe) → Avatar (pseudo pré
     Supabase (`avatars` row + `supabaseAvatarId`), joueur neuf Niv.1 / 0 XP
   - logout → login → retour direct sur `/map`, avatar + progression persistés
   - profil affiche bien le pseudo
-- **Compte de test livré** : `KenamsTest` / `kenams42+mylife@gmail.com` / `MyLife2026!`
+- **Compte de test livré** : identifiants conservés hors dépôt et mot de passe renouvelé après QA.
   (email confirmé à la main en base).
 - ⚠️ **Friction restante (non-bloquante pour le compte livré)** : « Confirm email » est
   ON sur le projet Supabase MyLife → un tout nouveau testeur doit cliquer le lien email
@@ -56,6 +56,18 @@ Flux cible : Inscription (pseudo + email + mot de passe) → Avatar (pseudo pré
   (`needsConfirm`).
 - Bruit relevé (non bloquant) : bandeau « MyLife sur ton téléphone » masque le haut de
   certains écrans sur desktop ; `ACTIVE_CITY.displayName` = « NEO TOULOUSE ».
+
+## 2026-08-31 - Crew actions contextuelles (branche `crew-geopolitics-actions-v1`)
+- Le Directeur City Pulse combine maintenant les evenements Living City avec le rapport
+  geopolitique persistant et propose une seule action Crew prioritaire : Battle, defense,
+  pression sur le leader, territoire neutre ou rejoindre un Crew.
+- Le CTA ouvre l'ecran Territoires existant et met le quartier cible en evidence.
+- Une contribution tactique numerique peut renforcer un territoire du Crew (+3) ou faire
+  baisser legerement l'influence rivale (-2), une fois par joueur et par jour.
+- L'action ne stocke aucune position et ne peut ni transferer un territoire, ni identifier
+  ou localiser un membre rival. Chaque effet est journalise dans `territory_events`.
+- Le doublon de version `20260911000000` existant sur `master` a ete corrige pour restaurer
+  la relecture a froid des migrations.
 
 ## NPC Brain V1 — DÉJÀ EN PLACE (2026-08-31)
 Vérifié dans le code, rien à réécrire (over-engineering évité) :
@@ -79,7 +91,7 @@ objectifs PNJ multi-jours explicites, rôles sociaux plus fins.
   log-only. Corrige l'écran « La carte n'a pas pu se charger » sur connexion lente /
   1re visite.
 - **Comptes de test prod** (email confirmé en base) :
-  - `KenamsTest` / `kenams42+mylife@gmail.com` / `MyLife2026!`
+  - compte QA Supabase configuré ; identifiants conservés hors dépôt.
   - `CollabTest` / `kenams42+collab@gmail.com` / `MyLife2026!`
 - ⚠️ openfreemap.org (CDN de tuiles gratuit, sans SLA) rate-limite l'IP après un gros
   volume de rechargements (tests). Un vrai utilisateur qui ouvre 1× ne le voit pas.

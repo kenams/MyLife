@@ -248,6 +248,9 @@ export function livingCityEventsToCityPulse(events: LivingCityEventLike[]): City
 }
 
 export function cityPulseRoute(signal: CityPulseSignal): string {
+  if (signal.territoryId && (signal.kind === "CREW" || signal.kind === "CHALLENGE")) {
+    return `/(app)/territories?focus=${encodeURIComponent(signal.territoryId)}`;
+  }
   if (signal.kind === "MISSION" || signal.kind === "EXPLORATION") return "/(app)/missions";
   if (signal.kind === "CHALLENGE") return "/(app)/territories";
   if (signal.kind === "CREW") return "/(app)/(tabs)/crews";

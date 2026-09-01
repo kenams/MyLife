@@ -129,5 +129,9 @@ describe("city pulse", () => {
     expect(cityPulseRoute(signals[0])).toBe("/(app)/missions");
     expect(cityPulseRoute(signals[1])).toBe("/(app)/territories");
     expect(cityPulseRoute(signals[2])).toBe("/(app)/rencontres");
+    expect(cityPulseRoute({
+      ...signals[1],
+      territoryId: "territory-a",
+    })).toBe("/(app)/territories?focus=territory-a");
   });
 });
