@@ -2,7 +2,7 @@
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { usePathname, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 
 import {
@@ -15,6 +15,7 @@ import {
 import { useGameStore } from "@/stores/game-store";
 
 const REFUSALS_KEY = "mylife:npc-social-refusals:v1";
+const RETRY_MS = 15_000;
 type RefusalMap = Record<string, number>;
 
 async function readActiveRefusals(now = Date.now()): Promise<RefusalMap> {
@@ -30,57 +31,85 @@ async function readActiveRefusals(now = Date.now()): Promise<RefusalMap> {
   }
 }
 
+function isMapPath(pathname: string) {
+  return pathname === "/map" || pathname.endsWith("/map");
+}
+
 export function NpcSocialDirector() {
   const pathname = usePathname();
   const router = useRouter();
   const avatar = useGameStore((state) => state.avatar);
   const session = useGameStore((state) => state.session);
-  const npcs = useGameStore((state) => state.npcs);
-  const npcRelations = useGameStore((state) => state.npcRelations);
   const updateNpcRelation = useGameStore((state) => state.updateNpcRelation);
   const startDirectConversation = useGameStore((state) => state.startDirectConversation);
   const addSocialNotification = useGameStore((state) => state.addSocialNotification);
 
   const [prompt, setPrompt] = useState<NpcSocialPrompt | null>(null);
   const [refusals, setRefusals] = useState<RefusalMap>({});
+  const refusalsRef = useRef<RefusalMap>({});
   const shownForSession = useRef(false);
   const resolving = useRef(false);
   const sessionKey = `${session?.provider ?? "none"}:${session?.email ?? "none"}`;
+  const onMap = isMapPath(pathname);
 
   useEffect(() => {
     shownForSession.current = false;
     resolving.current = false;
     setPrompt(null);
-    void readActiveRefusals().then(setRefusals);
+    void readActiveRefusals().then((next) => {
+      refusalsRef.current = next;
+      setRefusals(next);
+    });
   }, [sessionKey]);
 
-  const candidate = useMemo(() => selectNpcSocialPrompt({
-    npcs: npcs ?? [],
-    relations: npcRelations ?? [],
-    playerDistrict: avatar?.homeDistrict ?? "Capitole",
-    refusedNpcIds: Object.keys(refusals),
-  }), [avatar?.homeDistrict, npcRelations, npcs, refusals]);
-
   useEffect(() => {
-    if (pathname !== "/map" || !avatar || !session || !candidate || shownForSession.current) return;
-    const delay = candidate.kind === "reconnect-follow-up"
-      ? NPC_SOCIAL_RETURN_DELAY_MS
-      : NPC_SOCIAL_FIRST_DELAY_MS;
-    const timer = setTimeout(() => {
-      if (shownForSession.current) return;
+    if (!onMap || !avatar || !session || shownForSession.current) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const attempt = () => {
+      if (cancelled || shownForSession.current) return;
+      const state = useGameStore.getState();
+      const candidate = selectNpcSocialPrompt({
+        npcs: state.npcs ?? [],
+        relations: state.npcRelations ?? [],
+        playerDistrict: state.avatar?.homeDistrict ?? "Capitole",
+        refusedNpcIds: Object.keys(refusalsRef.current),
+      });
+
+      if (!candidate) {
+        timer = setTimeout(attempt, RETRY_MS);
+        return;
+      }
+
       shownForSession.current = true;
       setPrompt(candidate);
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [avatar, candidate, pathname, session]);
+    };
 
-  if (pathname !== "/map" || !prompt) return null;
+    const initial = selectNpcSocialPrompt({
+      npcs: useGameStore.getState().npcs ?? [],
+      relations: useGameStore.getState().npcRelations ?? [],
+      playerDistrict: avatar.homeDistrict ?? "Capitole",
+      refusedNpcIds: Object.keys(refusalsRef.current),
+    });
+    const delay = initial?.kind === "reconnect-follow-up"
+      ? NPC_SOCIAL_RETURN_DELAY_MS
+      : NPC_SOCIAL_FIRST_DELAY_MS;
+
+    timer = setTimeout(attempt, delay);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [avatar, onMap, session, sessionKey]);
+
+  if (!onMap || !prompt) return null;
 
   const accept = () => {
     if (resolving.current) return;
     resolving.current = true;
     setPrompt(null);
-    // +15 is the existing threshold for a cloud-synced NPC "contact" relation.
     updateNpcRelation(prompt.npcId, 15, prompt.npcName);
     startDirectConversation(prompt.npcId, prompt.npcName);
     addSocialNotification({
@@ -100,10 +129,10 @@ export function NpcSocialDirector() {
     if (resolving.current) return;
     resolving.current = true;
     setPrompt(null);
-    const next = { ...refusals, [prompt.npcId]: Date.now() };
+    const next = { ...refusalsRef.current, [prompt.npcId]: Date.now() };
+    refusalsRef.current = next;
     setRefusals(next);
     void AsyncStorage.setItem(REFUSALS_KEY, JSON.stringify(next));
-    // Refusal is deliberately neutral: no relation score/count mutation.
     addSocialNotification({
       id: `npc-social-declined-${prompt.npcId}-${Date.now()}`,
       kind: "social",
@@ -116,7 +145,7 @@ export function NpcSocialDirector() {
 
   return (
     <View pointerEvents="box-none" style={{ position: "absolute", left: 12, right: 12, bottom: 92, zIndex: 120 }}>
-      <View style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(12,12,14,0.96)", padding: 14, shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 14 }}>
+      <View testID="npc-social-card" style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(12,12,14,0.96)", padding: 14, shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 14 }}>
         <Text style={{ color: "#FFD600", fontSize: 10, fontWeight: "900", letterSpacing: 1.4 }}>
           HABITANT SIMULÉ · {prompt.district.toUpperCase()}
         </Text>
