@@ -7,6 +7,7 @@ import { CityAbsenceSummary } from "@/components/city-absence-summary";
 import { CityPulseDirector } from "@/components/city-pulse-director";
 import { CityRuntime } from "@/components/city-runtime";
 import { DuskOverlay } from "@/components/dusk-overlay";
+import { NpcSocialDirector } from "@/components/npc-social-director";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { useAuthListener } from "@/hooks/use-auth-listener";
 import { hasConsented } from "./(auth)/consent";
@@ -27,7 +28,6 @@ function AuthGate() {
     router.replace("/(auth)/welcome");
   }, [avatarName, resetAll, sessionEmail]);
 
-  // Vérif légale au premier lancement
   useEffect(() => {
     async function checkLegal() {
       try {
@@ -59,6 +59,7 @@ export default function RootLayout() {
       <Stack screenOptions={{ headerShown: false, animation: "fade" }} />
       <CityAbsenceSummary />
       <CityPulseDirector />
+      <NpcSocialDirector />
       <DuskOverlay />
       <PwaInstallPrompt />
     </QueryClientProvider>
