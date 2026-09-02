@@ -30,4 +30,22 @@ test.describe("smoke", () => {
     assertNoRuntimeErrors(guard);
     guard.dispose();
   });
+
+  test("un PNJ sollicite réellement le joueur puis ouvre la conversation", async ({ page }, testInfo) => {
+    test.setTimeout(100_000);
+    const guard = attachConsoleGuard(page);
+    await enterApp(page);
+
+    const card = page.getByTestId("npc-social-card");
+    await expect(card, "aucune sollicitation PNJ visible dans le délai produit").toBeVisible({ timeout: 70_000 });
+    await testInfo.attach("npc-social-card", { body: await page.screenshot(), contentType: "image/png" });
+
+    const respond = page.getByRole("button", { name: /Répondre à/i }).first();
+    await expect(respond).toBeVisible();
+    await respond.click();
+    await page.waitForURL(/\/dm/, { timeout: 15_000 });
+
+    assertNoRuntimeErrors(guard);
+    guard.dispose();
+  });
 });
