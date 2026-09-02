@@ -135,33 +135,44 @@ export function NpcSocialDirector() {
   const accept = () => {
     if (resolving.current) return;
     resolving.current = true;
+    const accepted = prompt;
     setPrompt(null);
-    updateNpcRelation(prompt.npcId, 15, prompt.npcName);
-    startDirectConversation(prompt.npcId, prompt.npcName);
+    updateNpcRelation(accepted.npcId, 15, accepted.npcName);
+    startDirectConversation(accepted.npcId, accepted.npcName);
     addSocialNotification({
-      id: `npc-social-accepted-${prompt.npcId}-${Date.now()}`,
+      id: `npc-social-accepted-${accepted.npcId}-${Date.now()}`,
       kind: "social",
-      title: `Tu as répondu à ${prompt.npcName}`,
-      body: prompt.kind === "reconnect-follow-up"
+      title: `Tu as répondu à ${accepted.npcName}`,
+      body: accepted.kind === "reconnect-follow-up"
         ? "Le lien reprend là où vous l'aviez laissé."
         : "Votre première rencontre est maintenant mémorisée.",
       createdAt: new Date().toISOString(),
       read: false,
     });
-    router.push("/(app)/dm" as never);
+    // DmScreen immediately returns when targetId is absent. Always carry the
+    // selected simulated resident through Expo Router so the conversation can open.
+    router.push({
+      pathname: "/(app)/dm",
+      params: {
+        targetId: accepted.npcId,
+        targetName: accepted.npcName,
+        targetEmoji: "🧢",
+      },
+    } as never);
   };
 
   const decline = () => {
     if (resolving.current) return;
     resolving.current = true;
+    const declined = prompt;
     setPrompt(null);
-    const next = { ...refusalsRef.current, [prompt.npcId]: Date.now() };
+    const next = { ...refusalsRef.current, [declined.npcId]: Date.now() };
     refusalsRef.current = next;
     void AsyncStorage.setItem(REFUSALS_KEY, JSON.stringify(next));
     addSocialNotification({
-      id: `npc-social-declined-${prompt.npcId}-${Date.now()}`,
+      id: `npc-social-declined-${declined.npcId}-${Date.now()}`,
       kind: "social",
-      title: `${prompt.npcName} te laisse tranquille`,
+      title: `${declined.npcName} te laisse tranquille`,
       body: "Aucune pénalité. Il ou elle pourra revenir plus tard, sans spam.",
       createdAt: new Date().toISOString(),
       read: false,
