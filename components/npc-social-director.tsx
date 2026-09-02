@@ -12,6 +12,7 @@ import {
   selectNpcSocialPrompt,
   type NpcSocialPrompt,
 } from "@/lib/npc-social";
+import { seedLivingCityNpcs } from "@/lib/living-city";
 import { useGameStore } from "@/stores/game-store";
 
 const REFUSALS_KEY = "mylife:npc-social-refusals:v1";
@@ -35,21 +36,53 @@ function isMapPath(pathname: string) {
   return pathname === "/map" || pathname.endsWith("/map");
 }
 
+function resolveCandidate(refusedNpcIds: string[]): NpcSocialPrompt | null {
+  const state = useGameStore.getState();
+  const playerDistrict = state.avatar?.homeDistrict ?? "Capitole";
+  const relations = state.npcRelations ?? [];
+
+  const current = selectNpcSocialPrompt({
+    npcs: state.npcs ?? [],
+    relations,
+    playerDistrict,
+    refusedNpcIds,
+  });
+  if (current) return current;
+
+  // Hard reliability fallback: reuse the canonical Living City seed rather than
+  // creating a second NPC engine. This repairs an empty/stale resident pool and
+  // guarantees the social director still has a real simulated resident to use.
+  const preset = state.livingCity?.preset ?? "NORMAL";
+  const seeded = seedLivingCityNpcs(preset);
+  if (seeded.length > 0) {
+    const existing = state.npcs ?? [];
+    if (existing.length === 0) useGameStore.setState({ npcs: seeded });
+    return selectNpcSocialPrompt({
+      npcs: seeded,
+      relations,
+      playerDistrict,
+      refusedNpcIds,
+    });
+  }
+
+  return null;
+}
+
 export function NpcSocialDirector() {
   const pathname = usePathname();
   const router = useRouter();
-  const avatar = useGameStore((state) => state.avatar);
-  const session = useGameStore((state) => state.session);
+  const avatarReady = useGameStore((state) => Boolean(state.avatar));
+  const sessionProvider = useGameStore((state) => state.session?.provider ?? "none");
+  const sessionEmail = useGameStore((state) => state.session?.email ?? "none");
   const updateNpcRelation = useGameStore((state) => state.updateNpcRelation);
   const startDirectConversation = useGameStore((state) => state.startDirectConversation);
   const addSocialNotification = useGameStore((state) => state.addSocialNotification);
 
   const [prompt, setPrompt] = useState<NpcSocialPrompt | null>(null);
-  const [refusals, setRefusals] = useState<RefusalMap>({});
   const refusalsRef = useRef<RefusalMap>({});
   const shownForSession = useRef(false);
   const resolving = useRef(false);
-  const sessionKey = `${session?.provider ?? "none"}:${session?.email ?? "none"}`;
+  const accountKey = `${sessionProvider}:${sessionEmail}`;
   const onMap = isMapPath(pathname);
 
   useEffect(() => {
@@ -58,25 +91,23 @@ export function NpcSocialDirector() {
     setPrompt(null);
     void readActiveRefusals().then((next) => {
       refusalsRef.current = next;
-      setRefusals(next);
     });
-  }, [sessionKey]);
+  }, [accountKey]);
 
   useEffect(() => {
-    if (!onMap || !avatar || !session || shownForSession.current) return;
+    // Object identity for avatar/session/NPC arrays changes during hydration,
+    // cloud sync and Living City ticks. Never depend on those objects here:
+    // doing so continuously cancels and recreates the 45 s guarantee timer.
+    // Avatar presence is enough to start: a stale hydration flag or auth refresh
+    // must never make a populated Map socially dead.
+    if (!onMap || !avatarReady || shownForSession.current) return;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
 
     const attempt = () => {
       if (cancelled || shownForSession.current) return;
-      const state = useGameStore.getState();
-      const candidate = selectNpcSocialPrompt({
-        npcs: state.npcs ?? [],
-        relations: state.npcRelations ?? [],
-        playerDistrict: state.avatar?.homeDistrict ?? "Capitole",
-        refusedNpcIds: Object.keys(refusalsRef.current),
-      });
+      const candidate = resolveCandidate(Object.keys(refusalsRef.current));
 
       if (!candidate) {
         timer = setTimeout(attempt, RETRY_MS);
@@ -87,12 +118,7 @@ export function NpcSocialDirector() {
       setPrompt(candidate);
     };
 
-    const initial = selectNpcSocialPrompt({
-      npcs: useGameStore.getState().npcs ?? [],
-      relations: useGameStore.getState().npcRelations ?? [],
-      playerDistrict: avatar.homeDistrict ?? "Capitole",
-      refusedNpcIds: Object.keys(refusalsRef.current),
-    });
+    const initial = resolveCandidate(Object.keys(refusalsRef.current));
     const delay = initial?.kind === "reconnect-follow-up"
       ? NPC_SOCIAL_RETURN_DELAY_MS
       : NPC_SOCIAL_FIRST_DELAY_MS;
@@ -102,41 +128,51 @@ export function NpcSocialDirector() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [avatar, onMap, session, sessionKey]);
+  }, [accountKey, avatarReady, onMap]);
 
   if (!onMap || !prompt) return null;
 
   const accept = () => {
     if (resolving.current) return;
     resolving.current = true;
+    const accepted = prompt;
     setPrompt(null);
-    updateNpcRelation(prompt.npcId, 15, prompt.npcName);
-    startDirectConversation(prompt.npcId, prompt.npcName);
+    updateNpcRelation(accepted.npcId, 15, accepted.npcName);
+    startDirectConversation(accepted.npcId, accepted.npcName);
     addSocialNotification({
-      id: `npc-social-accepted-${prompt.npcId}-${Date.now()}`,
+      id: `npc-social-accepted-${accepted.npcId}-${Date.now()}`,
       kind: "social",
-      title: `Tu as répondu à ${prompt.npcName}`,
-      body: prompt.kind === "reconnect-follow-up"
+      title: `Tu as répondu à ${accepted.npcName}`,
+      body: accepted.kind === "reconnect-follow-up"
         ? "Le lien reprend là où vous l'aviez laissé."
         : "Votre première rencontre est maintenant mémorisée.",
       createdAt: new Date().toISOString(),
       read: false,
     });
-    router.push("/(app)/dm" as never);
+    // DmScreen immediately returns when targetId is absent. Always carry the
+    // selected simulated resident through Expo Router so the conversation can open.
+    router.push({
+      pathname: "/(app)/dm",
+      params: {
+        targetId: accepted.npcId,
+        targetName: accepted.npcName,
+        targetEmoji: "🧢",
+      },
+    } as never);
   };
 
   const decline = () => {
     if (resolving.current) return;
     resolving.current = true;
+    const declined = prompt;
     setPrompt(null);
-    const next = { ...refusalsRef.current, [prompt.npcId]: Date.now() };
+    const next = { ...refusalsRef.current, [declined.npcId]: Date.now() };
     refusalsRef.current = next;
-    setRefusals(next);
     void AsyncStorage.setItem(REFUSALS_KEY, JSON.stringify(next));
     addSocialNotification({
-      id: `npc-social-declined-${prompt.npcId}-${Date.now()}`,
+      id: `npc-social-declined-${declined.npcId}-${Date.now()}`,
       kind: "social",
-      title: `${prompt.npcName} te laisse tranquille`,
+      title: `${declined.npcName} te laisse tranquille`,
       body: "Aucune pénalité. Il ou elle pourra revenir plus tard, sans spam.",
       createdAt: new Date().toISOString(),
       read: false,
@@ -144,8 +180,28 @@ export function NpcSocialDirector() {
   };
 
   return (
-    <View pointerEvents="box-none" style={{ position: "absolute", left: 12, right: 12, bottom: 92, zIndex: 120 }}>
-      <View testID="npc-social-card" style={{ borderRadius: 18, borderWidth: 1, borderColor: "rgba(255,255,255,0.16)", backgroundColor: "rgba(12,12,14,0.96)", padding: 14, shadowColor: "#000", shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 14 }}>
+    <View
+      pointerEvents="box-none"
+      style={{ position: "absolute", left: 12, right: 12, bottom: 92, zIndex: 10050, alignItems: "center" }}
+    >
+      <View
+        testID="npc-social-card"
+        accessibilityLiveRegion="assertive"
+        style={{
+          width: "100%",
+          maxWidth: 460,
+          borderRadius: 18,
+          borderWidth: 1,
+          borderColor: "rgba(255,255,255,0.16)",
+          backgroundColor: "rgba(12,12,14,0.98)",
+          padding: 14,
+          shadowColor: "#000",
+          shadowOpacity: 0.42,
+          shadowRadius: 18,
+          shadowOffset: { width: 0, height: 8 },
+          elevation: 30,
+        }}
+      >
         <Text style={{ color: "#FFD600", fontSize: 10, fontWeight: "900", letterSpacing: 1.4 }}>
           HABITANT SIMULÉ · {prompt.district.toUpperCase()}
         </Text>
