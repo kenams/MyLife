@@ -71,7 +71,6 @@ function resolveCandidate(refusedNpcIds: string[]): NpcSocialPrompt | null {
 export function NpcSocialDirector() {
   const pathname = usePathname();
   const router = useRouter();
-  const hasHydrated = useGameStore((state) => state.hasHydrated);
   const avatarReady = useGameStore((state) => Boolean(state.avatar));
   const sessionProvider = useGameStore((state) => state.session?.provider ?? "none");
   const sessionEmail = useGameStore((state) => state.session?.email ?? "none");
@@ -99,7 +98,9 @@ export function NpcSocialDirector() {
     // Object identity for avatar/session/NPC arrays changes during hydration,
     // cloud sync and Living City ticks. Never depend on those objects here:
     // doing so continuously cancels and recreates the 45 s guarantee timer.
-    if (!onMap || !hasHydrated || !avatarReady || shownForSession.current) return;
+    // Avatar presence is enough to start: a stale hydration flag or auth refresh
+    // must never make a populated Map socially dead.
+    if (!onMap || !avatarReady || shownForSession.current) return;
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -127,7 +128,7 @@ export function NpcSocialDirector() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [accountKey, avatarReady, hasHydrated, onMap]);
+  }, [accountKey, avatarReady, onMap]);
 
   if (!onMap || !prompt) return null;
 
